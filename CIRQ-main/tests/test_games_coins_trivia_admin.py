@@ -317,7 +317,7 @@ def test_admin_imports_csv_questions_and_existing_score_awards_coins(app, as_use
         "Capital of France?,Berlin,Paris,Rome,Madrid,B,20\n"
         "Largest planet?,Earth,Mars,Jupiter,Venus,Jupiter,15\n"
     ).encode()
-    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_csv": (io.BytesIO(csv_data), "questions.csv")},
+    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_file": (io.BytesIO(csv_data), "questions.csv")},
                          content_type="multipart/form-data", follow_redirects=True)
     assert b"Imported 2 questions" in response.data
     questions = sorted(db.data["trivia_questions"], key=lambda q: q["position"])
@@ -341,7 +341,7 @@ def test_trivia_csv_import_rejects_bad_rows_without_partial_import(app, db, mk):
         "Valid question?,one,two,three,four,A\n"
         "Invalid answer?,one,two,three,four,Z\n"
     ).encode()
-    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_csv": (io.BytesIO(csv_data), "questions.csv")},
+    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_file": (io.BytesIO(csv_data), "questions.csv")},
                          content_type="multipart/form-data", follow_redirects=True)
     assert b"Nothing was imported" in response.data
     assert not db.data.get("trivia_questions")
