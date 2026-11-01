@@ -1,3 +1,5 @@
+import base64
+import binascii
 import uuid
 
 from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, abort
@@ -18,12 +20,13 @@ def _cursor_values(cursor):
     if not cursor:
         return None
     try:
-        created_at, post_id = cursor.split("|", 1)
+        decoded = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
+        created_at, post_id = decoded.split("|", 1)
         if not parse_dt(created_at):
             raise ValueError
         uuid.UUID(post_id)
         return created_at, post_id
-    except (ValueError, TypeError):
+    except (binascii.Error, UnicodeDecodeError, ValueError, TypeError):
         abort(400, description="Invalid reel cursor.")
 
 
@@ -41,7 +44,8 @@ def index():
     rows = q.execute().data or []
     has_more = len(rows) > PER_PAGE
     page = rows[:PER_PAGE]
-    cursor = f"{page[-1]['created_at']}|{page[-1]['id']}" if has_more and page else None
+    cursor = (base64.urlsafe_b64encode(f"{page[-1]['created_at']}|{page[-1]['id']}".encode())
+              .decode().rstrip("=")) if has_more and page else None
     hidden = social.blocked_between(me["id"])
     reels = [r for r in social.hydrate_posts(page, me["id"])
              if r["author_id"] not in hidden and r["author"]["account_status"] == "approved" and not r["author"].get("is_private")]
