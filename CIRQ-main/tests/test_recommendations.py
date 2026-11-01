@@ -143,6 +143,8 @@ def test_reels_are_ranked_by_interest_and_paginate_without_repeats(as_user, db, 
     watched = reel(db, carol, "Derby highlights #football")
     a.post("/api/signals", json={"events": [{"post_id": watched["id"], "event": "watch", "value": 1.3}]})   # replayed it
     chess, foot = reel(db, dave, "Chess #chess"), reel(db, carol, "Cup final #football")
+    page = a.get("/reels").get_data(as_text=True)
+    assert 'href="/reels/new"' in page and "New reel" in page
     first = a.get("/reels?partial=1").get_data(as_text=True)
     assert first.index(foot["id"]) < first.index(chess["id"]) < first.index(watched["id"])   # liked topic first, already-watched last
     for i in range(6):
