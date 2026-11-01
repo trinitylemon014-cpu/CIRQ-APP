@@ -13,6 +13,22 @@ def test_create_post_and_see_in_feed(as_user, db):
     assert db.data["posts"][0]["caption"] == "my first post"
     assert b"my first post" in c.get("/feed").data
     assert any(r["code"] == "first_post" for r in db.data["user_achievements"])
+    assert a["id"] and db.data["profiles"][0]["coin_balance"] == 5
+    assert [(r["reason"], r["amount"]) for r in db.data["coin_ledger"]] == [("achievement", 5)]
+
+
+def test_achievement_coin_reward_is_once_only(as_user, db, app):
+    _, user = as_user("alice")
+    from app.services import social
+    with app.app_context():
+        assert social.grant_achievement(user["id"], "storyteller") is True
+        assert social.grant_achievement(user["id"], "storyteller") is False
+        assert social.grant_achievement(user["id"], "not_a_real_achievement") is False
+    profile = next(p for p in db.data["profiles"] if p["id"] == user["id"])
+    assert profile["coin_balance"] == 5
+    assert [(r["reason"], r["ref"], r["amount"]) for r in db.data["coin_ledger"]] == [
+        ("achievement", "storyteller", 5)
+    ]
 
 
 def test_empty_post_rejected(as_user, db):

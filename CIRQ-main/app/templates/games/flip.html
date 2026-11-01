@@ -33,7 +33,7 @@
 </div>
 
 <div class="section-title" id="leaderboard"><h2>Top guessers</h2></div>
-<div class="card">{% for r in board %}<div class="lb-row"><span class="lb-rank">{{ loop.index }}</span>{{ m.avatar(r.user, 38) }}<div class="grow"><b>{{ r.user.display_name }}</b>{{ m.verified(r.user) }}<br><small class="muted">@{{ r.user.username }}</small></div><span class="chip lime">{{ r.wins }} win{{ '' if r.wins == 1 else 's' }}</span></div>
+<div class="card">{% for r in board %}<div class="lb-row"><span class="lb-rank">{{ loop.index }}</span>{{ m.avatar(r.user, 38) }}<div class="grow"><b>{{ r.user.display_name }}</b>{{ m.verified(r.user) }}<br><small class="muted">@{{ r.user.username }}</small></div>{{ m.score(r.wins, 'wins') }}</div>
 {% else %}<div class="empty" style="padding:18px">{{ m.icon('trophy') }}<p>No one has found {{ dev_name }} yet. Be the first!</p></div>{% endfor %}</div>
 
 <div class="card" style="margin-top:14px"><h3>How to play</h3>

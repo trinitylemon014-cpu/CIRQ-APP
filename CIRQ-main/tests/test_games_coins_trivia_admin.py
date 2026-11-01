@@ -131,10 +131,10 @@ def test_winning_awards_500_coins_once_and_achievements(table, db):
     c, p = table; start(c); ai = answer_index(db)
     r = guess(c, ai).get_json()
     assert r["status"] == "won" and r["reward"]["coins"] == 500 and r["developer"]["name"] == "VEX" and r["developer"]["developer"] is True
-    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 500
+    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 510
     assert {"dev_finder", "flip_first_win"} <= {a["code"] for a in db.data["user_achievements"]}
     assert guess(c, (ai + 1) % r["cards"]).status_code == 409           # no guesses after a win
-    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 500
+    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 510
 
 
 def test_daily_reward_cap(table, db, app):
@@ -143,7 +143,7 @@ def test_daily_reward_cap(table, db, app):
     for _ in range(3):
         start(c); results.append(guess(c, answer_index(db)).get_json()["reward"]["coins"])
     assert results == [500, 500, 0]
-    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 1000
+    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 1015
 
 
 def test_default_daily_cap_is_one(table, db):
@@ -193,7 +193,7 @@ def test_boost_with_coins(as_user, db):
     give(db, p["id"], 1000)
     c.post("/coins/boost")
     prof = db.data["profiles"][0]
-    assert prof["coin_balance"] == 0 and db.data["boosts"][0]["source"] == "coins"
+    assert prof["coin_balance"] == 5 and db.data["boosts"][0]["source"] == "coins"
     assert (utcnow() + timedelta(days=2, hours=23)).isoformat() < prof["boosted_until"] < (utcnow() + timedelta(days=3, minutes=1)).isoformat()
     assert b"Boosted" in c.get("/coins").data
     assert any(a["code"] == "booster" for a in db.data["user_achievements"])
@@ -329,7 +329,7 @@ def test_admin_imports_csv_questions_and_existing_score_awards_coins(app, as_use
     result = play(c, sid, [1, 2]).get_json()
     attempt = db.data["trivia_attempts"][0]
     assert result["done"] and attempt["correct_count"] == 2 and attempt["coins_awarded"] > 0
-    assert next(p for p in db.data["profiles"] if p["id"] == player["id"])["coin_balance"] == attempt["coins_awarded"]
+    assert next(p for p in db.data["profiles"] if p["id"] == player["id"])["coin_balance"] == attempt["coins_awarded"] + 10
 
 
 def test_trivia_csv_import_rejects_bad_rows_without_partial_import(app, db, mk):
@@ -488,13 +488,14 @@ def test_free_trivia_awards_real_coins_once(app, as_user, db, mk):
     # coins = points / TRIVIA_POINTS_PER_COIN (capped), credited immediately, even though the set was free
     expect = min(app.config["TRIVIA_MAX_COINS"], att["points"] // app.config["TRIVIA_POINTS_PER_COIN"])
     assert expect > 0 and att["coins_awarded"] == expect
-    assert db.data["profiles"][-1]["coin_balance"] == expect
-    assert [r["reason"] for r in db.data["coin_ledger"]] == ["trivia"]
+    assert db.data["profiles"][-1]["coin_balance"] == expect + 10
+    assert [r["reason"] for r in db.data["coin_ledger"]].count("trivia") == 1
+    assert [r["reason"] for r in db.data["coin_ledger"]].count("achievement") == 2
     # finishing again (double submit / refresh) can never pay twice
     from app.blueprints.trivia.routes import _finish
     with app.test_request_context():
         _finish(att)
-    assert db.data["profiles"][-1]["coin_balance"] == expect and len(db.data["coin_ledger"]) == 1
+    assert db.data["profiles"][-1]["coin_balance"] == expect + 10 and len(db.data["coin_ledger"]) == 3
     assert f"+{expect} app coins earned" in c.get(f"/trivia/{sid}/results").get_data(as_text=True)
 
 
@@ -517,7 +518,7 @@ def test_trivia_awards_50_coins_for_500_points(app, as_user, db, mk):
     finished_attempt = db.data["trivia_attempts"][0]
     assert finished_attempt["points"] == 500
     assert finished_attempt["coins_awarded"] == 50
-    assert next(p for p in db.data["profiles"] if p["id"] == player["id"])["coin_balance"] == 50
+    assert next(p for p in db.data["profiles"] if p["id"] == player["id"])["coin_balance"] == 60
 
 
 def test_paid_trivia_requires_entry_scores_accuracy_and_speed_and_awards_coins(app, as_user, db, mk):

@@ -392,7 +392,7 @@ create table if not exists coin_ledger (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
   amount integer not null check (amount <> 0),
-  reason text not null,          -- welcome | dev_card | trivia | boost_spend | admin_adjust
+  reason text not null,          -- welcome | dev_card | trivia | achievement | boost_spend | admin_adjust
   ref text not null default '',  -- idempotency key (e.g. game round id)
   created_at timestamptz not null default now(),
   unique (user_id, reason, ref)  -- the same reward can never be granted twice

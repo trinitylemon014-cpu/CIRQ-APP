@@ -267,4 +267,5 @@ def test_trivia_pages_say_free_play_earns_coins(app, as_user, mk, db):
     boss = adm(app, mk); sid = make_set(boss, db, 2)
     c, _ = as_user("alice")
     assert "earn app coins" in c.get("/trivia").get_data(as_text=True)
-    assert "finish the set to earn app coins" in c.get(f"/trivia/{sid}").get_data(as_text=True)
+    expected_reward = f"Earn {500 // app.config['TRIVIA_POINTS_PER_COIN']} app coins per 500 points"
+    assert expected_reward in c.get(f"/trivia/{sid}").get_data(as_text=True)

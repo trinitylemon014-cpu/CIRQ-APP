@@ -12,6 +12,8 @@
 
 {% macro empty(ic, title, text='') %}<div class="card empty">{{ icon(ic) }}<h3>{{ title }}</h3><p>{{ text }}</p>{{ caller() if caller else '' }}</div>{% endmacro %}
 
+{% macro score(value, label='pts') %}<span class="score">{{ icon('target','i-sm') }} {{ value }} {{ label }}</span>{% endmacro %}
+
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 
 {% macro field(name, label, type='text', value='', placeholder='', required=True, hint='', autocomplete='') %}

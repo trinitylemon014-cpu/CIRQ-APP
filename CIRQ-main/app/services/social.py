@@ -1,7 +1,7 @@
 """Shared social helpers: visibility rules, hydration of posts, counters, achievements."""
 from flask import current_app
 from app.extensions import db
-from app.services import supabase_service as sb
+from app.services import supabase_service as sb, coin_service
 from app.services.notification_service import notify
 from app.utils import tier_for, iso
 
@@ -143,7 +143,8 @@ def grant_achievement(user_id, code):
     if not ach:
         return False
     sb.insert("user_achievements", {"user_id": user_id, "code": code})
-    notify(user_id, "account", body=f"Achievement unlocked: {ach['name']}", dedupe=False)
+    coin_service.award(user_id, 5, "achievement", code,
+                       message=f"Achievement unlocked: {ach['name']}! +5 app coins.")
     return True
 
 

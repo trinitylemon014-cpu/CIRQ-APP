@@ -183,6 +183,8 @@ select.input option { background: var(--navy-900); color: #fff; }
 .verified .i { width: 11px; height: 11px; stroke-width: 3.2; }
 .coin { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--gold); }
 .coin::before { content: "$"; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff3b0, #ffc542 50%, #c27a00); color: #6a3d00; font-size: .68rem; font-weight: 900; box-shadow: 0 0 10px rgba(255, 197, 66, .5); }
+.score { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--cyan); white-space: nowrap; }
+.score .i { width: 16px; height: 16px; }
 .status-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px var(--navy-950), 0 0 10px rgba(46, 229, 157, .8); }
 
 /* ---------- 8. Feedback ---------- */
