@@ -189,11 +189,14 @@ def test_private_reel_author_can_page_through_all_own_reels(as_user, db, mk):
     a, alice = as_user("alice")
     db.table("profiles").update({"is_private": True}).eq("id", alice["id"]).execute()
     carol = mk("carol")
-    own = [reel(db, alice, f"private {i}", visibility="followers") for i in range(7)]
+    own = [reel(db, alice, f"private {i}") for i in range(7)]
     public = [reel(db, carol, f"public {i}") for i in range(7)]
     start = datetime.now(timezone.utc) - timedelta(days=1)
     for i, item in enumerate(own + public):
-        db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
+        changes = {"created_at": (start + timedelta(seconds=i)).isoformat()}
+        if item in own:
+            changes["visibility"] = "followers"
+        db.table("posts").update(changes).eq("id", item["id"]).execute()
 
     seen = []
     cursor = ""
