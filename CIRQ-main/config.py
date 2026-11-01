@@ -55,7 +55,7 @@ class Config:
     COIN_BOOST_COST = _int("COIN_BOOST_COST", 1000)
     COIN_BOOST_DAYS = _int("COIN_BOOST_DAYS", 3)
     TRIVIA_ENTRY_FEE_UGX = _int("TRIVIA_ENTRY_FEE_UGX", 1000)
-    TRIVIA_POINTS_PER_COIN = _int("TRIVIA_POINTS_PER_COIN", 20)
+    TRIVIA_POINTS_PER_COIN = _int("TRIVIA_POINTS_PER_COIN", 10)
     TRIVIA_MAX_COINS = _int("TRIVIA_MAX_COINS", 100)
     # purpose -> (price in UGX, boost days)   (edit via env if the plans change)
     BOOST_PLANS = {

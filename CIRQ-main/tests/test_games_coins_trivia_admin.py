@@ -498,6 +498,28 @@ def test_free_trivia_awards_real_coins_once(app, as_user, db, mk):
     assert f"+{expect} app coins earned" in c.get(f"/trivia/{sid}/results").get_data(as_text=True)
 
 
+def test_trivia_awards_50_coins_for_500_points(app, as_user, db, mk):
+    app.config["TRIVIA_POINTS_PER_COIN"] = 10
+    boss = adm(app, mk); sid = make_set(boss, db, 3)
+    c, player = as_user("alice")
+    c.post(f"/trivia/{sid}/start")
+    attempt = db.data["trivia_attempts"][0]
+    questions = sorted((q for q in db.data["trivia_questions"] if q["set_id"] == sid), key=lambda q: q["position"])
+    db.table("trivia_answers").insert([
+        {"attempt_id": attempt["id"], "question_id": q["id"], "correct": True, "points": points}
+        for q, points in zip(questions, (200, 200, 100))
+    ]).execute()
+
+    from app.blueprints.trivia.routes import _finish
+    with app.test_request_context():
+        _finish(attempt)
+
+    finished_attempt = db.data["trivia_attempts"][0]
+    assert finished_attempt["points"] == 500
+    assert finished_attempt["coins_awarded"] == 50
+    assert next(p for p in db.data["profiles"] if p["id"] == player["id"])["coin_balance"] == 50
+
+
 def test_paid_trivia_requires_entry_scores_accuracy_and_speed_and_awards_coins(app, as_user, db, mk):
     enable_paid(app); boss = adm(app, mk); sid = make_set(boss, db, 4)
     c, pa = as_user("alice")
@@ -509,7 +531,7 @@ def test_paid_trivia_requires_entry_scores_accuracy_and_speed_and_awards_coins(a
     att = db.data["trivia_attempts"][0]
     assert att["paid"] and att["correct_count"] == 2 and att["accuracy"] == 50.0
     assert 2 * 100 < att["points"] <= 2 * 200                              # base + speed bonus
-    assert att["coins_awarded"] == att["points"] // 20
+    assert att["coins_awarded"] == att["points"] // app.config["TRIVIA_POINTS_PER_COIN"]
     assert [a["points"] for a in db.data["trivia_answers"]][2:] == [0, 0]
     assert db.data["trivia_entry_credits"][0]["used_at"]
     assert c.post(f"/trivia/{sid}/start").headers["Location"].endswith("/results")   # one attempt per set
