@@ -1,3 +1,6 @@
+import csv
+import io
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, abort, jsonify, current_app
 from app.decorators import admin_required, moderator_or_admin
 from app.extensions import db, csrf
@@ -386,6 +389,95 @@ def record_payment():
 
 
 # ------------------------------------------------------------------ trivia authoring
+TRIVIA_CSV_REQUIRED = {"question", "option_a", "option_b", "option_c", "option_d", "correct_answer"}
+TRIVIA_CSV_OPTIONAL = {"time_limit_seconds"}
+TRIVIA_CSV_MAX_BYTES = 2 * 1024 * 1024
+TRIVIA_CSV_MAX_QUESTIONS = 500
+
+
+def _parse_trivia_csv(file):
+    if not file or not file.filename:
+        return None, "Choose a CSV file."
+    if not file.filename.lower().endswith(".csv"):
+        return None, "Upload a .csv file."
+    raw = file.stream.read(TRIVIA_CSV_MAX_BYTES + 1)
+    if len(raw) > TRIVIA_CSV_MAX_BYTES:
+        return None, "The CSV file must be 2 MB or smaller."
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return None, "Save the CSV as UTF-8 and try again."
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        return None, "The CSV is empty or missing its header row."
+    headers = [header.strip().lower() for header in reader.fieldnames]
+    if len(headers) != len(set(headers)):
+        return None, "The CSV contains duplicate column names."
+    missing = TRIVIA_CSV_REQUIRED - set(headers)
+    extra = set(headers) - TRIVIA_CSV_REQUIRED - TRIVIA_CSV_OPTIONAL
+    if missing or extra:
+        details = []
+        if missing:
+            details.append("missing " + ", ".join(sorted(missing)))
+        if extra:
+            details.append("unknown " + ", ".join(sorted(extra)))
+        return None, "Check the CSV headers: " + "; ".join(details) + "."
+    reader.fieldnames = headers
+
+    questions, issues, rows_seen = [], [], 0
+    try:
+        for row in reader:
+            if None in row:
+                issues.append(f"Row {reader.line_num}: has more values than headers.")
+                continue
+            if not any(clean_text(value, 500) for value in row.values()):
+                continue
+            rows_seen += 1
+            if rows_seen > TRIVIA_CSV_MAX_QUESTIONS:
+                return None, f"A set can contain at most {TRIVIA_CSV_MAX_QUESTIONS} questions."
+
+            prompt = clean_text(row.get("question"), 300)
+            options = [clean_text(row.get(f"option_{letter}"), 120) for letter in "abcd"]
+            answer = clean_text(row.get("correct_answer"), 120)
+            try:
+                limit = int(clean_text(row.get("time_limit_seconds"), 3) or "20")
+            except ValueError:
+                limit = 0
+
+            problems = []
+            if len(prompt) < 3:
+                problems.append("question must be 3-300 characters")
+            if not all(options):
+                problems.append("all four options are required")
+            if len({option.casefold() for option in options}) != 4:
+                problems.append("the four options must be different")
+            if not 5 <= limit <= 120:
+                problems.append("time_limit_seconds must be 5-120")
+
+            answer_letter = answer.upper()
+            if answer_letter in "ABCD" and len(answer_letter) == 1:
+                correct_index = ord(answer_letter) - ord("A")
+            else:
+                matches = [i for i, option in enumerate(options) if option.casefold() == answer.casefold()]
+                correct_index = matches[0] if len(matches) == 1 else -1
+            if not 0 <= correct_index <= 3:
+                problems.append("correct_answer must be A, B, C, D, or match one option exactly")
+
+            if problems:
+                issues.append(f"Row {reader.line_num}: " + ", ".join(problems) + ".")
+            else:
+                questions.append({"prompt": prompt, "options": options, "correct_index": correct_index, "time_limit_seconds": limit})
+    except csv.Error:
+        return None, "The CSV formatting is invalid. Check quotes and commas, then try again."
+
+    if issues:
+        return None, "Nothing was imported. " + " ".join(issues[:5])
+    if not questions:
+        return None, "The CSV has no question rows to import."
+    return questions, None
+
+
 @bp.route("/trivia", methods=["GET", "POST"])
 @admin_required
 def trivia():
@@ -436,6 +528,35 @@ def trivia_add_question(set_id):
         pos = sb.count("trivia_questions", set_id=set_id) + 1
         sb.insert("trivia_questions", {"set_id": set_id, "position": pos, "prompt": prompt, "options": options, "correct_index": correct, "time_limit_seconds": limit})
         flash("Question added.", "success")
+    return redirect(url_for("admin.trivia_edit", set_id=set_id))
+
+
+@bp.post("/trivia/<set_id>/questions/import")
+@admin_required
+def trivia_import_questions(set_id):
+    s = sb.get("trivia_sets", id=set_id)
+    if not s:
+        abort(404)
+    if s["status"] != "draft":
+        flash("Only draft sets can receive imported questions.", "error")
+        return redirect(url_for("admin.trivia_edit", set_id=set_id))
+
+    questions, error = _parse_trivia_csv(request.files.get("questions_csv"))
+    if error:
+        flash(error, "error")
+        return redirect(url_for("admin.trivia_edit", set_id=set_id))
+
+    first_position = sb.count("trivia_questions", set_id=set_id) + 1
+    rows = [{"set_id": set_id, "position": first_position + i, **question} for i, question in enumerate(questions)]
+    try:
+        db().table("trivia_questions").insert(rows).execute()
+    except Exception:
+        current_app.logger.exception("trivia CSV import failed")
+        flash("The questions could not be saved. Nothing was imported; please try again.", "error")
+        return redirect(url_for("admin.trivia_edit", set_id=set_id))
+
+    audit(g.user["id"], "trivia_questions_imported", "trivia_set", set_id, count=len(rows))
+    flash(f"Imported {len(rows)} questions. Review them before publishing.", "success")
     return redirect(url_for("admin.trivia_edit", set_id=set_id))
 
 

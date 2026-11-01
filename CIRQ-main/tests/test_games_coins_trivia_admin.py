@@ -1,3 +1,4 @@
+import io
 import pytest
 from datetime import timedelta
 from tests.conftest import login
@@ -305,6 +306,45 @@ def test_admin_authors_and_publishes_trivia(app, as_user, db, mk):
     assert len(db.data["trivia_questions"]) == 2                          # duplicate options rejected
     boss.post(f"/admin/trivia/{sid}/status/published")
     assert b"General knowledge" in c.get("/trivia").data
+
+
+def test_admin_imports_csv_questions_and_existing_score_awards_coins(app, as_user, db, mk):
+    boss = adm(app, mk)
+    boss.post("/admin/trivia", data={"title": "World knowledge"})
+    sid = db.data["trivia_sets"][0]["id"]
+    csv_data = (
+        "question,option_a,option_b,option_c,option_d,correct_answer,time_limit_seconds\n"
+        "Capital of France?,Berlin,Paris,Rome,Madrid,B,20\n"
+        "Largest planet?,Earth,Mars,Jupiter,Venus,Jupiter,15\n"
+    ).encode()
+    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_csv": (io.BytesIO(csv_data), "questions.csv")},
+                         content_type="multipart/form-data", follow_redirects=True)
+    assert b"Imported 2 questions" in response.data
+    questions = sorted(db.data["trivia_questions"], key=lambda q: q["position"])
+    assert [q["correct_index"] for q in questions] == [1, 2]
+    assert [q["options"][q["correct_index"]] for q in questions] == ["Paris", "Jupiter"]
+
+    boss.post(f"/admin/trivia/{sid}/status/published")
+    c, player = as_user("alice")
+    result = play(c, sid, [1, 2]).get_json()
+    attempt = db.data["trivia_attempts"][0]
+    assert result["done"] and attempt["correct_count"] == 2 and attempt["coins_awarded"] > 0
+    assert next(p for p in db.data["profiles"] if p["id"] == player["id"])["coin_balance"] == attempt["coins_awarded"]
+
+
+def test_trivia_csv_import_rejects_bad_rows_without_partial_import(app, db, mk):
+    boss = adm(app, mk)
+    boss.post("/admin/trivia", data={"title": "Draft set"})
+    sid = db.data["trivia_sets"][0]["id"]
+    csv_data = (
+        "question,option_a,option_b,option_c,option_d,correct_answer\n"
+        "Valid question?,one,two,three,four,A\n"
+        "Invalid answer?,one,two,three,four,Z\n"
+    ).encode()
+    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_csv": (io.BytesIO(csv_data), "questions.csv")},
+                         content_type="multipart/form-data", follow_redirects=True)
+    assert b"Nothing was imported" in response.data
+    assert not db.data.get("trivia_questions")
 
 
 def test_non_admin_cannot_author_trivia(as_user, db):
