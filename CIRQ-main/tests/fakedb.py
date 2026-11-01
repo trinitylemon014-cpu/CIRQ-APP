@@ -70,13 +70,35 @@ def _match(row, filters):
             if needle not in str(v or "").lower(): return False
         if kind == "or":
             if not any(_match(row, [f]) for f in val): return False
+        if kind == "and":
+            if not all(_match(row, [f]) for f in val): return False
     return True
+
+
+def _split_filters(expression):
+    parts, depth, start = [], 0, 0
+    for i, char in enumerate(expression):
+        if char == "(": depth += 1
+        elif char == ")": depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(expression[start:i])
+            start = i + 1
+    parts.append(expression[start:])
+    return parts
+
+
+def _parse_filter(expression):
+    expression = expression.strip()
+    if expression.startswith("and(") and expression.endswith(")"):
+        return ("and", None, [_parse_filter(p) for p in _split_filters(expression[4:-1])])
+    col, op, val = expression.split(".", 2)
+    return (op, col, val)
 
 
 class Query:
     def __init__(self, db, table):
         self.db, self.table, self.op, self.filters = db, table, "select", []
-        self.payload, self.cols, self.want_count, self._order, self._limit, self.on_conflict = None, "*", False, None, None, None
+        self.payload, self.cols, self.want_count, self._order, self._limit, self.on_conflict = None, "*", False, [], None, None
 
     # builders
     def select(self, cols="*", count=None, **_): self.op, self.cols, self.want_count = "select", cols, bool(count); return self
@@ -94,12 +116,8 @@ class Query:
     def is_(self, c, v): self.filters.append(("is", c, None)); return self
     def ilike(self, c, v): self.filters.append(("ilike", c, v)); return self
     def or_(self, expr):
-        fl = []
-        for part in expr.split(","):
-            col, op, val = part.split(".", 2)
-            fl.append((op, col, val))
-        self.filters.append(("or", None, fl)); return self
-    def order(self, col, desc=False): self._order = (col, desc); return self
+        self.filters.append(("or", None, [_parse_filter(p) for p in _split_filters(expr)])); return self
+    def order(self, col, desc=False): self._order.append((col, desc)); return self
     def limit(self, n): self._limit = n; return self
     def range(self, a, b): self._limit = b - a + 1; return self
 
@@ -129,8 +147,7 @@ class Query:
             self.db.data[self.table] = [r for r in rows if r not in hit]
             return SimpleNamespace(data=copy.deepcopy(hit), count=None)
         total = len(hit)
-        if self._order:
-            c, d = self._order
+        for c, d in reversed(self._order):
             hit = sorted(hit, key=lambda r: (r.get(c) is None, r.get(c)), reverse=d)
         if self._limit is not None: hit = hit[: self._limit]
         out = copy.deepcopy(hit)

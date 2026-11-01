@@ -136,6 +136,8 @@ create table if not exists posts (
 create index if not exists posts_feed_idx on posts(kind, moderation_status, created_at desc);
 create index if not exists posts_author_idx on posts(author_id, created_at desc);
 create index if not exists posts_community_idx on posts(community_id, created_at desc);
+create index if not exists posts_public_reels_library_idx on posts(created_at desc, id desc)
+  where kind = 'reel' and visibility = 'public' and moderation_status = 'ok' and community_id is null;
 
 create table if not exists post_media (
   id uuid primary key default gen_random_uuid(),

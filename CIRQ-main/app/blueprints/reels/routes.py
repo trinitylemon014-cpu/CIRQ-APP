@@ -1,37 +1,49 @@
-from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, current_app, abort
+import uuid
+
+from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, abort
 from app.decorators import login_required
 from app.extensions import limiter, db
-from app.services import supabase_service as sb, cloudinary_service as cs, social, recommender as rec
+from app.services import supabase_service as sb, cloudinary_service as cs, social
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
-from app.utils import clean_text
+from app.utils import clean_text, parse_dt
 
 bp = Blueprint("reels", __name__)
 PER_PAGE = 5   # only a handful of videos are ever loaded at once
+QUERY_SIZE = PER_PAGE + 1
 MAX_REEL_SECONDS = 90
 
 
-def _seen_from(cursor):
-    """The cursor is the list of reel ids already served (newest 60), so personalised ranking can page without repeats."""
-    return [x for x in (cursor or "").split(",") if x and len(x) <= 40 and x.replace("-", "").isalnum()][-60:]
+def _cursor_values(cursor):
+    if not cursor:
+        return None
+    try:
+        created_at, post_id = cursor.split("|", 1)
+        if not parse_dt(created_at):
+            raise ValueError
+        uuid.UUID(post_id)
+        return created_at, post_id
+    except (ValueError, TypeError):
+        abort(400, description="Invalid reel cursor.")
 
 
 @bp.get("/reels")
 @login_required
 def index():
     me = g.user
-    seen = _seen_from(request.args.get("before"))
-    try:
-        rows, has_more = rec.rank_reels(me["id"], me, seen, PER_PAGE)
-    except Exception:                       # recommendations must never take Reels down: fall back to newest first
-        current_app.logger.exception("reel ranking failed")
-        q = db().table("posts").select("*").eq("kind", "reel").eq("visibility", "public").eq("moderation_status", "ok") \
-            .is_("community_id", "null").order("created_at", desc=True).limit(PER_PAGE + 1 + len(seen))
-        rows = [r for r in (q.execute().data or []) if r["id"] not in seen][:PER_PAGE + 1]
-        has_more, rows = len(rows) > PER_PAGE, rows[:PER_PAGE]
-    cursor = ",".join((seen + [r["id"] for r in rows])[-60:]) if has_more else None
+    before = _cursor_values(request.args.get("before"))
+    q = (db().table("posts").select("*").eq("kind", "reel").eq("visibility", "public")
+         .eq("moderation_status", "ok").is_("community_id", "null")
+         .order("created_at", desc=True).order("id", desc=True).limit(QUERY_SIZE))
+    if before:
+        created_at, post_id = before
+        q = q.or_(f"created_at.lt.{created_at},and(created_at.eq.{created_at},id.lt.{post_id})")
+    rows = q.execute().data or []
+    has_more = len(rows) > PER_PAGE
+    page = rows[:PER_PAGE]
+    cursor = f"{page[-1]['created_at']}|{page[-1]['id']}" if has_more and page else None
     hidden = social.blocked_between(me["id"])
-    reels = [r for r in social.hydrate_posts(rows, me["id"])
+    reels = [r for r in social.hydrate_posts(page, me["id"])
              if r["author_id"] not in hidden and r["author"]["account_status"] == "approved" and not r["author"].get("is_private")]
     following = set(social.following_ids(me["id"]))
     if request.args.get("partial"):

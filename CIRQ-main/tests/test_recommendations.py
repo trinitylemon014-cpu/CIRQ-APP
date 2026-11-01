@@ -1,5 +1,7 @@
 """Personalised suggestions: learning from behaviour, ranking, safety rules and student controls."""
 import io
+import re
+from datetime import datetime, timedelta, timezone
 from tests.conftest import MP4
 from app.services import recommender as rec
 
@@ -137,23 +139,50 @@ def reel(db, author, caption):
     return p
 
 
-def test_reels_are_ranked_by_interest_and_paginate_without_repeats(as_user, db, mk):
-    a, alice = as_user("alice")
-    carol, dave = mk("carol"), mk("dave")
-    watched = reel(db, carol, "Derby highlights #football")
-    a.post("/api/signals", json={"events": [{"post_id": watched["id"], "event": "watch", "value": 1.3}]})   # replayed it
-    chess, foot = reel(db, dave, "Chess #chess"), reel(db, carol, "Cup final #football")
+def reel_ids(response):
+    return re.findall(r'data-id="([^"]+)"', response.get_data(as_text=True))
+
+
+def test_reels_are_newest_first_and_paginate_without_repeats(as_user, db, mk):
+    a, _ = as_user("alice")
+    creator = mk("carol")
+    old = [reel(db, creator, f"reel {i}") for i in range(9)]
+    start = datetime.now(timezone.utc) - timedelta(days=2)
+    for i, item in enumerate(old):
+        db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
+
     page = a.get("/reels").get_data(as_text=True)
     assert 'href="/reels/new"' in page and "New reel" in page
-    first = a.get("/reels?partial=1").get_data(as_text=True)
-    assert first.index(foot["id"]) < first.index(chess["id"]) < first.index(watched["id"])   # liked topic first, already-watched last
-    for i in range(6):
-        reel(db, carol, f"filler {i}")
-    one = a.get("/reels?partial=1")
-    cur = one.headers["X-Next-Cursor"]
-    shown = set(cur.split(","))
-    two = a.get(f"/reels?partial=1&before={cur}").get_data(as_text=True)
-    assert len(shown) == 5 and not any(i in two for i in shown) and two.count("data-reel ") == 4
+    first = a.get("/reels?partial=1")
+    assert reel_ids(first) == [item["id"] for item in reversed(old[-5:])]
+    cursor = first.headers["X-Next-Cursor"]
+    second = a.get(f"/reels?partial=1&before={cursor}")
+    assert reel_ids(second) == [item["id"] for item in reversed(old[:4])]
+
+
+def test_reels_archive_reaches_old_content_and_new_uploads_do_not_shift_pages(as_user, db, mk):
+    a, _ = as_user("alice")
+    creator = mk("carol")
+    old = [reel(db, creator, f"archive {i}") for i in range(107)]
+    start = datetime.now(timezone.utc) - timedelta(days=90)
+    for i, item in enumerate(old):
+        db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
+
+    first = a.get("/reels?partial=1")
+    assert reel_ids(first) == [item["id"] for item in reversed(old[-5:])]
+    cursor = first.headers["X-Next-Cursor"]
+    new = reel(db, creator, "new upload")
+
+    seen = reel_ids(first)
+    while cursor:
+        page = a.get(f"/reels?partial=1&before={cursor}")
+        ids = reel_ids(page)
+        assert not set(ids).intersection(seen)
+        seen.extend(ids)
+        cursor = page.headers["X-Next-Cursor"]
+
+    assert seen == [item["id"] for item in reversed(old)]
+    assert reel_ids(a.get("/reels?partial=1"))[0] == new["id"]
 
 
 # ---------------------------------------------------------------- student controls

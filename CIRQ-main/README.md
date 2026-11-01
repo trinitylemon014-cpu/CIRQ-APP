@@ -23,7 +23,7 @@ app coins, boosts and CIRQ STATUS ranks, with an admin dashboard and safety tool
 | Admin approval of new accounts (pending / approved / rejected / suspended) | Implemented, tested |
 | **Admin-approved password recovery** (request → admin review → single-use, expiring emailed link → reset → audit) + manual-review path | Implemented, tested |
 | Feed: text/photo/video posts, edit/delete, likes, comments, follow, block, report, pagination | Implemented, tested |
-| Reels (vertical, lazy-loaded, muted by default), Stories (24 h, story tray, viewer, view tracking, cleanup job) | Implemented, tested (reels/stories UI only visually checked) |
+| Reels (vertical, lazy-loaded, muted by default, newest-first cursor archive), Stories (24 h, story tray, viewer, view tracking, cleanup job) | Implemented, tested (reels/stories UI only visually checked) |
 | Profiles, settings, change password, **delete my account** | Implemented, tested |
 | **Private accounts + follow requests** (Instagram-style: Follow → Requested → owner confirms/deletes; chat opens only after approval) | Implemented, tested (incl. headless-browser check) |
 | **Story likes, liker list, and story replies that land in the owner's inbox** | Implemented, tested (incl. headless-browser check) |
@@ -95,6 +95,8 @@ cirq/
    requests, story likes, the story-reply columns on `messages`, and the suggestion tables.
    **Then run `migrations/001_logos_music_story_comments.sql`** (also safe to re-run). It adds school logos, music on posts/stories,
    story comments, comment likes and the `story_comment` report type. A brand-new project already gets all of this from `schema.sql`.
+   **Then run `migrations/2026_11_01_reel_archive.sql`** (safe to re-run) to add the index used by the unlimited reels archive.
+   Reels are retained unless their creator deletes them; the archive loads five at a time, newest first.
 3. **Project Settings → API**: copy the Project URL into `SUPABASE_URL`, the anon/publishable key into
    `SUPABASE_ANON_KEY`, and the service-role/secret key into `SUPABASE_SERVICE_ROLE_KEY`.
    The service-role key is **server only**: never put it in a template, JavaScript or a screenshot.

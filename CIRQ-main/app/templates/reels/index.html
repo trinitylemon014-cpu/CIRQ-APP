@@ -1,5 +1,6 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Reels{% endblock %}
 {% block content %}
-{% if reels %}<div class="row between" style="margin-bottom:12px"><h1 class="page-title" style="margin:0">Reels</h1><a class="btn sm" href="{{ url_for('reels.new') }}">{{ m.icon('plus','i-sm') }} New reel</a></div><div class="reels" id="reels" data-more-url="{{ url_for('reels.index') }}" data-cursor="{{ cursor or '' }}">{% include 'reels/_items.html' %}</div>
+<div class="row between" style="margin-bottom:12px"><div><h1 class="page-title" style="margin:0">Reels</h1><p class="muted small" style="margin:4px 0 0">New reels appear first. Older reels stay here until their creator deletes them.</p></div><a class="btn sm" href="{{ url_for('reels.new') }}">{{ m.icon('plus','i-sm') }} New reel</a></div>
+{% if reels %}<div class="reels" id="reels" data-more-url="{{ url_for('reels.index') }}" data-cursor="{{ cursor or '' }}">{% include 'reels/_items.html' %}</div>
 {% else %}{% call m.empty('film','No reels yet','Be the first to upload a short vertical video.') %}<a class="btn" href="{{ url_for('reels.new') }}">Upload a reel</a>{% endcall %}{% endif %}
 {% endblock %}
