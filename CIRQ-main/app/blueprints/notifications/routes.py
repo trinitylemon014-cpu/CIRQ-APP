@@ -9,6 +9,9 @@ bp = Blueprint("notifications", __name__)
 
 def target_url(n):
     k, ref = n["kind"], n.get("ref_id")
+    if k == "account" and n.get("ref_type") == "auto_approved_account":
+        profile = sb.get("profiles", "username", id=ref) if ref else None
+        return url_for("profiles.view", username=profile["username"]) if profile else url_for("admin.users", status="approved")
     if k == "follow_request":
         return url_for("profiles.follow_requests")
     if k in ("follow", "follow_accepted", "story_like") and n.get("actor_id"):

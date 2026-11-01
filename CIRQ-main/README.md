@@ -146,16 +146,22 @@ be granted through any registration field.
 `DEVELOPER_USERNAME=vex`). It becomes the hidden card in *Guess the Developer*. If no such account exists the game still
 works with a profile-less "VEX" card, but a real account is nicer: the winner sees a link to the profile.
 
-## 9. Run locally, test, schedule cleanup
+## 9. Run locally, test, schedule background jobs
 
 ```bash
 flask --app wsgi run          # http://localhost:5000
-pytest                        # 209 tests
+pytest                        # 213 tests
 flask --app wsgi cleanup-expired
 ```
 **Cleanup job** (expired stories + Cloudinary files, stale reset links): `render.yaml` defines an hourly Render cron service. To use a
 free scheduler instead, call `POST {APP_BASE_URL}/admin/internal/cleanup` hourly with header `Authorization: Bearer <CRON_SECRET>`.
 Stories are also hidden by the database query the moment they expire, never just by the browser.
+
+**Pending account approval:** Render runs a separate cron job every minute. Accounts still pending more than five minutes
+after signup are automatically approved, including accounts whose email is not verified, and approved administrators receive
+an in-app notification. Configure the `APP_BASE_URL` and `CRON_SECRET` values on both cron services. For another scheduler,
+call `POST {APP_BASE_URL}/admin/internal/auto-approve-pending` every minute with header
+`Authorization: Bearer $CRON_SECRET`.
 
 ## 10. GitHub
 
@@ -281,7 +287,7 @@ See `.env.example` for the full list with comments. Required in production: `SEC
 | Can't pick a school when registering | Add schools (seed script or Admin → Schools). |
 | "Media uploads aren't configured" | Cloudinary variables missing/wrong. |
 | Approving a password reset says email could not be sent | Fix `MAIL_*`; check provider logs and the sender address. |
-| Logged in but bounced to "pending" | An admin must approve the account (or set `AUTO_APPROVE_NEW_ACCOUNTS=true` for a closed test). |
+| Logged in but bounced to "pending" | An admin can approve the account sooner; otherwise it is approved automatically after five minutes. |
 | "CIRQ FLIP needs a few more students" | Needs ≥ 5 other approved **public** students. |
 | Login always fails | Check `SUPABASE_ANON_KEY`; the user must exist in Supabase Auth **and** `profiles`. |
 | `permission denied` / empty results from Supabase | You used the anon key where the service-role key belongs. |

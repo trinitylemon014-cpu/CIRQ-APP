@@ -7,7 +7,7 @@ from pypdf import PdfReader
 from app.decorators import admin_required, moderator_or_admin
 from app.extensions import db, csrf
 from app.services import supabase_service as sb, auth_service, cloudinary_service as cs, coin_service, social
-from app.services.account_service import approve_account
+from app.services.account_service import approve_account, auto_approve_stale_accounts
 from app.services.audit_service import audit
 from app.services.mail_service import send_mail, mail_configured
 from app.services.notification_service import notify
@@ -789,3 +789,13 @@ def cleanup():
         abort(403)
     from app import run_cleanup
     return jsonify(result=run_cleanup())
+
+
+@bp.post("/internal/auto-approve-pending")
+@csrf.exempt
+def auto_approve_pending():
+    secret = current_app.config["CRON_SECRET"]
+    import hmac
+    if not secret or not hmac.compare_digest(request.headers.get("Authorization", ""), f"Bearer {secret}"):
+        abort(403)
+    return jsonify(approved=auto_approve_stale_accounts())

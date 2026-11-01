@@ -60,3 +60,15 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+  # Auto-approve signup accounts that have remained pending for more than five minutes.
+  - type: cron
+    name: cirq-pending-approvals
+    runtime: python
+    schedule: "* * * * *"
+    buildCommand: "true"
+    startCommand: 'curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$APP_BASE_URL/admin/internal/auto-approve-pending"'
+    envVars:
+      - key: APP_BASE_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false

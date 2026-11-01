@@ -102,3 +102,48 @@ def test_welcome_coins_on_approval_only_once(app, db, mk):
         approve_account(p["id"]); approve_account(p["id"])
     assert db.data["profiles"][0]["coin_balance"] == 50
     assert len(db.data["coin_ledger"]) == 1
+
+
+def test_auto_approval_after_five_minutes_notifies_admin_and_grants_welcome_coins(app, db, mk):
+    from datetime import timedelta
+    from app.services.account_service import auto_approve_stale_accounts
+    from app.utils import iso, utcnow
+
+    admin = mk("boss", role="admin")
+    pending = mk("unverified", status="pending", verified_email=False)
+    pending_row = next(p for p in db.data["profiles"] if p["id"] == pending["id"])
+    pending_row["created_at"] = iso(utcnow() - timedelta(minutes=6))
+    recent = mk("recent", status="pending")
+    rejected = mk("rejected", status="rejected")
+    rejected_row = next(p for p in db.data["profiles"] if p["id"] == rejected["id"])
+    rejected_row["created_at"] = iso(utcnow() - timedelta(minutes=6))
+
+    with app.app_context():
+        assert auto_approve_stale_accounts() == 1
+        assert auto_approve_stale_accounts() == 0
+
+    assert next(p for p in db.data["profiles"] if p["id"] == pending["id"])["account_status"] == "approved"
+    assert next(p for p in db.data["profiles"] if p["id"] == recent["id"])["account_status"] == "pending"
+    assert next(p for p in db.data["profiles"] if p["id"] == rejected["id"])["account_status"] == "rejected"
+    assert next(p for p in db.data["profiles"] if p["id"] == pending["id"])["coin_balance"] == app.config["WELCOME_COINS"]
+    admin_notices = [n for n in db.data["notifications"] if n["user_id"] == admin["id"]]
+    assert len(admin_notices) == 1
+    assert admin_notices[0]["ref_type"] == "auto_approved_account"
+    assert "unverified" in admin_notices[0]["body"]
+    from app.blueprints.notifications.routes import target_url
+    with app.test_request_context():
+        assert target_url(admin_notices[0]).endswith("/u/unverified")
+    assert len([r for r in db.data["audit_logs"] if r["action"] == "user_auto_approved"]) == 1
+
+
+def test_auto_approval_cron_endpoint_requires_secret_and_runs_job(app, db, mk):
+    from datetime import timedelta
+    from app.utils import iso, utcnow
+
+    pending = mk("olduser", status="pending")
+    next(p for p in db.data["profiles"] if p["id"] == pending["id"])["created_at"] = iso(utcnow() - timedelta(minutes=6))
+    app.config["CRON_SECRET"] = "cron-secret"
+    client = app.test_client()
+    assert client.post("/admin/internal/auto-approve-pending").status_code == 403
+    response = client.post("/admin/internal/auto-approve-pending", headers={"Authorization": "Bearer cron-secret"})
+    assert response.status_code == 200 and response.get_json() == {"approved": 1}
