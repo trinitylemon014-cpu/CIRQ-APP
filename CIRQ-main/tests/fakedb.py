@@ -214,7 +214,7 @@ class FakeDB:
             for p in self.data.get("posts", []):
                 if p["id"] == row["post_id"]: p["like_count" if table == "likes" else "comment_count"] = max(0, p["like_count" if table == "likes" else "comment_count"] - 1)
         if table == "posts":
-            for t in ("post_media", "likes", "comments"):
+            for t in ("post_media", "likes", "comments", "saved_posts"):
                 self.data[t] = [r for r in self.data.get(t, []) if r.get("post_id") != row["id"]]
 
     def rpc(self, name, params):                        # mirrors cirq_apply_coins()

@@ -221,6 +221,34 @@ def test_private_reel_author_can_page_through_all_own_reels(as_user, db, mk):
     assert set(bob_seen) == {item["id"] for item in public}
 
 
+def test_uploads_from_different_users_preserve_the_shared_reel_archive(as_user, db, mk, uploads):
+    alice_client, alice = as_user("alice")
+    bob_client, bob = as_user("bob")
+    archive_owner = mk("archive")
+    older = reel(db, archive_owner, "older reel")
+    base = datetime.now(timezone.utc) - timedelta(days=1)
+    db.table("posts").update({"created_at": base.isoformat()}).eq("id", older["id"]).execute()
+
+    alice_client.post("/reels", data={"video": (io.BytesIO(MP4), "alice.mp4"), "caption": "Alice's reel"},
+                      content_type="multipart/form-data")
+    alice_reel = next(post for post in db.data["posts"] if post["author_id"] == alice["id"])
+    db.table("posts").update({"created_at": (base + timedelta(days=1)).isoformat()}).eq("id", alice_reel["id"]).execute()
+    media = next(row for row in db.data["post_media"] if row["post_id"] == alice_reel["id"])
+    assert media["owner_id"] == alice["id"] and media["url"].startswith("https://res.cloudinary.com/")
+
+    bob_view = reel_ids(bob_client.get("/reels?partial=1"))
+    assert bob_view[:2] == [alice_reel["id"], older["id"]]
+    bob_client.post("/reels", data={"video": (io.BytesIO(MP4), "bob.mp4"), "caption": "Bob's reel"},
+                    content_type="multipart/form-data")
+    bob_reel = next(post for post in db.data["posts"] if post["author_id"] == bob["id"])
+    db.table("posts").update({"created_at": (base + timedelta(days=2)).isoformat()}).eq("id", bob_reel["id"]).execute()
+
+    alice_view = reel_ids(alice_client.get("/reels?partial=1"))
+    assert alice_view == [bob_reel["id"], alice_reel["id"], older["id"]]
+    assert len(db.data["posts"]) == 3
+    assert {row["post_id"] for row in db.data["post_media"]} == {older["id"], alice_reel["id"], bob_reel["id"]}
+
+
 def test_followers_can_see_private_creators_reels_but_other_users_cannot(as_user, db, mk):
     viewer, _ = as_user("viewer")
     outsider, _ = as_user("outsider")

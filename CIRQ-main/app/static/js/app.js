@@ -583,8 +583,9 @@
     function wire(r) {                         // per-reel video events (progress, buffering, errors)
       const v = vid(r); if (!v || v._wired) return; v._wired = 1;
       const bar = $(".reel-progress i", r);
-      v.addEventListener("playing", () => { if (!r._t0) r._t0 = performance.now(); });
-      v.addEventListener("pause", () => { if (r._t0) { r._ms = (r._ms || 0) + performance.now() - r._t0; r._t0 = 0; } });
+      const toggle = $("[data-reel-toggle]", r);
+      v.addEventListener("playing", () => { r.classList.add("playing"); toggle.setAttribute("aria-label", "Pause reel"); if (!r._t0) r._t0 = performance.now(); });
+      v.addEventListener("pause", () => { r.classList.remove("playing"); toggle.setAttribute("aria-label", "Play reel"); if (r._t0) { r._ms = (r._ms || 0) + performance.now() - r._t0; r._t0 = 0; } });
       v.addEventListener("timeupdate", () => { if (v.duration) bar.style.transform = `scaleX(${v.currentTime / v.duration})`; });
       ["waiting", "loadstart", "seeking"].forEach((ev) => v.addEventListener(ev, () => r.classList.add("buffering")));
       ["playing", "canplay", "loadeddata"].forEach((ev) => v.addEventListener(ev, () => r.classList.remove("buffering")));
@@ -669,7 +670,7 @@
     }
     let refreshBusy = false;
     async function refreshNewReels(retry = false) {
-      if (refreshBusy || (document.hidden && !retry)) return;
+      if (refreshBusy || busy || (document.hidden && !retry)) return;
       refreshBusy = true; if (refreshError) refreshError.hidden = true;
       try {
         for (let page = 0; page < 5; page++) {
@@ -763,7 +764,7 @@
         if (xhr.status >= 200 && xhr.status < 300 && r.ok) {
           setProgress(1); status.textContent = "Posted!"; window.removeEventListener("beforeunload", warn);
           if (r.html && $("#reels")) {
-            document.dispatchEvent(new CustomEvent("cirq:reel-posted", { detail: { html: r.html } }));
+            document.dispatchEvent(new CustomEvent("cirq:reel-posted", { detail: { html: r.html, newest: r.newest } }));
             const dialog = rform.closest("dialog"); if (dialog && dialog.open) dialog.close();
             reset(); toast("Your reel is live.", "success"); return;
           }

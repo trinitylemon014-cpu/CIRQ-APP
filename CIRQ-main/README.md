@@ -5,7 +5,7 @@ discover, school communities, LINKUP events, chats, the **Guess the Developer** 
 app coins, boosts and CIRQ STATUS ranks, with an admin dashboard and safety tools.
 
 > **Read this first — what has and hasn't been verified**
-> * **128 automated tests pass** (`pytest`, run on 31 Oct 2026). They run against an in-memory stand-in for Supabase
+> * **208 automated tests pass** (`pytest`, run on 1 Nov 2026). They run against an in-memory stand-in for Supabase
 >   (`tests/fakedb.py`) and a mocked Cloudinary upload call. Your real validation code, routes, templates and security rules
 >   are exercised, but **no test has touched a live Supabase project, a live Cloudinary account, a real SMTP server or Render.**
 >   Do the "first run checklist" in section 12 before inviting students.
@@ -67,7 +67,7 @@ cirq/
 │   │                       # games schools wallet trivia admin legal
 │   ├── templates/          # Jinja templates (partials/macros.html = reusable components)
 │   └── static/css/style.css  js/app.js  images/
-└── tests/                  # 128 pytest tests + fakedb.py
+└── tests/                  # pytest suite + fakedb.py
 ```
 
 ## 4. Local setup (beginner friendly)
@@ -149,7 +149,7 @@ works with a profile-less "VEX" card, but a real account is nicer: the winner se
 
 ```bash
 flask --app wsgi run          # http://localhost:5000
-pytest                        # 128 tests
+pytest                        # 208 tests
 flask --app wsgi cleanup-expired
 ```
 **Cleanup job** (expired stories + Cloudinary files, stale reset links): `render.yaml` defines an hourly Render cron service. To use a

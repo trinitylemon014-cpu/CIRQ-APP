@@ -301,7 +301,10 @@ select.input option { background: var(--navy-900); color: #fff; }
 .reel-options .menu-list form { margin: 0; }
 .reel-options .menu-list button { white-space: nowrap; text-shadow: none; }
 .reel .mute { position: absolute; top: 14px; right: 14px; z-index: 3; background: rgba(2, 8, 23, .6); color: #fff; }
-.reel .tap { position: absolute; inset: 0; background: none; border: 0; z-index: 1; cursor: pointer; }
+.reel .tap { position: absolute; inset: 0; display: grid; place-items: center; background: none; border: 0; z-index: 1; cursor: pointer; }
+.reel-play-hint { width: 68px; height: 68px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: rgba(2, 8, 23, .62); opacity: 0; transform: scale(.85); transition: opacity .18s, transform .18s; }
+.reel:not(.playing) .reel-play-hint { opacity: 1; transform: scale(1); }
+.reel-play-hint .i { width: 30px; height: 30px; fill: #fff; }
 .reel-feed-status { min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; color: var(--text-2); background: var(--navy-900); font-size: .88rem; scroll-snap-align: none; }
 .reel-feed-status[hidden] { display: none; }
 .reel-feed-status .i { color: var(--cyan); animation: reelspin .9s linear infinite; }

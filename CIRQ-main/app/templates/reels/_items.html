@@ -1,8 +1,8 @@
 {% import 'partials/macros.html' as m with context %}
-{% for r in reels %}{% set md = r.media[0] if r.media else None %}{% if md %}
+{% for r in reels %}{% set md = r.media|selectattr('media_type', 'equalto', 'video')|first %}{% if md %}
 <section class="reel" data-reel data-id="{{ r.id }}">
   <video data-src="{{ media_src(md, 540) }}" poster="{{ media_src(md, 540, thumb=True) }}" loop muted playsinline preload="none"></video>
-  <button class="tap" type="button" data-reel-toggle aria-label="Play or pause"></button>
+  <button class="tap" type="button" data-reel-toggle aria-label="Play reel"><span class="reel-play-hint">{{ m.icon('play','i-lg') }}</span></button>
   <div class="reel-spin" aria-hidden="true"></div>
   <div class="reel-flash" aria-hidden="true">{{ m.icon('play','i-lg') }}</div>
   <button class="reel-retry" type="button" data-reel-retry hidden>Couldn't play this reel · Tap to retry</button>
