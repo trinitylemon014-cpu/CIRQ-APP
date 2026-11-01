@@ -355,7 +355,7 @@ def test_trivia_csv_import_rejects_overlong_time_instead_of_truncating(app, db, 
         "question,option_a,option_b,option_c,option_d,correct_answer,time_limit_seconds\n"
         "Valid question?,one,two,three,four,A,1000\n"
     ).encode()
-    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_csv": (io.BytesIO(csv_data), "questions.csv")},
+    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_file": (io.BytesIO(csv_data), "questions.csv")},
                          content_type="multipart/form-data", follow_redirects=True)
     assert b"Nothing was imported" in response.data
     assert not db.data.get("trivia_questions")
