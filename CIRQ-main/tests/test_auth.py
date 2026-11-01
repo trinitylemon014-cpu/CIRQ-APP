@@ -29,6 +29,7 @@ def test_register_creates_pending_account_and_normalizes_username(client, db, sc
 
 def test_register_validation(client, db, school):
     for bad, key in [({"username": "a"}, "username"), ({"email": "nope"}, "email"),
+                     ({"password": "", "password2": ""}, "password"),
                      ({"password2": "different-pw-1"}, "match"), ({"terms": ""}, "terms"),
                      ({"age_ok": ""}, "age"), ({"school_id": "x"}, "school")]:
         r = reg(client, school, **bad)
@@ -57,6 +58,16 @@ def test_username_login_and_generic_errors(client, mk):
     unknown = login(c2, "nobody-here")
     assert wrong_pw.status_code == unknown.status_code == 401
     assert b"username or password isn" in wrong_pw.data and b"username or password isn" in unknown.data
+
+
+def test_change_password_accepts_short_password_containing_username(client, db, mk):
+    mk("alice")
+    login(client, "alice")
+    response = client.post("/settings", data={
+        "action": "password", "current": PASSWORD, "new": "alice", "new2": "alice",
+    })
+    assert response.status_code == 302
+    assert db.users[db.data["profiles"][0]["id"]]["password"] == "alice"
 
 
 def test_login_hides_email_and_sets_secure_session(client, mk, app):
