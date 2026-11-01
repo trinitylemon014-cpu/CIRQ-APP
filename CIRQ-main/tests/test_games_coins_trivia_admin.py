@@ -396,6 +396,50 @@ Time limit: 25 seconds
     assert question["time_limit_seconds"] == 25
 
 
+def test_admin_imports_numbered_pdf_with_inline_choices_and_trailing_answer_key(app, db, mk, monkeypatch):
+    from app.blueprints.admin import routes as admin_routes
+
+    class Page:
+        def extract_text(self):
+            return """Biology Revision
+1) Which organ pumps blood?
+A) Lung  B) Heart  C) Liver  D) Kidney
+2. Which gas do plants absorb?
+A. Carbon dioxide
+B. Oxygen
+C. Nitrogen
+D. Hydrogen
+
+Answer key: 1-B, 2-A
+"""
+
+    class Reader:
+        is_encrypted = False
+        pages = [Page()]
+
+        def __init__(self, _file, strict=True):
+            pass
+
+    monkeypatch.setattr(admin_routes, "PdfReader", Reader)
+    boss = adm(app, mk)
+    boss.post("/admin/trivia", data={"title": "Biology PDF"})
+    set_id = db.data["trivia_sets"][0]["id"]
+    response = boss.post(
+        f"/admin/trivia/{set_id}/questions/import",
+        data={"questions_file": (io.BytesIO(b"%PDF-test"), "biology.pdf")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert b"Imported 2 questions" in response.data
+    questions = sorted(db.data["trivia_questions"], key=lambda q: q["position"])
+    assert questions[0]["prompt"] == "Which organ pumps blood?"
+    assert questions[0]["options"] == ["Lung", "Heart", "Liver", "Kidney"]
+    assert questions[0]["correct_index"] == 1
+    assert questions[1]["prompt"] == "Which gas do plants absorb?"
+    assert questions[1]["correct_index"] == 0
+
+
 def test_admin_pdf_import_rejects_image_only_document(app, db, mk, monkeypatch):
     from app.blueprints.admin import routes as admin_routes
 
@@ -416,7 +460,7 @@ def test_admin_pdf_import_rejects_image_only_document(app, db, mk, monkeypatch):
     sid = db.data["trivia_sets"][0]["id"]
     response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_file": (io.BytesIO(b"%PDF-test"), "scan.pdf")},
                          content_type="multipart/form-data", follow_redirects=True)
-    assert b"Scanned PDFs aren't supported" in response.data
+    assert b"Scanned PDFs are not supported yet" in response.data
     assert not db.data.get("trivia_questions")
 
 

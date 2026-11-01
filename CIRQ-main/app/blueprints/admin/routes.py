@@ -397,9 +397,17 @@ TRIVIA_CSV_MAX_BYTES = 2 * 1024 * 1024
 TRIVIA_CSV_MAX_QUESTIONS = 500
 TRIVIA_PDF_MAX_PAGES = 100
 TRIVIA_PDF_MAX_TEXT = 2 * 1024 * 1024
-TRIVIA_PDF_QUESTION = re.compile(r"^question(?:\s*#?\s*\d+)?\s*[:.)-]\s*(.*)$", re.IGNORECASE)
-TRIVIA_PDF_OPTION = re.compile(r"^([A-D])\s*[.)\-:]\s*(.+)$", re.IGNORECASE)
-TRIVIA_PDF_ANSWER = re.compile(r"^(?:correct\s+answer|answer)\s*[:\-]\s*(.+)$", re.IGNORECASE)
+TRIVIA_PDF_QUESTION = re.compile(
+    r"^(?:question\s*(?:#\s*)?(?P<question_number>\d+)?\s*[:.)\-]?\s*"
+    r"|q(?:uestion)?\s*#?\s*(?P<q_number>\d+)\s*[:.)\-]\s*"
+    r"|(?P<number>\d{1,3})\s*[.)\-:]\s+)(?P<prompt>.*)$",
+    re.IGNORECASE,
+)
+TRIVIA_PDF_OPTION = re.compile(r"^\(?([A-D])\)?\s*[.)\-:]\s+(.+)$", re.IGNORECASE)
+TRIVIA_PDF_INLINE_OPTION = re.compile(r"(?<!\S)\(?([A-D])\)?\s*[.)\-:]\s+", re.IGNORECASE)
+TRIVIA_PDF_ANSWER = re.compile(r"^(?:(?:correct\s+)?answer|correct)\s*[:\-]\s*(.+)$", re.IGNORECASE)
+TRIVIA_PDF_ANSWER_KEY = re.compile(r"^(?:answer\s*key|answers|solutions)\s*:?\s*(.*)$", re.IGNORECASE)
+TRIVIA_PDF_ANSWER_KEY_ROW = re.compile(r"(?<!\w)(?:question\s*|q\s*)?#?\s*(\d{1,3})\s*[.)\-:]?\s*([A-D])\b", re.IGNORECASE)
 TRIVIA_PDF_TIME = re.compile(r"^time(?:\s+limit)?(?:\s*\(s\))?\s*[:\-]\s*(\d+)(?:\s*(?:s|sec|seconds))?$", re.IGNORECASE)
 
 
@@ -491,7 +499,7 @@ def _parse_trivia_csv(raw):
 
 def _parse_trivia_pdf(raw):
     try:
-        reader = PdfReader(io.BytesIO(raw), strict=True)
+        reader = PdfReader(io.BytesIO(raw), strict=False)
         if reader.is_encrypted:
             return None, "Encrypted PDFs aren't supported. Upload an unlocked PDF."
         if len(reader.pages) > TRIVIA_PDF_MAX_PAGES:
@@ -508,38 +516,81 @@ def _parse_trivia_pdf(raw):
 
     text = "\n".join(text_parts)
     if not text.strip():
-        return None, "This PDF has no selectable text. Scanned PDFs aren't supported."
+        return None, ("This PDF has no selectable text. Scanned PDFs are not supported yet; "
+                      "run OCR to make the PDF text selectable, then upload it again.")
 
     rows, issues, question = [], [], None
+    answer_key = {}
+    in_answer_key = False
 
     def save_question():
         if question:
+            question_number = question["number"]
+            answer = question["answer"] or answer_key.get(question_number, "")
             rows.append((f"Question on line {question['line']}", {
                 "question": question["prompt"],
                 **{f"option_{letter.lower()}": question["options"].get(letter, "") for letter in "ABCD"},
-                "correct_answer": question["answer"],
+                "correct_answer": answer,
                 "time_limit_seconds": question["time_limit"],
+                "_question_number": question_number,
             }))
+
+    def add_options(line, line_number):
+        markers = list(TRIVIA_PDF_INLINE_OPTION.finditer(line))
+        if not markers or (len(markers) == 1 and markers[0].start() != 0):
+            return False
+        if len(markers) == 1:
+            match = TRIVIA_PDF_OPTION.match(line)
+            if not match:
+                return False
+            markers = [match]
+            values = [(match.group(1).upper(), match.group(2).strip())]
+        else:
+            values = []
+            for index, marker in enumerate(markers):
+                start = marker.end()
+                end = markers[index + 1].start() if index + 1 < len(markers) else len(line)
+                values.append((marker.group(1).upper(), line[start:end].strip()))
+        for letter, option in values:
+            if letter in question["options"]:
+                issues.append(f"PDF line {line_number}: duplicate option {letter}.")
+            elif option:
+                question["options"][letter] = option
+        return True
 
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip().replace("\u00a0", " ")
         if not line or re.fullmatch(r"(?:page\s+)?\d+(?:\s+of\s+\d+)?", line, re.IGNORECASE):
             continue
+        key_heading = TRIVIA_PDF_ANSWER_KEY.match(line)
+        if key_heading:
+            save_question()
+            question = None
+            in_answer_key = True
+            for match in TRIVIA_PDF_ANSWER_KEY_ROW.finditer(key_heading.group(1)):
+                answer_key[int(match.group(1))] = match.group(2).upper()
+            continue
+        if in_answer_key:
+            for match in TRIVIA_PDF_ANSWER_KEY_ROW.finditer(line):
+                answer_key[int(match.group(1))] = match.group(2).upper()
+            continue
         match = TRIVIA_PDF_QUESTION.match(line)
         if match:
             save_question()
-            question = {"line": line_number, "prompt": match.group(1).strip(), "options": {}, "answer": "", "time_limit": "20"}
+            number = next((match.group(key) for key in ("question_number", "q_number", "number") if match.group(key)), None)
+            question = {"line": line_number, "number": int(number) if number else len(rows) + 1,
+                        "prompt": match.group("prompt").strip(), "options": {}, "answer": "", "time_limit": "20"}
+            if question["prompt"]:
+                add_options(question["prompt"], line_number)
+                if question["options"]:
+                    first_option = TRIVIA_PDF_INLINE_OPTION.search(question["prompt"])
+                    if first_option:
+                        question["prompt"] = question["prompt"][:first_option.start()].strip()
             continue
         if not question:
             continue
 
-        match = TRIVIA_PDF_OPTION.match(line)
-        if match:
-            letter, option = match.group(1).upper(), match.group(2).strip()
-            if letter in question["options"]:
-                issues.append(f"PDF line {line_number}: duplicate option {letter}.")
-            else:
-                question["options"][letter] = option
+        if add_options(line, line_number):
             continue
         match = TRIVIA_PDF_ANSWER.match(line)
         if match:
@@ -565,7 +616,13 @@ def _parse_trivia_pdf(raw):
     if issues:
         return None, "Nothing was imported. " + " ".join(issues[:5])
     if not rows:
-        return None, "No labeled questions were found in the PDF."
+        return None, ("No questions could be identified. Use numbered questions (for example, "
+                      "'1. Question text') or 'Question 1:', followed by A-D options. "
+                      "Include an 'Answer: B' or an 'Answer key' section.")
+    for _, row in rows:
+        question_number = row.pop("_question_number")
+        if not row["correct_answer"]:
+            row["correct_answer"] = answer_key.get(question_number, "")
     return _validate_trivia_rows(rows)
 
 
