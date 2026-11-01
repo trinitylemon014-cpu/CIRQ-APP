@@ -2,7 +2,7 @@ import base64
 import binascii
 import uuid
 
-from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, abort
+from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, current_app, abort
 from app.decorators import login_required
 from app.extensions import limiter, db
 from app.services import supabase_service as sb, cloudinary_service as cs, social

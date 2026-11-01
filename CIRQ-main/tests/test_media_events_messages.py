@@ -65,6 +65,11 @@ def test_reel_upload_requires_video_and_lists_paginated(as_user, db, uploads, pn
     assert b"autoplay" not in first.data                       # no unexpected autoplay audio
 
 
+def test_reel_pagination_rejects_malformed_cursor(as_user):
+    c, _ = as_user("alice")
+    assert c.get("/reels?partial=1&before=invalid").status_code == 400
+
+
 # ---------------- LINKUP
 def make_event(c, **over):
     data = {"title": "Debate night", "venue": "School hall", "starts_at": future(), "description": "Come along", "visibility": "public"}
