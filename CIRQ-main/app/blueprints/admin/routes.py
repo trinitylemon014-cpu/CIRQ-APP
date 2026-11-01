@@ -1,7 +1,9 @@
 import csv
 import io
+import re
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, abort, jsonify, current_app
+from pypdf import PdfReader
 from app.decorators import admin_required, moderator_or_admin
 from app.extensions import db, csrf
 from app.services import supabase_service as sb, auth_service, cloudinary_service as cs, coin_service, social
@@ -393,16 +395,61 @@ TRIVIA_CSV_REQUIRED = {"question", "option_a", "option_b", "option_c", "option_d
 TRIVIA_CSV_OPTIONAL = {"time_limit_seconds"}
 TRIVIA_CSV_MAX_BYTES = 2 * 1024 * 1024
 TRIVIA_CSV_MAX_QUESTIONS = 500
+TRIVIA_PDF_MAX_PAGES = 100
+TRIVIA_PDF_MAX_TEXT = 2 * 1024 * 1024
+TRIVIA_PDF_QUESTION = re.compile(r"^question(?:\s*#?\s*\d+)?\s*[:.)-]\s*(.*)$", re.IGNORECASE)
+TRIVIA_PDF_OPTION = re.compile(r"^([A-D])\s*[.)\-:]\s*(.+)$", re.IGNORECASE)
+TRIVIA_PDF_ANSWER = re.compile(r"^(?:correct\s+answer|answer)\s*[:\-]\s*(.+)$", re.IGNORECASE)
+TRIVIA_PDF_TIME = re.compile(r"^time(?:\s+limit)?(?:\s*\(s\))?\s*[:\-]\s*(\d+)(?:\s*(?:s|sec|seconds))?$", re.IGNORECASE)
 
 
-def _parse_trivia_csv(file):
-    if not file or not file.filename:
-        return None, "Choose a CSV file."
-    if not file.filename.lower().endswith(".csv"):
-        return None, "Upload a .csv file."
-    raw = file.stream.read(TRIVIA_CSV_MAX_BYTES + 1)
-    if len(raw) > TRIVIA_CSV_MAX_BYTES:
-        return None, "The CSV file must be 2 MB or smaller."
+def _validate_trivia_rows(rows, issues=None):
+    issues = issues or []
+    questions = []
+    for row_number, row in rows:
+        prompt = clean_text(row.get("question"), TRIVIA_CSV_MAX_BYTES)
+        options = [clean_text(row.get(f"option_{letter}"), TRIVIA_CSV_MAX_BYTES) for letter in "abcd"]
+        answer = clean_text(row.get("correct_answer"), TRIVIA_CSV_MAX_BYTES)
+        limit_value = clean_text(row.get("time_limit_seconds"), TRIVIA_CSV_MAX_BYTES)
+        try:
+            limit = int(limit_value or "20")
+        except ValueError:
+            limit = 0
+
+        problems = []
+        if not 3 <= len(prompt) <= 300:
+            problems.append("question must be 3-300 characters")
+        if any(not option or len(option) > 120 for option in options):
+            problems.append("all four options are required and must be 120 characters or fewer")
+        if len({option.casefold() for option in options}) != 4:
+            problems.append("the four options must be different")
+        if not 5 <= limit <= 120:
+            problems.append("time_limit_seconds must be 5-120")
+
+        answer_letter = answer.upper()
+        if len(answer_letter) == 1 and answer_letter in "ABCD":
+            correct_index = ord(answer_letter) - ord("A")
+        else:
+            matches = [i for i, option in enumerate(options) if option.casefold() == answer.casefold()]
+            correct_index = matches[0] if len(matches) == 1 else -1
+        if not 0 <= correct_index <= 3:
+            problems.append("correct_answer must be A, B, C, D, or match one option exactly")
+
+        if problems:
+            issues.append(f"{row_number}: " + ", ".join(problems) + ".")
+        else:
+            questions.append({"prompt": prompt, "options": options, "correct_index": correct_index, "time_limit_seconds": limit})
+
+    if issues:
+        return None, "Nothing was imported. " + " ".join(issues[:5])
+    if not questions:
+        return None, "The file has no question rows to import."
+    if len(questions) > TRIVIA_CSV_MAX_QUESTIONS:
+        return None, f"A set can contain at most {TRIVIA_CSV_MAX_QUESTIONS} questions."
+    return questions, None
+
+
+def _parse_trivia_csv(raw):
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -425,7 +472,7 @@ def _parse_trivia_csv(file):
         return None, "Check the CSV headers: " + "; ".join(details) + "."
     reader.fieldnames = headers
 
-    questions, issues, rows_seen = [], [], 0
+    rows, issues, rows_seen = [], [], 0
     try:
         for row in reader:
             if None in row:
@@ -436,47 +483,102 @@ def _parse_trivia_csv(file):
             rows_seen += 1
             if rows_seen > TRIVIA_CSV_MAX_QUESTIONS:
                 return None, f"A set can contain at most {TRIVIA_CSV_MAX_QUESTIONS} questions."
-
-            prompt = clean_text(row.get("question"), TRIVIA_CSV_MAX_BYTES)
-            options = [clean_text(row.get(f"option_{letter}"), TRIVIA_CSV_MAX_BYTES) for letter in "abcd"]
-            answer = clean_text(row.get("correct_answer"), TRIVIA_CSV_MAX_BYTES)
-            limit_value = clean_text(row.get("time_limit_seconds"), TRIVIA_CSV_MAX_BYTES)
-            try:
-                limit = int(limit_value or "20")
-            except ValueError:
-                limit = 0
-
-            problems = []
-            if not 3 <= len(prompt) <= 300:
-                problems.append("question must be 3-300 characters")
-            if any(not option or len(option) > 120 for option in options):
-                problems.append("all four options are required and must be 120 characters or fewer")
-            if len({option.casefold() for option in options}) != 4:
-                problems.append("the four options must be different")
-            if not 5 <= limit <= 120:
-                problems.append("time_limit_seconds must be 5-120")
-
-            answer_letter = answer.upper()
-            if answer_letter in "ABCD" and len(answer_letter) == 1:
-                correct_index = ord(answer_letter) - ord("A")
-            else:
-                matches = [i for i, option in enumerate(options) if option.casefold() == answer.casefold()]
-                correct_index = matches[0] if len(matches) == 1 else -1
-            if not 0 <= correct_index <= 3:
-                problems.append("correct_answer must be A, B, C, D, or match one option exactly")
-
-            if problems:
-                issues.append(f"Row {reader.line_num}: " + ", ".join(problems) + ".")
-            else:
-                questions.append({"prompt": prompt, "options": options, "correct_index": correct_index, "time_limit_seconds": limit})
+            rows.append((f"Row {reader.line_num}", row))
     except csv.Error:
         return None, "The CSV formatting is invalid. Check quotes and commas, then try again."
+    return _validate_trivia_rows(rows, issues)
 
+
+def _parse_trivia_pdf(raw):
+    try:
+        reader = PdfReader(io.BytesIO(raw), strict=True)
+        if reader.is_encrypted:
+            return None, "Encrypted PDFs aren't supported. Upload an unlocked PDF."
+        if len(reader.pages) > TRIVIA_PDF_MAX_PAGES:
+            return None, f"The PDF can contain at most {TRIVIA_PDF_MAX_PAGES} pages."
+        text_parts, text_size = [], 0
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            text_size += len(page_text)
+            if text_size > TRIVIA_PDF_MAX_TEXT:
+                return None, "The extracted PDF text is too large to import."
+            text_parts.append(page_text)
+    except Exception:
+        return None, "Couldn't read this PDF. Upload a valid, unlocked PDF and try again."
+
+    text = "\n".join(text_parts)
+    if not text.strip():
+        return None, "This PDF has no selectable text. Scanned PDFs aren't supported."
+
+    rows, issues, question = [], [], None
+
+    def save_question():
+        if question:
+            rows.append((f"Question on line {question['line']}", {
+                "question": question["prompt"],
+                **{f"option_{letter.lower()}": question["options"].get(letter, "") for letter in "ABCD"},
+                "correct_answer": question["answer"],
+                "time_limit_seconds": question["time_limit"],
+            }))
+
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.strip().replace("\u00a0", " ")
+        if not line or re.fullmatch(r"(?:page\s+)?\d+(?:\s+of\s+\d+)?", line, re.IGNORECASE):
+            continue
+        match = TRIVIA_PDF_QUESTION.match(line)
+        if match:
+            save_question()
+            question = {"line": line_number, "prompt": match.group(1).strip(), "options": {}, "answer": "", "time_limit": "20"}
+            continue
+        if not question:
+            continue
+
+        match = TRIVIA_PDF_OPTION.match(line)
+        if match:
+            letter, option = match.group(1).upper(), match.group(2).strip()
+            if letter in question["options"]:
+                issues.append(f"PDF line {line_number}: duplicate option {letter}.")
+            else:
+                question["options"][letter] = option
+            continue
+        match = TRIVIA_PDF_ANSWER.match(line)
+        if match:
+            if question["answer"]:
+                issues.append(f"PDF line {line_number}: duplicate answer.")
+            else:
+                question["answer"] = match.group(1).strip()
+            continue
+        match = TRIVIA_PDF_TIME.match(line)
+        if match:
+            question["time_limit"] = match.group(1)
+            continue
+
+        if not question["options"] and not question["answer"]:
+            question["prompt"] = f"{question['prompt']} {line}".strip()
+        elif question["options"] and not question["answer"]:
+            last_option = next(reversed(question["options"]))
+            question["options"][last_option] += f" {line}"
+        elif question["answer"]:
+            question["answer"] += f" {line}"
+
+    save_question()
     if issues:
         return None, "Nothing was imported. " + " ".join(issues[:5])
-    if not questions:
-        return None, "The CSV has no question rows to import."
-    return questions, None
+    if not rows:
+        return None, "No labeled questions were found in the PDF."
+    return _validate_trivia_rows(rows)
+
+
+def _parse_trivia_upload(file):
+    if not file or not file.filename:
+        return None, "Choose a CSV or PDF file."
+    extension = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if extension not in ("csv", "pdf"):
+        return None, "Upload a .csv or .pdf file."
+    raw = file.stream.read(TRIVIA_CSV_MAX_BYTES + 1)
+    if len(raw) > TRIVIA_CSV_MAX_BYTES:
+        return None, "The file must be 2 MB or smaller."
+    return _parse_trivia_pdf(raw) if extension == "pdf" else _parse_trivia_csv(raw)
 
 
 @bp.route("/trivia", methods=["GET", "POST"])
@@ -542,7 +644,7 @@ def trivia_import_questions(set_id):
         flash("Only draft sets can receive imported questions.", "error")
         return redirect(url_for("admin.trivia_edit", set_id=set_id))
 
-    questions, error = _parse_trivia_csv(request.files.get("questions_csv"))
+    questions, error = _parse_trivia_upload(request.files.get("questions_file"))
     if error:
         flash(error, "error")
         return redirect(url_for("admin.trivia_edit", set_id=set_id))
@@ -552,7 +654,7 @@ def trivia_import_questions(set_id):
     try:
         db().table("trivia_questions").insert(rows).execute()
     except Exception:
-        current_app.logger.exception("trivia CSV import failed")
+        current_app.logger.exception("trivia import failed")
         flash("The questions could not be saved. Nothing was imported; please try again.", "error")
         return redirect(url_for("admin.trivia_edit", set_id=set_id))
 

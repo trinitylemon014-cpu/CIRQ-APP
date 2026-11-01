@@ -13,8 +13,16 @@
   <div class="grid2"><div><label for="f-correct">Correct answer</label><select class="input" id="f-correct" name="correct">{% for i in range(4) %}<option value="{{ i }}">{{ 'ABCD'[i] }}</option>{% endfor %}</select></div><div><label for="f-t">Time limit (s)</label><input class="input" id="f-t" name="time_limit_seconds" type="number" min="5" max="120" value="20"></div></div>
   <button class="btn block" style="margin-top:14px">Add question</button></form>
 <form class="card" method="post" action="{{ url_for('admin.trivia_import_questions', set_id=s.id) }}" enctype="multipart/form-data" style="margin-top:14px">{{ m.csrf() }}<h2>Import questions</h2>
-  <p class="muted">Upload a CSV with a question, four options, and the correct answer. The answer can be A-D or the exact option text.</p>
-  <p class="hint"><a class="link" href="{{ url_for('static', filename='trivia_questions_template.csv') }}" download>Download CSV template</a> · Optional time limit: 5-120 seconds (default 20). Up to 500 questions per import.</p>
-  <label for="trivia-csv">Questions CSV</label><input class="input" id="trivia-csv" type="file" name="questions_csv" accept=".csv,text/csv" required>
+  <p class="muted">Upload a CSV or text-based PDF with each question, four options, and the correct answer. Scanned PDFs aren't supported.</p>
+  <p class="hint"><a class="link" href="{{ url_for('static', filename='trivia_questions_template.csv') }}" download>Download CSV template</a> · PDF layout:</p>
+  <pre class="hint" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:0">Question 1: Capital of France?
+A. Berlin
+B. Paris
+C. Rome
+D. Madrid
+Correct answer: B
+Time limit: 20</pre>
+  <p class="hint">Repeat the block for each question. Correct answer can be A-D or the exact option text. Time limit is optional (5-120s, default 20). Max 500 questions.</p>
+  <label for="trivia-file">Questions file</label><input class="input" id="trivia-file" type="file" name="questions_file" accept=".csv,.pdf,text/csv,application/pdf" required>
   <button class="btn sm" style="margin-top:12px">Import questions</button></form>
 {% else %}<p class="hint" style="margin-top:12px">Questions are locked while a set is live. Move it back to draft to edit (only possible before anyone has played).</p>{% endif %}{% endblock %}

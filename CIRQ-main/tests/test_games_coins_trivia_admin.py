@@ -361,6 +361,65 @@ def test_trivia_csv_import_rejects_overlong_time_instead_of_truncating(app, db, 
     assert not db.data.get("trivia_questions")
 
 
+def test_admin_imports_text_pdf_questions(app, db, mk, monkeypatch):
+    from app.blueprints.admin import routes as admin_routes
+
+    class Page:
+        def extract_text(self):
+            return """Trivia
+Question 1: Capital of France?
+A. Berlin
+B. Paris
+C. Rome
+D. Madrid
+Correct answer: B
+Time limit: 25 seconds
+"""
+
+    class Reader:
+        is_encrypted = False
+        pages = [Page()]
+
+        def __init__(self, _file, strict=True):
+            pass
+
+    monkeypatch.setattr(admin_routes, "PdfReader", Reader)
+    boss = adm(app, mk)
+    boss.post("/admin/trivia", data={"title": "PDF set"})
+    sid = db.data["trivia_sets"][0]["id"]
+    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_file": (io.BytesIO(b"%PDF-test"), "questions.pdf")},
+                         content_type="multipart/form-data", follow_redirects=True)
+    assert b"Imported 1 questions" in response.data
+    question = db.data["trivia_questions"][0]
+    assert question["prompt"] == "Capital of France?"
+    assert question["options"][question["correct_index"]] == "Paris"
+    assert question["time_limit_seconds"] == 25
+
+
+def test_admin_pdf_import_rejects_image_only_document(app, db, mk, monkeypatch):
+    from app.blueprints.admin import routes as admin_routes
+
+    class Page:
+        def extract_text(self):
+            return ""
+
+    class Reader:
+        is_encrypted = False
+        pages = [Page()]
+
+        def __init__(self, _file, strict=True):
+            pass
+
+    monkeypatch.setattr(admin_routes, "PdfReader", Reader)
+    boss = adm(app, mk)
+    boss.post("/admin/trivia", data={"title": "PDF set"})
+    sid = db.data["trivia_sets"][0]["id"]
+    response = boss.post(f"/admin/trivia/{sid}/questions/import", data={"questions_file": (io.BytesIO(b"%PDF-test"), "scan.pdf")},
+                         content_type="multipart/form-data", follow_redirects=True)
+    assert b"Scanned PDFs aren't supported" in response.data
+    assert not db.data.get("trivia_questions")
+
+
 def test_non_admin_cannot_author_trivia(as_user, db):
     c, _ = as_user("alice")
     assert c.post("/admin/trivia", data={"title": "Hax"}).status_code == 403 and not db.data.get("trivia_sets")
