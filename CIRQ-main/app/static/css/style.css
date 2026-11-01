@@ -309,6 +309,9 @@ select.input option { background: var(--navy-900); color: #fff; }
 .reel-feed-status[hidden] { display: none; }
 .reel-feed-status .i { color: var(--cyan); animation: reelspin .9s linear infinite; }
 .reel-feed-status [data-reels-retry] { margin-left: 8px; }
+.reel-loading-banner { display: flex; align-items: center; justify-content: center; gap: 8px; width: fit-content; margin: 0 auto 10px; padding: 7px 14px; border: 1px solid var(--border-cyan); border-radius: var(--r-pill); background: rgba(7, 19, 41, .92); color: var(--text-2); font-size: .82rem; font-weight: 700; box-shadow: var(--glow-cyan); }
+.reel-loading-banner[hidden] { display: none; }
+.reel-loading-banner .i { width: 17px; height: 17px; color: var(--cyan); animation: reelspin .9s linear infinite; }
 .reel-feed-sentinel { height: 1px; scroll-snap-align: none; }
 .reel-empty { height: 100%; }
 @media (max-width: 700px) {

@@ -507,6 +507,7 @@
     let muted = true;
     const composer = $("#reel-create-dialog");
     const loading = $("[data-reels-loading]", reels), loadError = $("[data-reels-error]", reels);
+    const loadingBanner = $("[data-reels-loading-banner]");
     const endNotice = $("[data-reels-end]", reels), sentinel = $("[data-reels-sentinel]", reels);
     const refreshError = $("[data-reels-refresh-error]", reels);
     const currentUrl = new URL(location.href);
@@ -650,21 +651,21 @@
     let loadFailed = false;
     async function loadMoreReels(retry = false) {
       const cur = reels.dataset.cursor; if (!cur || busy || (loadFailed && !retry)) return;
-      busy = true; loadFailed = false; loading.hidden = false; loadError.hidden = true; endNotice.hidden = true;
+      busy = true; loadFailed = false; loading.hidden = false; loadingBanner.hidden = false; loadError.hidden = true; endNotice.hidden = true;
       try {
         const res = await fetch(`${reels.dataset.moreUrl}?before=${encodeURIComponent(cur)}&partial=1`, { credentials: "same-origin" });
         if (!res.ok) throw new Error(`Reel request failed (${res.status}).`);
         const html = await res.text();
         reels.dataset.cursor = res.headers.get("X-Next-Cursor") || "";
         appendReels(html);
-        loading.hidden = true;
+        loading.hidden = true; loadingBanner.hidden = true;
         syncFeedStatus();
         if (reels.dataset.cursor && sentinel) {
           const box = reels.getBoundingClientRect(), end = sentinel.getBoundingClientRect();
           if (end.top < box.bottom + 600) requestAnimationFrame(() => loadMoreReels());
         }
       } catch (err) {
-        loadFailed = true; loadError.hidden = false; loading.hidden = true;
+        loadFailed = true; loadError.hidden = false; loading.hidden = true; loadingBanner.hidden = true;
         const message = $("span", loadError); if (message) message.textContent = `Couldn't load more reels. ${err.message}`;
       } finally { busy = false; }
     }
