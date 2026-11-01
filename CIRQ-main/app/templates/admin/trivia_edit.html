@@ -13,7 +13,7 @@
   <div class="grid2"><div><label for="f-correct">Correct answer</label><select class="input" id="f-correct" name="correct">{% for i in range(4) %}<option value="{{ i }}">{{ 'ABCD'[i] }}</option>{% endfor %}</select></div><div><label for="f-t">Time limit (s)</label><input class="input" id="f-t" name="time_limit_seconds" type="number" min="5" max="120" value="20"></div></div>
   <button class="btn block" style="margin-top:14px">Add question</button></form>
 <form class="card" method="post" action="{{ url_for('admin.trivia_import_questions', set_id=s.id) }}" enctype="multipart/form-data" style="margin-top:14px">{{ m.csrf() }}<h2>Import questions</h2>
-  <p class="muted">Upload a CSV or text-based PDF. PDF imports support numbered questions, A-D choices on separate or shared lines, and answers beside each question or in an answer key. Scanned/image-only PDFs need OCR before upload.</p>
+  <p class="muted">Upload a CSV, text-based PDF, or Word document (.docx). Document imports support numbered questions, A-D choices on separate or shared lines, and answers beside each question or in an answer key. Scanned/image-only PDFs need OCR before upload.</p>
   <p class="hint"><a class="link" href="{{ url_for('static', filename='trivia_questions_template.csv') }}" download>Download CSV template</a> · PDF layout:</p>
   <pre class="hint" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:0">1. Capital of France?
 A) Berlin
@@ -24,6 +24,6 @@ D) Madrid
 Answer key:
 1. B</pre>
   <p class="hint">You can also use “Question 1:” and include “Answer: B” after each block. Correct answers must be A-D or match an option. Time limit is optional (5-120s, default 20). Max 500 questions.</p>
-  <label for="trivia-file">Questions file</label><input class="input" id="trivia-file" type="file" name="questions_file" accept=".csv,.pdf,text/csv,application/pdf" required>
+  <label for="trivia-file">Questions file</label><input class="input" id="trivia-file" type="file" name="questions_file" accept=".csv,.pdf,.docx,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
   <button class="btn sm" style="margin-top:12px">Import questions</button></form>
 {% else %}<p class="hint" style="margin-top:12px">Questions are locked while a set is live. Move it back to draft to edit (only possible before anyone has played).</p>{% endif %}{% endblock %}

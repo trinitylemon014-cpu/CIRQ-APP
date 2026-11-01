@@ -1,4 +1,5 @@
 import io
+import zipfile
 import pytest
 from datetime import timedelta
 from tests.conftest import login
@@ -330,6 +331,73 @@ def test_admin_imports_csv_questions_and_existing_score_awards_coins(app, as_use
     attempt = db.data["trivia_attempts"][0]
     assert result["done"] and attempt["correct_count"] == 2 and attempt["coins_awarded"] > 0
     assert next(p for p in db.data["profiles"] if p["id"] == player["id"])["coin_balance"] == attempt["coins_awarded"] + 10
+
+
+def test_admin_imports_word_document_questions(app, db, mk):
+    boss = adm(app, mk)
+    boss.post("/admin/trivia", data={"title": "Word document set"})
+    sid = db.data["trivia_sets"][0]["id"]
+    paragraphs = [
+        "Capital of France?",
+        "A) Berlin",
+        "B) Paris",
+        "C) Rome",
+        "D) Madrid",
+        "Answer: B",
+        "2. Largest planet?",
+        "A) Earth",
+        "B) Mars",
+        "C) Jupiter",
+        "D) Venus",
+        "Answer key: 2-C",
+    ]
+    first_question = (
+        '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>'
+        f"<w:r><w:t>{paragraphs[0]}</w:t></w:r></w:p>"
+    )
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+        + first_question
+        + "".join(f"<w:p><w:r><w:t>{text}</w:t></w:r></w:p>" for text in paragraphs[1:])
+        + "</w:body></w:document>"
+    ).encode()
+    numbering_xml = (
+        '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/>'
+        '<w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum>'
+        '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>'
+    ).encode()
+    word_file = io.BytesIO()
+    with zipfile.ZipFile(word_file, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", document_xml)
+        archive.writestr("word/numbering.xml", numbering_xml)
+
+    response = boss.post(
+        f"/admin/trivia/{sid}/questions/import",
+        data={"questions_file": (io.BytesIO(word_file.getvalue()), "questions.docx")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert b"Imported 2 questions" in response.data
+    questions = sorted(db.data["trivia_questions"], key=lambda q: q["position"])
+    assert questions[0]["options"] == ["Berlin", "Paris", "Rome", "Madrid"]
+    assert questions[0]["correct_index"] == 1
+    assert questions[1]["correct_index"] == 2
+
+
+def test_trivia_word_import_rejects_invalid_document(app, db, mk):
+    boss = adm(app, mk)
+    boss.post("/admin/trivia", data={"title": "Draft set"})
+    sid = db.data["trivia_sets"][0]["id"]
+    response = boss.post(
+        f"/admin/trivia/{sid}/questions/import",
+        data={"questions_file": (io.BytesIO(b"not a Word document"), "questions.docx")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert b"Couldn&#39;t read this Word document" in response.data
+    assert not db.data.get("trivia_questions")
 
 
 def test_trivia_csv_import_rejects_bad_rows_without_partial_import(app, db, mk):

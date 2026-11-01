@@ -1,6 +1,8 @@
 import csv
 import io
 import re
+import zipfile
+import xml.etree.ElementTree as ET
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, abort, jsonify, current_app
 from pypdf import PdfReader
@@ -519,6 +521,133 @@ def _parse_trivia_pdf(raw):
         return None, ("This PDF has no selectable text. Scanned PDFs are not supported yet; "
                       "run OCR to make the PDF text selectable, then upload it again.")
 
+    return _parse_trivia_text(text, "PDF")
+
+
+def _parse_trivia_docx(raw):
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            document = archive.getinfo("word/document.xml")
+            if document.file_size > TRIVIA_PDF_MAX_TEXT:
+                return None, "The extracted Word document text is too large to import."
+            with archive.open(document) as xml_file:
+                xml = xml_file.read(TRIVIA_PDF_MAX_TEXT + 1)
+            if len(xml) > TRIVIA_PDF_MAX_TEXT:
+                return None, "The extracted Word document text is too large to import."
+            try:
+                numbering = archive.getinfo("word/numbering.xml")
+            except KeyError:
+                numbering_xml = None
+            else:
+                if numbering.file_size > TRIVIA_PDF_MAX_TEXT:
+                    return None, "The extracted Word document text is too large to import."
+                with archive.open(numbering) as xml_file:
+                    numbering_xml = xml_file.read(TRIVIA_PDF_MAX_TEXT + 1)
+                if len(numbering_xml) > TRIVIA_PDF_MAX_TEXT:
+                    return None, "The extracted Word document text is too large to import."
+    except (zipfile.BadZipFile, KeyError, RuntimeError, OSError):
+        return None, "Couldn't read this Word document. Upload a valid .docx file and try again."
+
+    if re.search(rb"<!DOCTYPE|<!ENTITY", xml, re.IGNORECASE) or (
+        numbering_xml and re.search(rb"<!DOCTYPE|<!ENTITY", numbering_xml, re.IGNORECASE)
+    ):
+        return None, "This Word document contains unsupported XML declarations."
+    try:
+        root = ET.fromstring(xml)
+        numbering_root = ET.fromstring(numbering_xml) if numbering_xml else None
+    except ET.ParseError:
+        return None, "Couldn't read this Word document. Upload a valid .docx file and try again."
+
+    namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+    def word_int(element, attribute, default):
+        try:
+            return int(element.get(f"{namespace}{attribute}", str(default)))
+        except (AttributeError, TypeError, ValueError):
+            return default
+
+    numbering_formats = {}
+    num_to_abstract = {}
+    if numbering_root is not None:
+        for abstract in numbering_root.findall(f"{namespace}abstractNum"):
+            abstract_id = abstract.get(f"{namespace}abstractNumId")
+            for level in abstract.findall(f"{namespace}lvl"):
+                level_id = word_int(level, "ilvl", 0)
+                number_format = level.find(f"{namespace}numFmt")
+                level_text = level.find(f"{namespace}lvlText")
+                start = level.find(f"{namespace}start")
+                if number_format is not None and level_text is not None:
+                    numbering_formats[(abstract_id, level_id)] = (
+                        number_format.get(f"{namespace}val", ""),
+                        level_text.get(f"{namespace}val", ""),
+                        word_int(start, "val", 1),
+                    )
+        for num in numbering_root.findall(f"{namespace}num"):
+            num_id = num.get(f"{namespace}numId")
+            abstract_id = num.find(f"{namespace}abstractNumId")
+            if abstract_id is not None:
+                num_to_abstract[num_id] = abstract_id.get(f"{namespace}val")
+
+    def format_number(value, number_format):
+        if number_format in ("upperLetter", "lowerLetter"):
+            letter = ""
+            while value:
+                value, remainder = divmod(value - 1, 26)
+                letter = chr(ord("A") + remainder) + letter
+            return letter.upper() if number_format == "upperLetter" else letter.lower()
+        if number_format in ("upperRoman", "lowerRoman"):
+            numerals = ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"),
+                        (90, "XC"), (50, "L"), (40, "XL"), (10, "X"), (9, "IX"),
+                        (5, "V"), (4, "IV"), (1, "I"))
+            numeral = ""
+            for amount, symbol in numerals:
+                count, value = divmod(value, amount)
+                numeral += symbol * count
+            return numeral.upper() if number_format == "upperRoman" else numeral.lower()
+        return str(value)
+
+    counters = {}
+    paragraphs = []
+    for paragraph in root.iter(f"{namespace}p"):
+        parts = []
+        for node in paragraph.iter():
+            if node.tag == f"{namespace}t" and node.text:
+                parts.append(node.text)
+            elif node.tag == f"{namespace}tab":
+                parts.append(" ")
+            elif node.tag == f"{namespace}br":
+                parts.append("\n")
+        paragraph_text = "".join(parts)
+        num_pr = paragraph.find(f"{namespace}pPr/{namespace}numPr")
+        if num_pr is not None:
+            num_id = num_pr.find(f"{namespace}numId")
+            level_id = num_pr.find(f"{namespace}ilvl")
+            num_id = num_id.get(f"{namespace}val") if num_id is not None else None
+            level_id = word_int(level_id, "val", 0)
+            abstract_id = num_to_abstract.get(num_id)
+            numbering = numbering_formats.get((abstract_id, level_id))
+            if numbering and not TRIVIA_PDF_QUESTION.match(paragraph_text.strip()):
+                number_format, level_text, start = numbering
+                if number_format != "bullet":
+                    key = (num_id, level_id)
+                    counters[key] = counters.get(key, start - 1) + 1
+                    for deeper_level in range(level_id + 1, 9):
+                        counters.pop((num_id, deeper_level), None)
+                    prefix = level_text
+                    for index in range(level_id + 1):
+                        value = counters.get((num_id, index), 1)
+                        prefix = prefix.replace(f"%{index + 1}", format_number(value, numbering_formats.get((abstract_id, index), ("decimal", "", 1))[0]))
+                    paragraph_text = f"{prefix} {paragraph_text}".strip()
+        paragraphs.append(paragraph_text)
+    text = "\n".join(paragraphs)
+    if len(text) > TRIVIA_PDF_MAX_TEXT:
+        return None, "The extracted Word document text is too large to import."
+    if not text.strip():
+        return None, "This Word document contains no readable text to import."
+    return _parse_trivia_text(text, "Word document")
+
+
+def _parse_trivia_text(text, source):
     rows, issues, question = [], [], None
     answer_key = {}
     in_answer_key = False
@@ -553,7 +682,7 @@ def _parse_trivia_pdf(raw):
                 values.append((marker.group(1).upper(), line[start:end].strip()))
         for letter, option in values:
             if letter in question["options"]:
-                issues.append(f"PDF line {line_number}: duplicate option {letter}.")
+                issues.append(f"{source} line {line_number}: duplicate option {letter}.")
             elif option:
                 question["options"][letter] = option
         return True
@@ -595,7 +724,7 @@ def _parse_trivia_pdf(raw):
         match = TRIVIA_PDF_ANSWER.match(line)
         if match:
             if question["answer"]:
-                issues.append(f"PDF line {line_number}: duplicate answer.")
+                issues.append(f"{source} line {line_number}: duplicate answer.")
             else:
                 question["answer"] = match.group(1).strip()
             continue
@@ -628,14 +757,18 @@ def _parse_trivia_pdf(raw):
 
 def _parse_trivia_upload(file):
     if not file or not file.filename:
-        return None, "Choose a CSV or PDF file."
+        return None, "Choose a CSV, PDF, or Word document."
     extension = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    if extension not in ("csv", "pdf"):
-        return None, "Upload a .csv or .pdf file."
+    if extension not in ("csv", "pdf", "docx"):
+        return None, "Upload a .csv, .pdf, or .docx file."
     raw = file.stream.read(TRIVIA_CSV_MAX_BYTES + 1)
     if len(raw) > TRIVIA_CSV_MAX_BYTES:
         return None, "The file must be 2 MB or smaller."
-    return _parse_trivia_pdf(raw) if extension == "pdf" else _parse_trivia_csv(raw)
+    if extension == "pdf":
+        return _parse_trivia_pdf(raw)
+    if extension == "docx":
+        return _parse_trivia_docx(raw)
+    return _parse_trivia_csv(raw)
 
 
 @bp.route("/trivia", methods=["GET", "POST"])
