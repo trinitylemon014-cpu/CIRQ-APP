@@ -36,12 +36,17 @@ def index():
     me = g.user
     before = _cursor_values(request.args.get("before"))
     q = (db().table("posts").select("*").eq("kind", "reel")
-         .eq("moderation_status", "ok").is_("community_id", "null")
-         .order("created_at", desc=True).order("id", desc=True).limit(QUERY_SIZE))
-    q = q.or_(f"visibility.eq.public,author_id.eq.{me['id']}")
+         .eq("moderation_status", "ok").is_("community_id", "null"))
     if before:
         created_at, post_id = before
-        q = q.or_(f"created_at.lt.{created_at},and(created_at.eq.{created_at},id.lt.{post_id})")
+        public_older = (f"and(visibility.eq.public,created_at.lt.{created_at}),"
+                        f"and(visibility.eq.public,created_at.eq.{created_at},id.lt.{post_id})")
+        own_older = (f"and(author_id.eq.{me['id']},created_at.lt.{created_at}),"
+                     f"and(author_id.eq.{me['id']},created_at.eq.{created_at},id.lt.{post_id})")
+        q = q.or_(f"{public_older},{own_older}")
+    else:
+        q = q.or_(f"visibility.eq.public,author_id.eq.{me['id']}")
+    q = q.order("created_at", desc=True).order("id", desc=True).limit(QUERY_SIZE)
     rows = q.execute().data or []
     has_more = len(rows) > PER_PAGE
     page = rows[:PER_PAGE]

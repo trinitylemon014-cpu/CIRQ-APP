@@ -185,6 +185,39 @@ def test_reels_archive_reaches_old_content_and_new_uploads_do_not_shift_pages(as
     assert reel_ids(a.get("/reels?partial=1"))[0] == new["id"]
 
 
+def test_private_reel_author_can_page_through_all_own_reels(as_user, db, mk):
+    a, alice = as_user("alice")
+    db.table("profiles").update({"is_private": True}).eq("id", alice["id"]).execute()
+    carol = mk("carol")
+    own = [reel(db, alice, f"private {i}", visibility="followers") for i in range(7)]
+    public = [reel(db, carol, f"public {i}") for i in range(7)]
+    start = datetime.now(timezone.utc) - timedelta(days=1)
+    for i, item in enumerate(own + public):
+        db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
+
+    seen = []
+    cursor = ""
+    while True:
+        page = a.get(f"/reels?partial=1&before={cursor}" if cursor else "/reels?partial=1")
+        ids = reel_ids(page)
+        assert not set(ids).intersection(seen)
+        seen.extend(ids)
+        cursor = page.headers["X-Next-Cursor"]
+        if not cursor:
+            break
+    assert set(seen) == {item["id"] for item in own + public}
+
+    b, _ = as_user("bob")
+    bob_seen, cursor = [], ""
+    while True:
+        page = b.get(f"/reels?partial=1&before={cursor}" if cursor else "/reels?partial=1")
+        bob_seen.extend(reel_ids(page))
+        cursor = page.headers["X-Next-Cursor"]
+        if not cursor:
+            break
+    assert set(bob_seen) == {item["id"] for item in public}
+
+
 # ---------------------------------------------------------------- student controls
 def test_turning_personalisation_off_forgets_and_stops_learning(as_user, db, mk):
     a, alice = as_user("alice")
