@@ -138,6 +138,8 @@ create index if not exists posts_author_idx on posts(author_id, created_at desc)
 create index if not exists posts_community_idx on posts(community_id, created_at desc);
 create index if not exists posts_public_reels_library_idx on posts(created_at desc, id desc)
   where kind = 'reel' and visibility = 'public' and moderation_status = 'ok' and community_id is null;
+create index if not exists posts_reel_stream_idx on posts(created_at desc, id desc)
+  where kind = 'reel' and moderation_status = 'ok' and community_id is null;
 
 create table if not exists post_media (
   id uuid primary key default gen_random_uuid(),
@@ -158,6 +160,14 @@ create table if not exists likes (
   created_at timestamptz not null default now(),
   primary key (post_id, user_id)
 );
+
+create table if not exists saved_posts (
+  post_id uuid not null references posts(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+create index if not exists saved_posts_user_idx on saved_posts(user_id, created_at desc);
 
 create table if not exists comments (
   id uuid primary key default gen_random_uuid(),
@@ -779,6 +789,7 @@ alter table reports add constraint reports_target_type_check
 alter table story_comments enable row level security;
 alter table comment_likes enable row level security;
 alter table story_comment_likes enable row level security;
+alter table saved_posts enable row level security;
 
 -- Story comments: a person reads their own comments and the comments on their own stories.
 drop policy if exists story_comments_read on story_comments;
@@ -798,6 +809,9 @@ create policy comment_likes_own on comment_likes for all to authenticated using 
 
 drop policy if exists story_comment_likes_own on story_comment_likes;
 create policy story_comment_likes_own on story_comment_likes for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists saved_posts_own on saved_posts;
+create policy saved_posts_own on saved_posts for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Make PostgREST pick up the new tables and columns right away.
 notify pgrst, 'reload schema';

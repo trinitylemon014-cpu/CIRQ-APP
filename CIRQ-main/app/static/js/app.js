@@ -82,7 +82,10 @@
 
     const menuBtn = c("[data-menu]");
     $$(".menu.open").forEach((m) => { if (!menuBtn || m !== menuBtn.closest(".menu")) m.classList.remove("open"); });
-    if (menuBtn) { menuBtn.closest(".menu").classList.toggle("open"); return; }
+    if (menuBtn) {
+      const menu = menuBtn.closest(".menu"), open = menu.classList.toggle("open");
+      menuBtn.setAttribute("aria-expanded", open); return;
+    }
 
     const pw = c("[data-toggle-pw]");
     if (pw) { const inp = document.getElementById(pw.dataset.togglePw); inp.type = inp.type === "password" ? "text" : "password"; return; }
@@ -133,6 +136,18 @@
         $("[data-count]", like).textContent = r.count;
       } catch (err) { toast(err.message, "error"); }
       like.disabled = false; return;
+    }
+
+    const save = c("[data-save]");
+    if (save) {
+      save.disabled = true;
+      try {
+        const r = await api(`/posts/${save.dataset.save}/save`);
+        save.classList.toggle("saved", r.saved); save.setAttribute("aria-pressed", r.saved);
+        save.setAttribute("aria-label", r.saved ? "Remove saved reel" : "Save reel");
+        $("span", save).textContent = r.saved ? "Saved" : "Save";
+      } catch (err) { toast(err.message, "error"); }
+      save.disabled = false; return;
     }
 
     const fol = c("[data-follow]");
@@ -491,6 +506,9 @@
   if (reels) {
     let muted = true;
     const composer = $("#reel-create-dialog");
+    const loading = $("[data-reels-loading]", reels), loadError = $("[data-reels-error]", reels);
+    const endNotice = $("[data-reels-end]", reels), sentinel = $("[data-reels-sentinel]", reels);
+    const refreshError = $("[data-reels-refresh-error]", reels);
     const currentUrl = new URL(location.href);
     if (currentUrl.searchParams.get("create") === "1" && composer) {
       composer.showModal();
@@ -503,6 +521,37 @@
       const v = r && vid(r); if (!v) return;
       if (!v.getAttribute("src") && v.dataset.src) { v.preload = "metadata"; v.src = v.dataset.src; }
     };
+    function nodesFromHtml(html) {
+      const template = document.createElement("template");
+      template.innerHTML = html;
+      return [...template.content.querySelectorAll("[data-reel]")];
+    }
+    function prependReels(html, preservePosition = true) {
+      const empty = $("[data-reels-empty]", reels); if (empty) empty.remove();
+      const existing = new Set($$("[data-reel]", reels).map((r) => r.dataset.id));
+      const nodes = nodesFromHtml(html).filter((r) => !existing.has(r.dataset.id));
+      if (!nodes.length) return 0;
+      const oldHeight = reels.scrollHeight, oldTop = reels.scrollTop, fragment = document.createDocumentFragment();
+      nodes.forEach((r) => fragment.append(r));
+      reels.insertBefore(fragment, reels.firstChild);
+      if (preservePosition) reels.scrollTop = oldTop + reels.scrollHeight - oldHeight;
+      watch();
+      return nodes.length;
+    }
+    function appendReels(html) {
+      const existing = new Set($$("[data-reel]", reels).map((r) => r.dataset.id));
+      const nodes = nodesFromHtml(html).filter((r) => !existing.has(r.dataset.id));
+      const fragment = document.createDocumentFragment();
+      nodes.forEach((r) => fragment.append(r));
+      reels.insertBefore(fragment, loading);
+      watch();
+      return nodes.length;
+    }
+    function syncFeedStatus() {
+      loading.hidden = true;
+      loadError.hidden = true;
+      endNotice.hidden = Boolean(reels.dataset.cursor) || !$$("[data-reel]", reels).length;
+    }
     const flash = (r, icon) => {
       const f = $(".reel-flash", r); if (!f) return;
       f.innerHTML = ICON(icon); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
@@ -526,9 +575,10 @@
         if (en.isIntersecting && en.intersectionRatio > 0.65) { $$("video", reels).forEach((o) => { if (o !== v) o.pause(); }); r._active = true; playReel(r); }
         else { if (r._active) reportWatch(r); v.pause(); if (en.intersectionRatio === 0) v.currentTime = 0; }
       });
-      const all = $$("[data-reel]", reels), last = all[all.length - 2] || all[all.length - 1];
-      if (last && entries.some((en) => en.target === last && en.isIntersecting)) loadMoreReels();
     }, { root: reels, threshold: [0, 0.1, 0.65] });
+    const moreIO = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+      if (entries.some((en) => en.isIntersecting)) loadMoreReels();
+    }, { root: reels, rootMargin: "600px 0px", threshold: 0 }) : null;
 
     function wire(r) {                         // per-reel video events (progress, buffering, errors)
       const v = vid(r); if (!v || v._wired) return; v._wired = 1;
@@ -540,12 +590,16 @@
       ["playing", "canplay", "loadeddata"].forEach((ev) => v.addEventListener(ev, () => r.classList.remove("buffering")));
       v.addEventListener("error", () => { r.classList.remove("buffering"); if (v.getAttribute("src")) { v.classList.add("failed"); $(".reel-retry", r).hidden = false; } });
     }
-    const watch = () => $$("[data-reel]", reels).forEach((r) => { if (!r._w) { r._w = 1; wire(r); io.observe(r); } });
+    const watch = () => {
+      $$("[data-reel]", reels).forEach((r) => { if (!r._w) { r._w = 1; wire(r); io.observe(r); } });
+      if (moreIO && sentinel) moreIO.observe(sentinel);
+      syncFeedStatus();
+    };
     watch();
     document.addEventListener("cirq:reel-posted", (e) => {
-      const empty = $("[data-reels-empty]", reels); if (empty) empty.remove();
-      reels.insertAdjacentHTML("afterbegin", e.detail.html);
-      watch();
+      prependReels(e.detail.html, false);
+      if (e.detail.newest) reels.dataset.newest = e.detail.newest;
+      syncFeedStatus();
       reels.scrollTo({ top: 0, behavior: "smooth" });
     });
 
@@ -557,6 +611,8 @@
       r.append(h); setTimeout(() => h.remove(), 800);
     }
     reels.addEventListener("click", (e) => {
+      if (e.target.closest("[data-reels-retry]")) { loadMoreReels(true); return; }
+      if (e.target.closest("[data-reels-refresh-retry]")) { refreshNewReels(true); return; }
       const retry = e.target.closest("[data-reel-retry]");
       if (retry) { const r = retry.closest("[data-reel]"), v = vid(r); const src = v.dataset.src; v.removeAttribute("src"); v.load(); v.src = src; playReel(r); return; }
       const mu = e.target.closest("[data-reel-mute]");
@@ -583,24 +639,74 @@
     document.addEventListener("keydown", (e) => {   // desktop: arrows move between reels, space pauses
       if (/INPUT|TEXTAREA|SELECT/.test((e.target.tagName || ""))) return;
       const rs = $$("[data-reel]", reels); const cur = rs.findIndex((r) => { const b = r.getBoundingClientRect(), c = reels.getBoundingClientRect(); return Math.abs(b.top - c.top) < c.height / 2; });
-      if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); rs[Math.min(rs.length - 1, cur + 1)].scrollIntoView({ behavior: "smooth" }); }
-      if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); rs[Math.max(0, cur - 1)].scrollIntoView({ behavior: "smooth" }); }
+      if ((e.key === "ArrowDown" || e.key === "j") && rs.length) { e.preventDefault(); rs[Math.min(rs.length - 1, cur + 1)].scrollIntoView({ behavior: "smooth" }); }
+      if ((e.key === "ArrowUp" || e.key === "k") && rs.length) { e.preventDefault(); rs[Math.max(0, cur - 1)].scrollIntoView({ behavior: "smooth" }); }
       if (e.key === " " && cur >= 0) { e.preventDefault(); const v = vid(rs[cur]); v.paused ? v.play().catch(() => {}) : v.pause(); }
       if (e.key === "m") { const b = $("[data-reel-mute]", reels); b && b.click(); }
     });
 
     let busy = false;
-    async function loadMoreReels() {
-      const cur = reels.dataset.cursor; if (!cur || busy) return; busy = true;
+    let loadFailed = false;
+    async function loadMoreReels(retry = false) {
+      const cur = reels.dataset.cursor; if (!cur || busy || (loadFailed && !retry)) return;
+      busy = true; loadFailed = false; loading.hidden = false; loadError.hidden = true; endNotice.hidden = true;
       try {
         const res = await fetch(`${reels.dataset.moreUrl}?before=${encodeURIComponent(cur)}&partial=1`, { credentials: "same-origin" });
-        if (!res.ok) throw new Error("load failed");
+        if (!res.ok) throw new Error(`Reel request failed (${res.status}).`);
         const html = await res.text();
         reels.dataset.cursor = res.headers.get("X-Next-Cursor") || "";
-        reels.insertAdjacentHTML("beforeend", html); watch();
-      } catch (_) { /* try again on next scroll */ }
-      busy = false;
+        appendReels(html);
+        loading.hidden = true;
+        syncFeedStatus();
+        if (reels.dataset.cursor && sentinel) {
+          const box = reels.getBoundingClientRect(), end = sentinel.getBoundingClientRect();
+          if (end.top < box.bottom + 600) requestAnimationFrame(() => loadMoreReels());
+        }
+      } catch (err) {
+        loadFailed = true; loadError.hidden = false; loading.hidden = true;
+        const message = $("span", loadError); if (message) message.textContent = `Couldn't load more reels. ${err.message}`;
+      } finally { busy = false; }
     }
+    let refreshBusy = false;
+    async function refreshNewReels(retry = false) {
+      if (refreshBusy || (document.hidden && !retry)) return;
+      refreshBusy = true; if (refreshError) refreshError.hidden = true;
+      try {
+        for (let page = 0; page < 5; page++) {
+          const marker = reels.dataset.newest;
+          const query = marker ? `?partial=1&after=${encodeURIComponent(marker)}` : "?partial=1";
+          const res = await fetch(`${reels.dataset.moreUrl}${query}`, { credentials: "same-origin" });
+          if (!res.ok) throw new Error(`Refresh failed (${res.status}).`);
+          const html = await res.text();
+          if (marker) {
+            const next = res.headers.get("X-After-Cursor");
+            if (next) reels.dataset.newest = next;
+            prependReels(html);
+            if (res.headers.get("X-More-Newer") !== "1") break;
+          } else {
+            prependReels(html);
+            const newest = res.headers.get("X-Newest-Cursor");
+            if (newest) reels.dataset.newest = newest;
+            if (!reels.dataset.cursor) reels.dataset.cursor = res.headers.get("X-Next-Cursor") || "";
+            break;
+          }
+        }
+        syncFeedStatus();
+      } catch (err) {
+        if (refreshError) {
+          refreshError.hidden = false;
+          const message = $("span", refreshError); if (message) message.textContent = `Couldn't check for new reels. ${err.message}`;
+        }
+      } finally { refreshBusy = false; }
+    }
+    if (moreIO && sentinel) moreIO.observe(sentinel);
+    else reels.addEventListener("scroll", () => {
+      if (sentinel && sentinel.getBoundingClientRect().top < reels.getBoundingClientRect().bottom + 600) loadMoreReels();
+    }, { passive: true });
+    reels.addEventListener("click", (e) => {
+      if (e.target.closest("[data-reels-refresh-retry]")) refreshNewReels(true);
+    });
+    window.setInterval(() => refreshNewReels(), 30000);
   }
 
   /* ---------- reel composer: preview, validation, real upload progress ---------- */

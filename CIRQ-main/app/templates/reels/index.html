@@ -1,9 +1,14 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Reels{% endblock %}
 {% block content %}
 <div class="row between" style="margin-bottom:12px"><div><h1 class="page-title" style="margin:0">Reels</h1><p class="muted small" style="margin:4px 0 0">New reels appear first. Older reels stay here until their creator deletes them.</p></div><button class="btn sm" type="button" data-open="reel-create-dialog">{{ m.icon('plus','i-sm') }} New reel</button></div>
-<div class="reels" id="reels" data-more-url="{{ url_for('reels.index') }}" data-cursor="{{ cursor or '' }}">
+<div class="reels" id="reels" data-more-url="{{ url_for('reels.index') }}" data-cursor="{{ cursor or '' }}" data-newest="{{ newest or '' }}">
   {% if reels %}{% include 'reels/_items.html' %}
   {% else %}<div class="card empty reel-empty" data-reels-empty>{{ m.icon('film') }}<h3>No reels yet</h3><p>Be the first to upload a short vertical video.</p><button class="btn" type="button" data-open="reel-create-dialog">Upload a reel</button></div>{% endif %}
+  <div class="reel-feed-status" data-reels-loading role="status" aria-live="polite" hidden>{{ m.icon('loader') }} Loading more reels…</div>
+  <div class="reel-feed-status" data-reels-end role="status" hidden>You're all caught up.</div>
+  <div class="reel-feed-status" data-reels-error role="alert" hidden><span>Couldn't load more reels.</span><button class="btn sm" type="button" data-reels-retry>Try again</button></div>
+  <div class="reel-feed-status" data-reels-refresh-error role="alert" hidden><span>Couldn't check for new reels.</span><button class="btn sm" type="button" data-reels-refresh-retry>Retry</button></div>
+  <div class="reel-feed-sentinel" data-reels-sentinel aria-hidden="true"></div>
 </div>
 <dialog id="reel-create-dialog" class="reel-create-dialog" aria-labelledby="reel-create-title">
   <div class="row between" style="margin-bottom:14px"><h2 id="reel-create-title" style="margin:0">Share a reel</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>

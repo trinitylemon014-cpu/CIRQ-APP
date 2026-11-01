@@ -221,6 +221,62 @@ def test_private_reel_author_can_page_through_all_own_reels(as_user, db, mk):
     assert set(bob_seen) == {item["id"] for item in public}
 
 
+def test_followers_can_see_private_creators_reels_but_other_users_cannot(as_user, db, mk):
+    viewer, _ = as_user("viewer")
+    outsider, _ = as_user("outsider")
+    creator = mk("creator")
+    viewer.post("/u/creator/follow")
+    private(db, creator)
+    item = reel(db, creator, "followers-only reel")
+
+    assert item["id"] in reel_ids(viewer.get("/reels?partial=1"))
+    assert item["id"] not in reel_ids(outsider.get("/reels?partial=1"))
+
+
+def test_new_reel_refresh_is_keyset_paginated_newest_first_without_duplicates(as_user, db, mk):
+    client, _ = as_user("viewer")
+    creator = mk("creator")
+    old = [reel(db, creator, f"old {i}") for i in range(9)]
+    start = datetime.now(timezone.utc) - timedelta(days=2)
+    for i, item in enumerate(old):
+        db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
+
+    first = client.get("/reels?partial=1")
+    marker = first.headers["X-Newest-Cursor"]
+    new = [reel(db, creator, f"new {i}") for i in range(12)]
+    for i, item in enumerate(new):
+        db.table("posts").update({"created_at": (start + timedelta(days=1, seconds=i)).isoformat()}).eq("id", item["id"]).execute()
+
+    refreshed, after = [], marker
+    while True:
+        page = client.get(f"/reels?partial=1&after={after}")
+        ids = reel_ids(page)
+        assert not set(ids).intersection(refreshed)
+        refreshed = ids + refreshed
+        after = page.headers["X-After-Cursor"]
+        if page.headers["X-More-Newer"] != "1":
+            break
+    assert refreshed == [item["id"] for item in reversed(new)]
+    assert reel_ids(client.get("/reels?partial=1&before=" + first.headers["X-Next-Cursor"])) == [item["id"] for item in reversed(old[:4])]
+
+
+def test_reel_saves_are_private_and_visibility_checked(as_user, db, mk):
+    owner, owner_profile = as_user("owner")
+    viewer, _ = as_user("viewer")
+    creator = mk("creator")
+    item = reel(db, creator, "bookmarkable")
+
+    response = viewer.post(f"/posts/{item['id']}/save")
+    assert response.get_json() == {"saved": True}
+    assert len(db.data["saved_posts"]) == 1
+    assert b"Remove saved reel" in viewer.get("/reels").data
+    assert viewer.post(f"/posts/{item['id']}/save").get_json() == {"saved": False}
+    assert not db.data["saved_posts"]
+
+    private_item = reel(db, private(db, owner_profile), "private reel")
+    assert viewer.post(f"/posts/{private_item['id']}/save").status_code == 404
+
+
 # ---------------------------------------------------------------- student controls
 def test_turning_personalisation_off_forgets_and_stops_learning(as_user, db, mk):
     a, alice = as_user("alice")

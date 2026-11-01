@@ -286,7 +286,7 @@ select.input option { background: var(--navy-900); color: #fff; }
 .send { width: 46px; height: 46px; flex: none; border-radius: 50%; border: 0; background: var(--grad-primary); color: #fff; display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-btn); transition: transform .15s; } .send:hover { transform: scale(1.06); }
 
 /* ---------- 13. Reels ---------- */
-.reels { height: calc(100vh - 20px); height: calc(100dvh - 20px); overflow-y: auto; scroll-snap-type: y mandatory; border-radius: var(--r-xl); margin: 0 auto; max-width: 440px; scrollbar-width: none; background: #000; border: 1px solid var(--border); box-shadow: var(--glow-purple); }
+.reels { height: min(78vh, 880px); height: min(78dvh, 880px); min-height: 420px; overflow-y: auto; overscroll-behavior-y: contain; scroll-snap-type: y mandatory; border-radius: var(--r-xl); margin: 0 auto; width: min(100%, 440px); scrollbar-width: none; background: #000; border: 1px solid var(--border); box-shadow: var(--glow-purple); }
 .reels::-webkit-scrollbar { display: none; }
 .reel { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; background: #000; overflow: hidden; }
 .reel video { width: 100%; height: 100%; object-fit: cover; }
@@ -295,8 +295,22 @@ select.input option { background: var(--navy-900); color: #fff; }
 .reel .side { position: absolute; right: 12px; bottom: 100px; z-index: 2; display: grid; gap: 14px; justify-items: center; }
 .reel .side .act { flex-direction: column; gap: 2px; padding: 8px; color: #fff; font-size: .76rem; text-shadow: 0 1px 6px #000; }
 .reel .side .act .i { width: 30px; height: 30px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)); }
+.reel .side .act.saved { color: var(--cyan); }
+.reel-options { z-index: 4; }
+.reel-options .menu-list { top: auto; right: 0; bottom: 46px; }
+.reel-options .menu-list form { margin: 0; }
+.reel-options .menu-list button { white-space: nowrap; text-shadow: none; }
 .reel .mute { position: absolute; top: 14px; right: 14px; z-index: 3; background: rgba(2, 8, 23, .6); color: #fff; }
 .reel .tap { position: absolute; inset: 0; background: none; border: 0; z-index: 1; cursor: pointer; }
+.reel-feed-status { min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; color: var(--text-2); background: var(--navy-900); font-size: .88rem; scroll-snap-align: none; }
+.reel-feed-status[hidden] { display: none; }
+.reel-feed-status .i { color: var(--cyan); animation: reelspin .9s linear infinite; }
+.reel-feed-status [data-reels-retry] { margin-left: 8px; }
+.reel-feed-sentinel { height: 1px; scroll-snap-align: none; }
+.reel-empty { height: 100%; }
+@media (max-width: 700px) {
+  .reels { height: max(420px, calc(100dvh - 270px)); min-height: 0; border-radius: var(--r-lg); }
+}
 
 /* ---------- 14. Games: CIRQ FLIP collectible cards, hub, trivia ---------- */
 .game-hero { position: relative; text-align: center; padding: 8px 0 4px; }

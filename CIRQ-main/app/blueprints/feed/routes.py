@@ -208,6 +208,24 @@ def like(post_id):
     return jsonify(liked=liked, count=fresh["like_count"])
 
 
+@bp.post("/posts/<post_id>/save")
+@login_required
+@limiter.limit("240 per hour")
+def save_post(post_id):
+    post = sb.get("posts", id=post_id)
+    author = sb.get("profiles", id=post["author_id"]) if post else None
+    if not post or not social.can_view_post(g.user, post, author):
+        abort(404)
+    saved = sb.get("saved_posts", post_id=post_id, user_id=g.user["id"])
+    if saved:
+        sb.delete("saved_posts", post_id=post_id, user_id=g.user["id"])
+        state = False
+    else:
+        sb.insert("saved_posts", {"post_id": post_id, "user_id": g.user["id"]})
+        state = True
+    return jsonify(saved=state)
+
+
 @bp.get("/post/<post_id>")
 @login_required
 def detail(post_id):

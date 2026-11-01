@@ -12,7 +12,7 @@ from app.utils import clean_text, parse_dt
 
 bp = Blueprint("reels", __name__)
 PER_PAGE = 5   # only a handful of videos are ever loaded at once
-QUERY_SIZE = PER_PAGE + 1
+SCAN_SIZE = 25
 MAX_REEL_SECONDS = 90
 
 
@@ -30,38 +30,92 @@ def _cursor_values(cursor):
         abort(400, description="Invalid reel cursor.")
 
 
+def _cursor_for(post):
+    return base64.urlsafe_b64encode(f"{post['created_at']}|{post['id']}".encode()).decode().rstrip("=")
+
+
+def _cursor_filter(cursor, direction):
+    created_at, post_id = cursor
+    op = "lt" if direction == "before" else "gt"
+    return f"and(created_at.{op}.{created_at}),and(created_at.eq.{created_at},id.{op}.{post_id})"
+
+
+def _visible_reels(rows, viewer, following, blocked):
+    hydrated = social.hydrate_posts(rows, viewer["id"])
+    out = []
+    for reel in hydrated:
+        author = reel["author"]
+        allowed_by_relationship = reel["author_id"] == viewer["id"] or reel["author_id"] in following
+        if (author["account_status"] != "approved" or reel["author_id"] in blocked
+                or not any(media.get("media_type") == "video" for media in reel["media"])):
+            continue
+        if reel["visibility"] != "public" and not allowed_by_relationship:
+            continue
+        if author.get("is_private") and not allowed_by_relationship:
+            continue
+        out.append(reel)
+    return out
+
+
 @bp.get("/reels")
 @login_required
 def index():
     me = g.user
-    before = _cursor_values(request.args.get("before"))
-    q = (db().table("posts").select("*").eq("kind", "reel")
-         .eq("moderation_status", "ok").is_("community_id", "null"))
-    if before:
-        created_at, post_id = before
-        public_older = (f"and(visibility.eq.public,created_at.lt.{created_at}),"
-                        f"and(visibility.eq.public,created_at.eq.{created_at},id.lt.{post_id})")
-        own_older = (f"and(author_id.eq.{me['id']},created_at.lt.{created_at}),"
-                     f"and(author_id.eq.{me['id']},created_at.eq.{created_at},id.lt.{post_id})")
-        q = q.or_(f"{public_older},{own_older}")
-    else:
-        q = q.or_(f"visibility.eq.public,author_id.eq.{me['id']}")
-    q = q.order("created_at", desc=True).order("id", desc=True).limit(QUERY_SIZE)
-    rows = q.execute().data or []
-    has_more = len(rows) > PER_PAGE
-    page = rows[:PER_PAGE]
-    cursor = (base64.urlsafe_b64encode(f"{page[-1]['created_at']}|{page[-1]['id']}".encode())
-              .decode().rstrip("=")) if has_more and page else None
-    hidden = social.blocked_between(me["id"])
-    reels = [r for r in social.hydrate_posts(page, me["id"])
-             if r["author_id"] not in hidden and r["author"]["account_status"] == "approved"
-             and (r["author_id"] == me["id"] or not r["author"].get("is_private"))]
+    if request.args.get("before") and request.args.get("after"):
+        abort(400, description="Use either the older or newer reel cursor, not both.")
+    direction = "after" if request.args.get("after") else "before"
+    initial_cursor = _cursor_values(request.args.get(direction))
     following = set(social.following_ids(me["id"]))
+    hidden = social.blocked_between(me["id"])
+    eligible_authors = sorted(following | {me["id"]})
+    scan_cursor = initial_cursor
+    scanned_ids = set()
+    visible = []
+    exhausted = False
+    while len(visible) <= PER_PAGE and not exhausted:
+        q = (db().table("posts").select("*").eq("kind", "reel")
+             .eq("moderation_status", "ok").is_("community_id", "null")
+             .or_(f"visibility.eq.public,author_id.in.({','.join(eligible_authors)})"))
+        if scan_cursor:
+            q = q.or_(_cursor_filter(scan_cursor, direction))
+        rows = (q.order("created_at", desc=direction != "after")
+                .order("id", desc=direction != "after").limit(SCAN_SIZE).execute().data or [])
+        if not rows:
+            break
+        for reel in _visible_reels(rows, me, following, hidden):
+            if reel["id"] not in scanned_ids:
+                scanned_ids.add(reel["id"])
+                visible.append(reel)
+        exhausted = len(rows) < SCAN_SIZE
+        scan_cursor = (rows[-1]["created_at"], rows[-1]["id"])
+
+    has_more = len(visible) > PER_PAGE
+    page = visible[:PER_PAGE]
+    if direction == "after":
+        page.reverse()
+        cursor = _cursor_for(visible[PER_PAGE - 1]) if has_more else None
+        after_cursor = (_cursor_for(visible[PER_PAGE - 1]) if has_more else
+                        _cursor_for({"created_at": scan_cursor[0], "id": scan_cursor[1]}) if scan_cursor else None)
+    else:
+        cursor = _cursor_for(page[-1]) if has_more and page else None
+        after_cursor = None
+    saved = {row["post_id"] for row in sb.in_("saved_posts", "post_id", [r["id"] for r in page])
+             if row["user_id"] == me["id"]} if page else set()
+    for reel in page:
+        reel["saved"] = reel["id"] in saved
     if request.args.get("partial"):
-        resp = make_response(render_template("reels/_items.html", reels=reels, cursor=cursor, following=following))
+        rendered_page = page if direction == "before" else sorted(
+            page, key=lambda r: (parse_dt(r["created_at"]), r["id"]), reverse=True)
+        resp = make_response(render_template("reels/_items.html", reels=rendered_page, cursor=cursor, following=following))
         resp.headers["X-Next-Cursor"] = cursor or ""
+        if direction == "after":
+            resp.headers["X-After-Cursor"] = after_cursor or ""
+            resp.headers["X-More-Newer"] = "1" if has_more else "0"
+        elif page:
+            resp.headers["X-Newest-Cursor"] = _cursor_for(page[0])
         return resp
-    return render_template("reels/index.html", reels=reels, cursor=cursor, following=following)
+    return render_template("reels/index.html", reels=page, cursor=cursor, newest=(_cursor_for(page[0]) if page else ""),
+                           following=following)
 
 
 @bp.get("/reels/new")
@@ -113,8 +167,10 @@ def create():
     social.grant_achievement(g.user["id"], "reel_maker")
     if _wants_json():
         rendered = social.hydrate_posts([post], g.user["id"])
+        rendered[0]["saved"] = False
+        newest = _cursor_for(post)
         html = render_template("reels/_items.html", reels=rendered, cursor=None,
                                following=set(social.following_ids(g.user["id"])))
-        return jsonify(ok=True, redirect=url_for("reels.index"), html=html)
+        return jsonify(ok=True, redirect=url_for("reels.index"), html=html, newest=newest)
     flash("Reel posted!", "success")
     return redirect(url_for("reels.index"))

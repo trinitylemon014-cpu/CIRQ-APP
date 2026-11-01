@@ -42,7 +42,7 @@ DEFAULTS = {
     "email_verifications": dict(used_at=None),
     "post_media": dict(delivery_type="upload"),
 }
-PKS = {"likes": ("post_id", "user_id"), "follows": ("follower_id", "followee_id"), "blocks": ("blocker_id", "blocked_id"),
+PKS = {"likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "follows": ("follower_id", "followee_id"), "blocks": ("blocker_id", "blocked_id"),
        "community_members": ("community_id", "user_id"), "conversation_members": ("conversation_id", "user_id"),
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
        "feature_flags": ("key",), "achievements": ("code",)}
@@ -92,6 +92,8 @@ def _parse_filter(expression):
     if expression.startswith("and(") and expression.endswith(")"):
         return ("and", None, [_parse_filter(p) for p in _split_filters(expression[4:-1])])
     col, op, val = expression.split(".", 2)
+    if op == "in" and val.startswith("(") and val.endswith(")"):
+        val = [item for item in val[1:-1].split(",") if item]
     return (op, col, val)
 
 

@@ -16,8 +16,14 @@
     <button class="act {{ 'liked' if r.liked }}" type="button" data-like="{{ r.id }}">{{ m.icon('heart') }}<span data-count>{{ r.like_count }}</span></button>
     <a class="act" href="{{ url_for('feed.detail', post_id=r.id) }}#comments">{{ m.icon('comment') }}<span>{{ r.comment_count }}</span></a>
     <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=r.id, _external=True) }}">{{ m.icon('share') }}<span>Share</span></button>
-    {% if r.author_id == cur.id %}<form method="post" action="{{ url_for('feed.delete_post', post_id=r.id) }}" data-confirm="Delete this reel?">{{ m.csrf() }}<button class="act">{{ m.icon('trash') }}<span>Delete</span></button></form>
-    {% else %}<button class="act" type="button" data-not-interested="{{ r.id }}">{{ m.icon('x') }}<span>Hide</span></button>
-    <button class="act" type="button" data-report="reel:{{ r.id }}">{{ m.icon('flag') }}<span>Report</span></button>{% endif %}
+    <button class="act {{ 'saved' if r.saved }}" type="button" data-save="{{ r.id }}" aria-pressed="{{ 'true' if r.saved else 'false' }}" aria-label="{{ 'Remove saved reel' if r.saved else 'Save reel' }}">{{ m.icon('bookmark') }}<span>{{ 'Saved' if r.saved else 'Save' }}</span></button>
+    <div class="menu reel-options">
+      <button class="act" type="button" data-menu aria-label="More reel options" aria-expanded="false">{{ m.icon('more') }}<span>More</span></button>
+      <div class="menu-list">
+        {% if r.author_id == cur.id %}<form method="post" action="{{ url_for('feed.delete_post', post_id=r.id) }}" data-confirm="Delete this reel?">{{ m.csrf() }}<button class="danger">{{ m.icon('trash','i-sm') }} Delete reel</button></form>
+        {% else %}<button type="button" data-not-interested="{{ r.id }}">{{ m.icon('x','i-sm') }} Hide reel</button>
+        <button type="button" data-report="reel:{{ r.id }}">{{ m.icon('flag','i-sm') }} Report reel</button>{% endif %}
+      </div>
+    </div>
   </div>
 </section>{% endif %}{% endfor %}
