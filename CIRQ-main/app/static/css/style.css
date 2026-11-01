@@ -262,6 +262,20 @@ select.input option { background: var(--navy-900); color: #fff; }
 .event-cover { aspect-ratio: 16/8; background: linear-gradient(135deg, #1a2d6b, #0b1c3d 55%, #5b21d6); display: grid; place-items: center; color: var(--cyan); }
 .event-cover img { width: 100%; height: 100%; object-fit: cover; }
 .event-body { padding: 16px; }
+.event-card--compact { grid-template-columns: minmax(104px, 30%) minmax(0, 1fr); margin-bottom: 14px; transition: border-color .18s, transform .18s, box-shadow .18s; }
+.event-card--compact:hover { transform: translateY(-2px); border-color: var(--border-cyan); box-shadow: var(--shadow-card), 0 0 18px rgba(0, 217, 255, .12); }
+.event-card--compact .event-cover { aspect-ratio: auto; min-height: 132px; overflow: hidden; }
+.event-card--compact .event-body { min-width: 0; gap: 12px; }
+.event-card--compact .grow { min-width: 0; }
+.event-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.05rem; }
+.event-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) {
+  .event-card--compact { grid-template-columns: 92px minmax(0, 1fr); }
+  .event-card--compact .event-cover { min-height: 112px; }
+  .event-card--compact .event-body { padding: 12px; gap: 9px; }
+  .event-card--compact .date-pill { min-width: 46px; padding: 7px 5px; }
+  .event-title { font-size: .96rem; }
+}
 .date-pill { display: inline-grid; place-items: center; min-width: 58px; padding: 8px; border-radius: var(--r-md); background: var(--grad-primary); color: #fff; font-weight: 800; line-height: 1.05; text-align: center; box-shadow: var(--glow-purple); } .date-pill small { font-weight: 700; letter-spacing: .08em; font-size: .66rem; opacity: .9; }
 .convo { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: var(--r-lg); background: var(--card-bg); border: 1px solid var(--border-soft); transition: .18s; } .convo:hover { border-color: var(--border-cyan); transform: translateY(-1px); box-shadow: var(--glow-cyan); } .convo + .convo { margin-top: 10px; }
 .convo .snip { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .9rem; } .convo.unread { border-color: var(--border); } .convo.unread .snip { color: #fff; font-weight: 700; }

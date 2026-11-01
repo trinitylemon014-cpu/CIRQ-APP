@@ -4,10 +4,10 @@
 <p class="muted">School events and student communities. Meet at school or public venues.</p>
 <div class="tabs"><a href="?tab=upcoming" class="{{ 'active' if tab == 'upcoming' }}">Upcoming</a><a href="?tab=school" class="{{ 'active' if tab == 'school' }}">My school</a><a href="?tab=mine" class="{{ 'active' if tab == 'mine' }}">My events</a></div>
 {% for e in events %}
-<a class="card event-card" style="margin-bottom:14px;display:block" href="{{ url_for('linkup.detail', event_id=e.id) }}">
+<a class="card event-card event-card--compact" href="{{ url_for('linkup.detail', event_id=e.id) }}">
   <div class="event-cover">{% if e.cover_url %}<img src="{{ media_src({'url': e.cover_url, 'public_id': e.cover_public_id, 'media_type': 'image'}, 800) }}" alt="" loading="lazy">{% else %}{{ m.icon('calendar','i-lg') }}{% endif %}</div>
   <div class="event-body row"><span class="date-pill"><small>{{ (e.starts_at|event_dt)[8:11]|upper }}</small>{{ (e.starts_at|event_dt)[5:7] }}</span>
-    <div class="grow"><b style="font-size:1.1rem">{{ e.title }}</b><br><small class="muted">{{ e.starts_at|event_dt }} · {{ e.venue }}</small><br>
+    <div class="grow"><b class="event-title">{{ e.title }}</b><small class="muted event-meta">{{ e.starts_at|event_dt }} · {{ e.venue }}</small>
       <small class="muted">{{ e.going }} going{% if e.school %} · {{ e.school.name }}{% endif %}</small></div>
     {% if e.status != 'scheduled' %}<span class="chip {{ 'red' if e.status == 'cancelled' else '' }}">{{ e.status|capitalize }}</span>{% endif %}</div>
 </a>
