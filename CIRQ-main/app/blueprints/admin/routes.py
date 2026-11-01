@@ -437,19 +437,20 @@ def _parse_trivia_csv(file):
             if rows_seen > TRIVIA_CSV_MAX_QUESTIONS:
                 return None, f"A set can contain at most {TRIVIA_CSV_MAX_QUESTIONS} questions."
 
-            prompt = clean_text(row.get("question"), 300)
-            options = [clean_text(row.get(f"option_{letter}"), 120) for letter in "abcd"]
-            answer = clean_text(row.get("correct_answer"), 120)
+            prompt = clean_text(row.get("question"), TRIVIA_CSV_MAX_BYTES)
+            options = [clean_text(row.get(f"option_{letter}"), TRIVIA_CSV_MAX_BYTES) for letter in "abcd"]
+            answer = clean_text(row.get("correct_answer"), TRIVIA_CSV_MAX_BYTES)
+            limit_value = clean_text(row.get("time_limit_seconds"), TRIVIA_CSV_MAX_BYTES)
             try:
-                limit = int(clean_text(row.get("time_limit_seconds"), 3) or "20")
+                limit = int(limit_value or "20")
             except ValueError:
                 limit = 0
 
             problems = []
-            if len(prompt) < 3:
+            if not 3 <= len(prompt) <= 300:
                 problems.append("question must be 3-300 characters")
-            if not all(options):
-                problems.append("all four options are required")
+            if any(not option or len(option) > 120 for option in options):
+                problems.append("all four options are required and must be 120 characters or fewer")
             if len({option.casefold() for option in options}) != 4:
                 problems.append("the four options must be different")
             if not 5 <= limit <= 120:
