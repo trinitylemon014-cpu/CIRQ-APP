@@ -23,7 +23,7 @@ app coins, boosts and CIRQ STATUS ranks, with an admin dashboard and safety tool
 | Admin approval of new accounts (pending / approved / rejected / suspended) | Implemented, tested |
 | **Admin-approved password recovery** (request → admin review → single-use, expiring emailed link → reset → audit) + manual-review path | Implemented, tested |
 | Feed: text/photo/video posts, edit/delete, likes, comments, follow, block, report, pagination | Implemented, tested |
-| Reels (vertical, lazy-loaded, muted by default, newest-first cursor archive), Stories (24 h, story tray, viewer, view tracking, cleanup job) | Implemented, tested (reels/stories UI only visually checked) |
+| Reels (vertical, lazy-loaded, muted by default, newest-first cursor archive, in-page upload), Stories (24 h, story tray, viewer, view tracking, cleanup job) | Implemented, tested (reels/stories UI only visually checked) |
 | Profiles, settings, change password, **delete my account** | Implemented, tested |
 | **Private accounts + follow requests** (Instagram-style: Follow → Requested → owner confirms/deletes; chat opens only after approval) | Implemented, tested (incl. headless-browser check) |
 | **Story likes, liker list, and story replies that land in the owner's inbox** | Implemented, tested (incl. headless-browser check) |

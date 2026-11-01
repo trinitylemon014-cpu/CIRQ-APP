@@ -1,38 +1,5 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}New reel{% endblock %}
 {% block content %}
 <h1 class="page-title">New reel</h1>
-<form class="card rc" id="reel-form" method="post" action="{{ url_for('reels.create') }}" enctype="multipart/form-data"
-      data-reel-form data-max-mb="{{ config.MAX_VIDEO_MB }}" data-max-sec="90">{{ m.csrf() }}
-
-  <div class="rc-pick-group" data-rc-pick>
-    <label class="file-drop rc-pick">{{ m.icon('film') }}
-      <span><b>Select a video</b><small class="muted" style="display:block;font-weight:500">Vertical works best · MP4, MOV or WebM · up to {{ config.MAX_VIDEO_MB }} MB · max 90 sec</small></span>
-      <input type="file" name="video" id="rc-file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.m4v,.webm" required></label>
-    <button type="button" class="file-drop cam-btn rc-cam" data-camera="#rc-file" data-camera-modes="video" data-camera-max="90" data-camera-max-mb="{{ config.MAX_VIDEO_MB }}">{{ m.icon('camera') }} Record with camera</button>
-  </div>
-
-  <div class="rc-edit" data-rc-edit hidden>
-    <div class="rc-frame">
-      <video data-rc-video muted loop playsinline></video>
-      <div class="rc-nopreview" data-rc-nopreview hidden>{{ m.icon('film') }}<span>Preview isn't available for this format,<br>but it will upload fine.</span></div>
-      <div class="rc-overlay" data-rc-overlay hidden>
-        <div class="rc-ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/><circle class="v" cx="22" cy="22" r="19" data-rc-ring/></svg><b data-rc-pct>0%</b></div>
-        <p data-rc-status>Uploading…</p>
-        <button class="btn ghost sm" type="button" data-rc-cancel>Cancel</button>
-      </div>
-    </div>
-    <div class="rc-side">
-      <div class="rc-meta"><b data-rc-name></b><small class="muted" data-rc-info></small></div>
-      <label for="f-cap">Caption</label>
-      <textarea class="input" id="f-cap" name="caption" maxlength="300" rows="4" placeholder="Write a caption…" data-rc-caption></textarea>
-      <div class="rc-count"><small class="muted"><span data-rc-count>0</span>/300</small></div>
-      <p class="rc-error" data-rc-error role="alert" hidden></p>
-      <p class="hint">Public unless your profile is followers-only. Your reel stays on CIRQ until you delete it. We convert it so it plays on every phone.</p>
-      <div class="row" style="gap:10px;margin-top:6px">
-        <button class="btn grow" type="submit" data-rc-submit>Share reel</button>
-        <button class="btn ghost" type="button" data-rc-remove>Change</button>
-      </div>
-    </div>
-  </div>
-</form>
+{% include 'reels/_form.html' %}
 {% endblock %}

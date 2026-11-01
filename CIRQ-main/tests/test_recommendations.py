@@ -152,7 +152,7 @@ def test_reels_are_newest_first_and_paginate_without_repeats(as_user, db, mk):
         db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
 
     page = a.get("/reels").get_data(as_text=True)
-    assert 'href="/reels/new"' in page and "New reel" in page
+    assert 'data-open="reel-create-dialog"' in page and "New reel" in page
     first = a.get("/reels?partial=1")
     assert reel_ids(first) == [item["id"] for item in reversed(old[-5:])]
     cursor = first.headers["X-Next-Cursor"]

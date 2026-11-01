@@ -191,6 +191,19 @@ def test_reel_upload_json_for_progress_uploader(as_user, db, uploads):
     assert len(db.data["posts"]) == 1
 
 
+def test_private_reel_upload_is_added_to_owner_stream_only(as_user, db, uploads):
+    owner, profile = as_user("alice")
+    db.table("profiles").update({"is_private": True}).eq("id", profile["id"]).execute()
+    posted = owner.post("/reels", data={"video": (io.BytesIO(MP4), "private.mp4"), "caption": "My reel"},
+                        content_type="multipart/form-data", headers={"X-Requested-With": "fetch"}).get_json()
+    assert posted["ok"] and 'data-id="' + db.data["posts"][0]["id"] + '"' in posted["html"]
+    assert db.data["posts"][0]["visibility"] == "followers"
+    assert db.data["posts"][0]["id"] in owner.get("/reels").get_data(as_text=True)
+
+    viewer, _ = as_user("bob")
+    assert db.data["posts"][0]["id"] not in viewer.get("/reels").get_data(as_text=True)
+
+
 def test_reel_delivery_url_is_h264_mp4(uploads):
     from app.services import cloudinary_service as cs
     url = cs.media_src({"public_id": "cirq/reels/a", "media_type": "video", "delivery_type": "upload", "url": "u"}, 540)

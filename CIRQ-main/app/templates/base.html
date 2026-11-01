@@ -79,7 +79,8 @@
   <div class="row between"><h2 style="margin:0">Create</h2><button class="icon-btn" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
   <div class="sheet-grid">
     <a href="{{ url_for('feed.home') }}#composer">{{ m.icon('edit') }} Post</a>
-    <a href="{{ url_for('reels.new') }}">{{ m.icon('film') }} Reel</a>
+    {% if ep == 'reels' %}<button type="button" data-open="reel-create-dialog">{{ m.icon('film') }} Reel</button>
+    {% else %}<a href="{{ url_for('reels.index', create=1) }}">{{ m.icon('film') }} Reel</a>{% endif %}
     <button type="button" data-open="story-sheet">{{ m.icon('camera') }} Story</button>
     <a href="{{ url_for('linkup.new') }}">{{ m.icon('calendar') }} Event</a>
   </div>

@@ -490,6 +490,13 @@
   const reels = $("#reels");
   if (reels) {
     let muted = true;
+    const composer = $("#reel-create-dialog");
+    const currentUrl = new URL(location.href);
+    if (currentUrl.searchParams.get("create") === "1" && composer) {
+      composer.showModal();
+      currentUrl.searchParams.delete("create");
+      history.replaceState(null, "", currentUrl.pathname + currentUrl.search + currentUrl.hash);
+    }
     const ICON = (n) => `<svg class="i"><use href="#i-${n}"/></svg>`;
     const vid = (r) => $("video", r);
     const arm = (r) => {                       // give a reel its source (lazy), metadata only
@@ -535,6 +542,12 @@
     }
     const watch = () => $$("[data-reel]", reels).forEach((r) => { if (!r._w) { r._w = 1; wire(r); io.observe(r); } });
     watch();
+    document.addEventListener("cirq:reel-posted", (e) => {
+      const empty = $("[data-reels-empty]", reels); if (empty) empty.remove();
+      reels.insertAdjacentHTML("afterbegin", e.detail.html);
+      watch();
+      reels.scrollTo({ top: 0, behavior: "smooth" });
+    });
 
     // tap = play/pause, double-tap = like (with a heart burst), like Instagram
     let lastTap = 0, tapTimer = null;
@@ -641,7 +654,15 @@
       xhr.upload.onprogress = (ev) => { if (!ev.lengthComputable) return; const p = ev.loaded / ev.total; setProgress(p * 0.98); if (p >= 1) status.textContent = "Processing your reel…"; };
       xhr.onload = () => {
         const r = xhr.response || {};
-        if (xhr.status >= 200 && xhr.status < 300 && r.ok) { setProgress(1); status.textContent = "Posted!"; window.removeEventListener("beforeunload", warn); location.href = r.redirect || "/reels"; return; }
+        if (xhr.status >= 200 && xhr.status < 300 && r.ok) {
+          setProgress(1); status.textContent = "Posted!"; window.removeEventListener("beforeunload", warn);
+          if (r.html && $("#reels")) {
+            document.dispatchEvent(new CustomEvent("cirq:reel-posted", { detail: { html: r.html } }));
+            const dialog = rform.closest("dialog"); if (dialog && dialog.open) dialog.close();
+            reset(); toast("Your reel is live.", "success"); return;
+          }
+          location.href = r.redirect || "/reels"; return;
+        }
         const byStatus = { 413: "That video is larger than CIRQ allows.", 429: "You've posted a lot of reels. Please wait a while and try again.", 502: "The server was busy. Please try again.", 504: "The upload took too long. Try a shorter or smaller video." };
         fail(r.error || byStatus[xhr.status] || "Upload failed. Please try again.");
       };

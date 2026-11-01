@@ -35,9 +35,10 @@ def _cursor_values(cursor):
 def index():
     me = g.user
     before = _cursor_values(request.args.get("before"))
-    q = (db().table("posts").select("*").eq("kind", "reel").eq("visibility", "public")
+    q = (db().table("posts").select("*").eq("kind", "reel")
          .eq("moderation_status", "ok").is_("community_id", "null")
          .order("created_at", desc=True).order("id", desc=True).limit(QUERY_SIZE))
+    q = q.or_(f"visibility.eq.public,author_id.eq.{me['id']}")
     if before:
         created_at, post_id = before
         q = q.or_(f"created_at.lt.{created_at},and(created_at.eq.{created_at},id.lt.{post_id})")
@@ -48,7 +49,8 @@ def index():
               .decode().rstrip("=")) if has_more and page else None
     hidden = social.blocked_between(me["id"])
     reels = [r for r in social.hydrate_posts(page, me["id"])
-             if r["author_id"] not in hidden and r["author"]["account_status"] == "approved" and not r["author"].get("is_private")]
+             if r["author_id"] not in hidden and r["author"]["account_status"] == "approved"
+             and (r["author_id"] == me["id"] or not r["author"].get("is_private"))]
     following = set(social.following_ids(me["id"]))
     if request.args.get("partial"):
         resp = make_response(render_template("reels/_items.html", reels=reels, cursor=cursor, following=following))
@@ -105,6 +107,9 @@ def create():
         return _fail("We couldn't save your reel. Please try again.", 500)
     social.grant_achievement(g.user["id"], "reel_maker")
     if _wants_json():
-        return jsonify(ok=True, redirect=url_for("reels.index"))
+        rendered = social.hydrate_posts([post], g.user["id"])
+        html = render_template("reels/_items.html", reels=rendered, cursor=None,
+                               following=set(social.following_ids(g.user["id"])))
+        return jsonify(ok=True, redirect=url_for("reels.index"), html=html)
     flash("Reel posted!", "success")
     return redirect(url_for("reels.index"))
