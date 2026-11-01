@@ -28,11 +28,18 @@ def test_register_creates_pending_account_and_normalizes_username(client, db, sc
 
 
 def test_register_validation(client, db, school):
-    for bad, key in [({"username": "a"}, "username"), ({"email": "nope"}, "email"), ({"password": "short", "password2": "short"}, "pw"),
-                     ({"password2": "different-pw-1"}, "match"), ({"terms": ""}, "terms"), ({"age_ok": ""}, "age"), ({"school_id": "x"}, "school")]:
+    for bad, key in [({"username": "a"}, "username"), ({"email": "nope"}, "email"),
+                     ({"password2": "different-pw-1"}, "match"), ({"terms": ""}, "terms"),
+                     ({"age_ok": ""}, "age"), ({"school_id": "x"}, "school")]:
         r = reg(client, school, **bad)
         assert r.status_code == 400, key
     assert not db.data.get("profiles")
+
+
+def test_registration_accepts_short_password_containing_username(client, db, school):
+    r = reg(client, school, password="newkid", password2="newkid")
+    assert r.status_code == 302
+    assert list(db.users.values())[0]["password"] == "newkid"
 
 
 def test_username_uniqueness(client, db, school, mk):

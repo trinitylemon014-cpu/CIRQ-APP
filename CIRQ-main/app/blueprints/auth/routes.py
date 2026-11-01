@@ -62,7 +62,7 @@ def register():
             errors.append("Enter a valid email address.")
         if not any(s["id"] == school_id for s in schools):
             errors.append("Choose your school.")
-        errors += password_problems(pw, username)
+        errors += password_problems(pw)
         if pw != pw2:
             errors.append("Passwords don't match.")
         if not f.get("terms"):
@@ -187,7 +187,7 @@ def reset_password(token):
     profile = sb.get("profiles", id=req["user_id"])
     if request.method == "POST":
         pw, pw2 = request.form.get("password", ""), request.form.get("password2", "")
-        errors = password_problems(pw, profile["username"]) + (["Passwords don't match."] if pw != pw2 else [])
+        errors = password_problems(pw) + (["Passwords don't match."] if pw != pw2 else [])
         if errors:
             for e in errors:
                 flash(e, "error")

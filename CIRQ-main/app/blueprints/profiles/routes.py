@@ -177,7 +177,7 @@ def settings():
                   else "Your account is now public. Pending requests were approved.", "success")
         elif action == "password":
             cur, new, new2 = request.form.get("current", ""), request.form.get("new", ""), request.form.get("new2", "")
-            errs = password_problems(new, me["username"]) + (["Passwords don't match."] if new != new2 else [])
+            errs = password_problems(new) + (["Passwords don't match."] if new != new2 else [])
             if not auth_service.verify_password(me["id"], cur):
                 errs.append("Your current password isn't right.")
             if errs:

@@ -154,7 +154,7 @@ def register_cli(app):
         username = normalize_username(username)
         if not valid_username(username):
             raise click.ClickException("Invalid username.")
-        probs = password_problems(password, username)
+        probs = password_problems(password)
         if probs:
             raise click.ClickException(" ".join(probs))
         uid = auth_service.create_auth_user(email.strip().lower(), password)

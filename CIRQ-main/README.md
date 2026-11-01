@@ -104,6 +104,8 @@ cirq/
    The service-role key is **server only**: never put it in a template, JavaScript or a screenshot.
 4. **Authentication → Providers → Email**: sign-ups are created by the server (admin API), so you can turn **off**
    "Allow new users to sign up" for extra safety. You do not need Supabase's own confirmation emails.
+   CIRQ does not impose password strength or username-based rules; passwords must be non-empty and confirmed. Supabase Auth
+   may still enforce the minimum length and password policy configured for your project.
 5. **Username login:** students log in with a username. The server finds the profile by username, reads the account's email
    from Supabase Auth with the service role, and verifies the password through Supabase Auth. Emails never reach the browser.
 6. Add your schools: copy `schools.example.txt` to `schools.txt`, edit it, then `python seed_data.py schools.txt`

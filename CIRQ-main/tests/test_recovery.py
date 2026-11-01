@@ -90,19 +90,20 @@ def test_expired_token_rejected(app, client, db, school, mk):
     assert client.post(f"/reset-password/{token}", data={"password": NEW_PW, "password2": NEW_PW}).status_code == 400
 
 
-def test_rejection_and_weak_password(app, client, db, school, mk):
+def test_rejection_and_short_password_reset(app, client, db, school, mk):
     mk("alice"); request_reset(client, school)
     adm = admin_client(app, mk); rid = db.data["password_reset_requests"][0]["id"]
     adm.post(f"/admin/password-resets/{rid}/reject", data={"note": "not verified"})
     assert db.data["password_reset_requests"][0]["status"] == "rejected"
     assert not app.extensions.get("sent_mail")
-    # weak password on a valid token
+    # Short passwords are accepted on a valid reset token.
     request_reset(client, school)
     rid2 = db.data["password_reset_requests"][1]["id"]
     adm.post(f"/admin/password-resets/{rid2}/approve", data={})
     token = re.search(r"/reset-password/([\w-]+)", app.extensions["sent_mail"][-1]["body"]).group(1)
-    assert client.post(f"/reset-password/{token}", data={"password": "short", "password2": "short"}).status_code == 400
-    assert db.data["password_reset_requests"][1]["status"] == "approved"
+    assert client.post(f"/reset-password/{token}", data={"password": "alice", "password2": "alice"}).status_code == 302
+    assert db.data["password_reset_requests"][1]["status"] == "completed"
+    assert db.users[db.data["profiles"][0]["id"]]["password"] == "alice"
 
 
 def test_manual_review_requires_replacement_email_and_note(app, client, db, school, mk):

@@ -51,17 +51,8 @@ def valid_email(email):
     return bool(EMAIL_RE.match(email or "")) and len(email) <= 254
 
 
-def password_problems(pw, username=""):
-    problems = []
-    if len(pw or "") < 10:
-        problems.append("Use at least 10 characters.")
-    if not re.search(r"[A-Za-z]", pw or "") or not re.search(r"\d", pw or ""):
-        problems.append("Include at least one letter and one number.")
-    if username and username.lower() in (pw or "").lower():
-        problems.append("Your password can't contain your username.")
-    if (pw or "").lower() in {"password123", "1234567890", "qwerty12345", "password1234"}:
-        problems.append("That password is too common.")
-    return problems
+def password_problems(pw):
+    return [] if pw else ["Enter a password."]
 
 
 def tier_for(followers):

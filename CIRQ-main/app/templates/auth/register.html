@@ -10,7 +10,7 @@
     <select class="input" id="f-school" name="school_id" required><option value="">Choose your school</option>
       {% for s in schools %}<option value="{{ s.id }}" {{ 'selected' if form.get('school_id') == s.id }}>{{ s.name }}</option>{% endfor %}</select>
     {% if not schools %}<div class="hint">No schools are listed yet. An administrator needs to add yours first.</div>{% endif %}
-    {{ m.pw_field('password', 'Password', 'new-password') }}<div class="hint">At least 10 characters with a letter and a number.</div>
+    {{ m.pw_field('password', 'Password', 'new-password') }}
     {{ m.pw_field('password2', 'Confirm password', 'new-password') }}
     <label class="check"><input type="checkbox" name="age_ok" required> I'm 13 or older.</label>
     <label class="check"><input type="checkbox" name="terms" required> I agree to the <a class="link" href="{{ url_for('legal_pages.guidelines') }}" target="_blank">Community Guidelines</a> and <a class="link" href="{{ url_for('legal_pages.privacy') }}" target="_blank">Privacy Notice</a>.</label>
