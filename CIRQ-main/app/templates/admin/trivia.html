@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Trivia admin{% endblock %}
+{% block content %}<h1 class="page-title">Trivia sets</h1>{% include 'admin/_nav.html' %}
+<form class="card row wrap" method="post">{{ m.csrf() }}<input class="input grow" name="title" placeholder="New set title" required><input class="input grow" name="description" placeholder="Short description"><button class="btn sm">Create set</button></form>
+{% for s in sets %}<a class="card row" style="margin-top:10px" href="{{ url_for('admin.trivia_edit', set_id=s.id) }}"><div class="grow"><b>{{ s.title }}</b><br><small class="muted">{{ s.q_count }} questions · {{ s.attempts }} attempts</small></div><span class="chip {{ {'draft':'','published':'green','closed':'red'}[s.status] }}">{{ s.status }}</span></a>{% endfor %}{% endblock %}

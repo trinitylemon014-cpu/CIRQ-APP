@@ -1,0 +1,23 @@
+{% import 'partials/macros.html' as m with context %}
+{% for r in reels %}{% set md = r.media[0] if r.media else None %}{% if md %}
+<section class="reel" data-reel data-id="{{ r.id }}">
+  <video data-src="{{ media_src(md, 540) }}" poster="{{ media_src(md, 540, thumb=True) }}" loop muted playsinline preload="none"></video>
+  <button class="tap" type="button" data-reel-toggle aria-label="Play or pause"></button>
+  <div class="reel-spin" aria-hidden="true"></div>
+  <div class="reel-flash" aria-hidden="true">{{ m.icon('play','i-lg') }}</div>
+  <button class="reel-retry" type="button" data-reel-retry hidden>Couldn't play this reel · Tap to retry</button>
+  <button class="icon-btn mute" type="button" data-reel-mute aria-label="Unmute">{{ m.icon('mute') }}</button>
+  <div class="shade"></div>
+  <div class="info"><a class="row" href="{{ url_for('profiles.view', username=r.author.username) }}">{{ m.avatar(r.author, 38) }}<b>@{{ r.author.username }}</b>{{ m.verified(r.author) }}</a>
+    {% if r.author_id != cur.id %}<span style="display:inline-block;margin:8px 0">{{ m.follow_btn(r.author.username, 'following' if r.author_id in following else 'none') }}</span>{% endif %}
+    <p style="margin:6px 0 0">{{ r.caption or '' }}</p></div>
+  <div class="reel-progress" aria-hidden="true"><i></i></div>
+  <div class="side">
+    <button class="act {{ 'liked' if r.liked }}" type="button" data-like="{{ r.id }}">{{ m.icon('heart') }}<span data-count>{{ r.like_count }}</span></button>
+    <a class="act" href="{{ url_for('feed.detail', post_id=r.id) }}#comments">{{ m.icon('comment') }}<span>{{ r.comment_count }}</span></a>
+    <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=r.id, _external=True) }}">{{ m.icon('share') }}<span>Share</span></button>
+    {% if r.author_id == cur.id %}<form method="post" action="{{ url_for('feed.delete_post', post_id=r.id) }}" data-confirm="Delete this reel?">{{ m.csrf() }}<button class="act">{{ m.icon('trash') }}<span>Delete</span></button></form>
+    {% else %}<button class="act" type="button" data-not-interested="{{ r.id }}">{{ m.icon('x') }}<span>Hide</span></button>
+    <button class="act" type="button" data-report="reel:{{ r.id }}">{{ m.icon('flag') }}<span>Report</span></button>{% endif %}
+  </div>
+</section>{% endif %}{% endfor %}

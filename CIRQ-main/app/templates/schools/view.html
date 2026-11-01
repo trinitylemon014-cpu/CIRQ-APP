@@ -1,0 +1,23 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ s.name }}{% endblock %}
+{% block content %}
+<section class="card hero">{{ m.school_logo(s, 96, 'center') }}
+  <h1 style="font-size:1.6rem">{{ s.name }}</h1>
+  <div class="row wrap" style="justify-content:center">{% if s.verified %}<span class="chip violet">{{ m.icon('check','i-sm') }} Verified school</span>{% else %}<span class="chip">Not yet verified</span>{% endif %}<span class="chip">{{ m.icon('users','i-sm') }} {{ members }} member{{ '' if members == 1 else 's' }}</span></div>
+  <div class="row" style="justify-content:center;margin-top:14px">
+  {% if member %}<form method="post" action="{{ url_for('schools.chat', slug=s.slug) }}">{{ m.csrf() }}<button class="btn">{{ m.icon('message','i-sm') }} Community chat</button></form>
+    <form method="post" action="{{ url_for('schools.leave', slug=s.slug) }}">{{ m.csrf() }}<button class="btn ghost">Leave</button></form>
+  {% else %}<form method="post" action="{{ url_for('schools.join', slug=s.slug) }}">{{ m.csrf() }}<button class="btn">Join community</button></form>{% endif %}</div>
+</section>
+{% if events %}<div class="section-title"><h2>Upcoming events</h2></div>{% for e in events %}<a class="card row" style="margin-bottom:8px" href="{{ url_for('linkup.detail', event_id=e.id) }}"><div class="grow"><b>{{ e.title }}</b><br><small class="muted">{{ e.starts_at|event_dt }}</small></div></a>{% endfor %}{% endif %}
+{% if member or cur.role == 'admin' %}
+  <div class="section-title"><h2>Community</h2></div>
+  <form class="card" method="post" action="{{ url_for('schools.post', slug=s.slug) }}">{{ m.csrf() }}<textarea class="input" name="caption" maxlength="1000" placeholder="Share with your school community" aria-label="Community post"></textarea>
+    <div class="row between wrap" style="margin-top:10px">{% if is_mod %}<label class="check" style="margin:0"><input type="checkbox" name="announcement"> Announcement</label>{% else %}<span></span>{% endif %}<button class="btn sm">Post</button></div></form>
+  <div style="margin-top:14px">{% for p in posts %}{% if p.is_announcement %}<div class="chip violet" style="margin:0 0 6px 8px">{{ m.icon('bell','i-sm') }} Announcement</div>{% endif %}{% include 'partials/post_card.html' %}{% else %}{% call m.empty('users','No posts yet','Start the conversation.') %}{% endcall %}{% endfor %}</div>
+{% else %}{% call m.empty('lock','Join to see the community','Posts, announcements and the community chat are for members.') %}{% endcall %}{% endif %}
+{% if not s.verified and member and not pending %}
+<details class="card" style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Are you an official school representative?</summary>
+  <form method="post" action="{{ url_for('schools.verify_request', slug=s.slug) }}">{{ m.csrf() }}<p class="muted small">Verification is a manual check by CIRQ admins (e.g. an official school email or staff contact). It is never based on followers.</p>
+  <textarea class="input" name="evidence_note" minlength="20" maxlength="500" placeholder="How can we confirm you represent this school?" required></textarea><button class="btn sm" style="margin-top:10px">Send request</button></form></details>
+{% elif pending %}<p class="chip warn" style="margin-top:14px">Verification request pending review</p>{% endif %}
+{% endblock %}

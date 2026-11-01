@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Chat{% endblock %}
+{% block content %}
+<div class="chat-wrap" data-cid="{{ conv.id }}" data-poll="{{ url_for('messages.poll', cid=conv.id) }}" data-last="{{ last_ts }}">
+  <div class="chat-head"><a class="icon-btn" href="{{ url_for('messages.inbox') }}" aria-label="Back">{{ m.icon('arrow-left') }}</a>
+    {% if other %}<a class="row" href="{{ url_for('profiles.view', username=other.username) }}">{{ m.avatar(other, 44) }}<div><b>{{ other.display_name }}</b>{{ m.verified(other) }}<br><small class="muted">@{{ other.username }}</small></div></a>
+    {% else %}<span class="av" style="--s:44px">{{ m.icon('users') }}</span><div><b>{{ conv.title or 'Group chat' }}</b><br><small class="muted">{{ members|length }} members</small></div>{% endif %}</div>
+  <div class="bubbles" id="bubbles" aria-live="polite">
+    {% if more %}<a class="btn sm ghost" style="align-self:center" href="?before={{ more }}">Older messages</a>{% endif %}
+    {% include 'messages/_bubbles.html' %}
+    {% if not msgs %}<p class="muted" style="text-align:center;margin:auto">No messages yet. Say hello!</p>{% endif %}
+  </div>
+  {% if can_send %}
+  <form class="chat-form" id="chat-form" action="{{ url_for('messages.send', cid=conv.id) }}" method="post" enctype="multipart/form-data">{{ m.csrf() }}
+    <label class="icon-btn" style="margin:0;cursor:pointer" aria-label="Attach a photo or video">{{ m.icon('image') }}<input type="file" name="attachment" accept="image/*,video/mp4,video/quicktime,video/webm" hidden></label>
+    <input type="text" name="body" maxlength="2000" placeholder="Message" aria-label="Message" autocomplete="off">
+    <button class="send" aria-label="Send">{{ m.icon('send') }}</button></form>
+  {% else %}
+  <div class="chat-locked">{{ m.icon('lock','i-sm') }}<span>{% if other %}@{{ other.username }} has a private account. You can send messages once they approve your follow request.{% else %}You can't send messages in this chat.{% endif %}</span></div>
+  {% endif %}
+</div>
+{% endblock %}

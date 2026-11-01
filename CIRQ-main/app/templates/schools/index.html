@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Schools{% endblock %}
+{% block content %}<h1 class="page-title">Schools</h1>
+{% for s in schools %}<a class="card row" style="margin-bottom:10px" href="{{ url_for('schools.view', slug=s.slug) }}">{{ m.school_logo(s, 52) }}<div class="grow"><b>{{ s.name }}</b> {% if s.verified %}<span class="chip violet">{{ m.icon('check','i-sm') }} Verified</span>{% endif %}<br><small class="muted">{{ s.city or '' }}{{ ', ' if s.city }}{{ s.country }}</small></div></a>
+{% else %}{% call m.empty('school','No schools yet','An administrator needs to add schools first.') %}{% endcall %}{% endfor %}{% endblock %}

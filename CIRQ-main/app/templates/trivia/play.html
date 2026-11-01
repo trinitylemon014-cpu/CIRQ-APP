@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ s.title }}{% endblock %}
+{% block content %}
+<div class="card" id="trivia" data-q="{{ url_for('trivia.question', set_id=s.id) }}" data-a="{{ url_for('trivia.answer', set_id=s.id) }}">
+  <div class="row between"><span class="chip" id="t-pos">Question 1 / {{ total }}</span><span class="coin" id="t-pts">0</span></div>
+  <div class="timer" id="t-timer" style="margin:14px 0"><b></b></div>
+  <h2 id="t-prompt" style="min-height:3em">Loading…</h2>
+  <div id="t-opts"></div>
+  <p class="muted small" id="t-note" style="margin-top:12px"></p>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Coins{% endblock %}
+{% block content %}
+<h1 class="page-title">App coins</h1>
+<div class="card lime"><div style="font-weight:800;color:rgba(255,255,255,.8)">BALANCE</div><div style="font-size:3.4rem;font-weight:800;line-height:1.05">{{ me.coin_balance }}</div>
+  <p style="margin:6px 0 0;font-weight:700">Earn coins by joining, finding the developer card in CIRQ FLIP and playing trivia.</p></div>
+<div class="card" style="margin-top:14px"><div class="row">{{ m.icon('rocket','i-lg') }}<div class="grow"><h2 style="margin:0">Boost your account</h2><p class="muted" style="margin:2px 0 0">Show up higher in Discover with a Boosted badge for {{ days }} days. Boosts never change your CIRQ STATUS rank.</p></div></div>
+  {% if boosted %}<p class="chip lime" style="margin-top:12px">{{ m.icon('rocket','i-sm') }} Boosted until {{ me.boosted_until|event_dt }}</p>{% endif %}
+  <form method="post" action="{{ url_for('wallet.boost_with_coins') }}" style="margin-top:12px">{{ m.csrf() }}<button class="btn block" {{ 'disabled' if me.coin_balance < cost }}>Boost with {{ cost }} coins</button></form>
+  {% if me.coin_balance < cost %}<div class="progress" style="margin-top:10px"><b style="width:{{ [100, (me.coin_balance * 100 // cost)]|min }}%"></b></div><p class="hint">{{ cost - me.coin_balance }} more coins to go.</p>{% endif %}
+  {% if paid_enabled %}<hr class="divider"><a class="link" href="{{ url_for('wallet.pay') }}">Or pay by mobile money →</a>{% endif %}</div>
+<div class="section-title"><h2>History</h2></div>
+<div class="card">{% for h in history %}<div class="person"><div class="grow"><b>{{ {'welcome':'Welcome bonus','dev_card':'Found the developer','trivia':'Trivia reward','boost_spend':'Account boost','admin_adjust':'Adjustment'}.get(h.reason, h.reason) }}</b><br><small class="dim">{{ h.created_at|ago }}</small></div>
+  <b style="color:{{ 'var(--lime)' if h.amount > 0 else 'var(--danger)' }}">{{ '+' if h.amount > 0 }}{{ h.amount }}</b></div>{% else %}<p class="muted">No coin activity yet.</p>{% endfor %}</div>
+{% endblock %}

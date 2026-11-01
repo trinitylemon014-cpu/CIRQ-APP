@@ -1,0 +1,62 @@
+# Render Blueprint. Secrets use `sync: false`: Render asks you for them in the dashboard; nothing secret lives in this file.
+services:
+  - type: web
+    name: cirq
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app -c gunicorn.conf.py
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: APP_BASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: MAIL_SERVER
+        sync: false
+      - key: MAIL_PORT
+        value: 587
+      - key: MAIL_USE_TLS
+        value: true
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_DEFAULT_SENDER
+        sync: false
+      - key: CRON_SECRET
+        generateValue: true
+      - key: DEVELOPER_USERNAME
+        value: vex
+      - key: PAID_COMPETITIONS_ENABLED
+        value: false          # keep false until legal / payment / child-safety review is complete
+  # Hourly cleanup of expired stories (rows + Cloudinary files) and stale reset links.
+  # If you don't want a second paid Render service, call the same URL from any free scheduler instead (see README).
+  - type: cron
+    name: cirq-cleanup
+    runtime: python
+    schedule: "0 * * * *"
+    buildCommand: "true"
+    startCommand: 'curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$APP_BASE_URL/admin/internal/cleanup"'
+    envVars:
+      - key: APP_BASE_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false

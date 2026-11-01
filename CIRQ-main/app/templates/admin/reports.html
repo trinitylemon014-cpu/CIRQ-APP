@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Reports{% endblock %}
+{% block content %}<h1 class="page-title">Reports</h1>{% include 'admin/_nav.html' %}
+<div class="tabs">{% for s in ['open','actioned','dismissed'] %}<a href="?status={{ s }}" class="{{ 'active' if status == s }}">{{ s|capitalize }}</a>{% endfor %}</div>
+{% for r in rows %}<div class="card" style="margin-bottom:12px"><div class="row between wrap"><div><span class="chip red">{{ r.target_type }}</span> <span class="chip">{{ r.reason }}</span></div><small class="muted">{{ r.created_at|ago }} ago · by @{{ r.reporter.username if r.reporter }}</small></div>
+  <p style="margin:10px 0;overflow-wrap:anywhere"><i>{{ r.preview[:300] }}</i></p>{% if r.details %}<p class="muted small">Reporter said: {{ r.details }}</p>{% endif %}
+  {% if r.target_type == 'post' or r.target_type == 'reel' %}<a class="link small" href="{{ url_for('feed.detail', post_id=r.target_id) }}">Open post</a>{% elif r.target_type == 'profile' and r.target %}<a class="link small" href="{{ url_for('profiles.view', username=r.target.username) }}">Open profile</a>{% elif r.target_type == 'event' %}<a class="link small" href="{{ url_for('linkup.detail', event_id=r.target_id) }}">Open event</a>{% endif %}
+  {% if r.status == 'open' %}<form class="inline" method="post" style="margin-top:10px;display:flex">{{ m.csrf() }}<input class="input" name="note" placeholder="Decision note" style="width:200px">
+    <button class="btn sm ghost" formaction="{{ url_for('admin.report_decide', rid=r.id, decision='dismiss') }}">Dismiss</button>
+    {% if r.target_type != 'profile' %}<button class="btn sm danger" formaction="{{ url_for('admin.report_decide', rid=r.id, decision='remove') }}">Remove content</button>{% endif %}
+    {% if cur.role == 'admin' %}<button class="btn sm danger" formaction="{{ url_for('admin.report_decide', rid=r.id, decision='suspend') }}">Suspend user</button>{% endif %}</form>
+  {% elif r.resolution_note %}<p class="hint">Resolution: {{ r.resolution_note }}</p>{% endif %}</div>
+{% else %}{% call m.empty('check','All clear','No reports with this status.') %}{% endcall %}{% endfor %}{% endblock %}

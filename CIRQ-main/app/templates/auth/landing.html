@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}More than social{% endblock %}
+{% block public %}
+<section class="landing"><div class="orb"></div>
+  <div class="inner">
+    <header class="land-nav"><a class="row" href="{{ url_for('auth.landing') }}" style="font-weight:800;font-size:1.6rem;letter-spacing:.03em"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="" style="height:50px"> CIRQ</a>
+      <div class="row"><a class="btn ghost sm" href="{{ url_for('auth.login') }}">Login</a><a class="btn sm" href="{{ url_for('auth.register') }}">Sign up</a></div></header>
+    <div class="land-hero">
+      <div>
+        <h1>More than a social app. <em>It's your circle.</em></h1>
+        <p class="muted" style="font-size:1.08rem;max-width:480px">CIRQ brings together students, schools and communities across East Africa. Share, discover, connect and be part of something bigger.</p>
+        <div class="row wrap" style="margin:18px 0"><a class="btn" href="{{ url_for('auth.register') }}">Join CIRQ <span style="display:inline-flex;transform:rotate(180deg)">{{ m.icon('arrow-left','i-sm') }}</span></a><a class="btn ghost" href="#features">Explore features</a></div>
+        <div class="features"><div>{{ m.icon('users') }}Connect with friends</div><div>{{ m.icon('calendar') }}Discover school events</div><div>{{ m.icon('school') }}Join communities</div><div>{{ m.icon('layers') }}Play CIRQ FLIP</div></div>
+      </div>
+      <div class="land-art"><img src="{{ url_for('static', filename='images/hero-students.jpg') }}" alt="Students using CIRQ"></div>
+    </div>
+    <h2 id="features" style="margin-top:36px;font-size:1.7rem">Everything you need in <span class="grad-text">one place</span></h2>
+    <div class="land-cards">
+      <div class="game-card"><div class="icon-tile">{{ m.icon('calendar','i-lg') }}</div><h3 style="margin-top:14px">CIRQ LINKUP</h3><p class="muted">Discover and join school events, competitions and activities across East Africa.</p></div>
+      <div class="game-card"><div class="icon-tile">{{ m.icon('layers','i-lg') }}</div><h3 style="margin-top:14px">CIRQ FLIP</h3><p class="muted">Think you can find the developer? Flip the cards, make your guesses and win {{ config.DEV_CARD_COINS }} coins.</p></div>
+      <div class="game-card"><div class="icon-tile">{{ m.icon('trophy','i-lg') }}</div><h3 style="margin-top:14px">CIRQ STATUS</h3><p class="muted">Grow your followers, earn badges and unlock your next status level.</p></div>
+    </div>
+    <p class="tagline">CIRQ · <span>Connect · Share · Belong</span></p>
+    <p class="dim small" style="text-align:center;margin-top:10px">For students 13+. <a class="link" href="{{ url_for('legal_pages.guidelines') }}">Community guidelines</a> · <a class="link" href="{{ url_for('legal_pages.privacy') }}">Privacy</a></p>
+  </div>
+</section>
+{% endblock %}

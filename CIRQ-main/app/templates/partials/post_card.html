@@ -1,0 +1,39 @@
+{% import 'partials/macros.html' as m with context %}
+<article class="card post{{ ' suggested' if p.suggested }}" id="post-{{ p.id }}" data-post-id="{{ p.id }}">
+  {% if p.suggested %}<div class="sugg-tag">{{ m.icon('rocket','i-sm') }}<span><b>Suggested for you</b><small>{{ p.reason }}</small></span>
+    {% if p.author_id != cur.id %}{{ m.follow_btn(p.author.username, 'none', private=p.author.is_private) }}{% endif %}</div>{% endif %}
+  <div class="post-head">
+    <a href="{{ url_for('profiles.view', username=p.author.username) }}">{{ m.avatar(p.author, 46) }}</a>
+    <div class="who"><a href="{{ url_for('profiles.view', username=p.author.username) }}"><b>{{ p.author.display_name }}</b>{{ m.verified(p.author) }}</a>
+      <small>@{{ p.author.username }}{% if p.school %} · {{ p.school.name }}{% endif %} · <a href="{{ url_for('feed.detail', post_id=p.id) }}">{{ p.created_at|ago }}</a>{% if p.edited_at %} · edited{% endif %}{% if p.visibility == 'followers' %} · {{ m.icon('lock','i-sm') }}{% endif %}</small></div>
+    {{ m.boosted(p.author) }}
+    <div class="menu">
+      <button class="icon-btn" type="button" data-menu aria-label="More options" aria-haspopup="true">{{ m.icon('more') }}</button>
+      <div class="menu-list" role="menu">
+        {% if p.author_id == cur.id %}
+          {% if not hide_edit %}<button type="button" data-edit-post="{{ p.id }}">{{ m.icon('edit','i-sm') }} Edit</button>{% endif %}
+          <form method="post" action="{{ url_for('feed.delete_post', post_id=p.id) }}" data-confirm="Delete this post? This can't be undone.">{{ m.csrf() }}<button class="danger">{{ m.icon('trash','i-sm') }} Delete</button></form>
+        {% else %}<button type="button" data-not-interested="{{ p.id }}">{{ m.icon('x','i-sm') }} Not interested</button>{{ m.report_btn('post', p.id) }}{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if p.caption %}<div class="post-body" data-caption>{{ p.caption }}</div>{% endif %}
+  {% if p.author_id == cur.id %}
+  <form class="stack" method="post" action="{{ url_for('feed.edit_post', post_id=p.id) }}" data-edit-form hidden>{{ m.csrf() }}
+    <textarea class="input" name="caption" maxlength="2000">{{ p.caption or '' }}</textarea>
+    <div class="row" style="margin-top:8px"><button class="btn sm">Save</button><button type="button" class="btn sm ghost" data-cancel-edit>Cancel</button></div></form>
+  {% endif %}
+  {% for md in p.media %}
+    <div class="post-media">
+      {% if md.media_type == 'video' %}<video src="{{ media_src(md, 720) }}" poster="{{ media_src(md, 720, thumb=True) }}" controls preload="none" playsinline></video>
+      {% else %}<img src="{{ media_src(md, 900) }}" alt="Photo posted by {{ p.author.display_name }}" loading="lazy">{% endif %}
+    </div>
+  {% endfor %}
+  {{ m.music(p) }}
+  <div class="post-actions">
+    <button class="act {{ 'liked' if p.liked }}" type="button" data-like="{{ p.id }}" aria-pressed="{{ 'true' if p.liked else 'false' }}" aria-label="Like">{{ m.icon('heart') }}<span data-count>{{ p.like_count }}</span></button>
+    <a class="act" href="{{ url_for('feed.detail', post_id=p.id) }}#comments" aria-label="Comments">{{ m.icon('comment') }}<span>{{ p.comment_count }}</span></a>
+    <span class="sp"></span>
+    <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=p.id, _external=True) }}" aria-label="Copy link">{{ m.icon('share') }}</button>
+  </div>
+</article>

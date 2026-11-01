@@ -1,0 +1,30 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Settings{% endblock %}
+{% block content %}
+<h1 class="page-title">Settings</h1>
+<form class="card" method="post" enctype="multipart/form-data">{{ m.csrf() }}<input type="hidden" name="action" value="profile">
+  <h2>Profile</h2><div class="row">{{ m.avatar(cur, 72) }}<label class="file-drop grow" style="margin:0">{{ m.icon('camera') }}<span data-file-label>Change photo</span><input type="file" name="avatar" accept="image/*"></label></div>
+  {{ m.field('display_name', 'Display name', value=cur.display_name) }}
+  <label for="f-bio">Bio</label><textarea class="input" id="f-bio" name="bio" maxlength="200" placeholder="Tell people about you (optional)">{{ cur.bio or '' }}</textarea>
+  <button class="btn block">Save profile</button></form>
+<form class="card" method="post" style="margin-top:14px">{{ m.csrf() }}<input type="hidden" name="action" value="privacy"><h2>Account privacy</h2>
+  <label class="check switch"><input type="checkbox" name="is_private" {{ 'checked' if cur.is_private }}><span><b>Private account</b><small class="muted" style="display:block;font-weight:500">When your account is private, only people you approve can follow you, see your posts and stories, or chat with you. Your current followers stay. People who aren't following you can still find your profile, name and photo.</small></span></label>
+  {% if cur.is_private %}<a class="row between person-link" href="{{ url_for('profiles.follow_requests') }}"><span>{{ m.icon('users','i-sm') }} Follow requests</span><span>{% if pending_requests %}<span class="chip lime">{{ pending_requests }}</span>{% endif %} {{ m.icon('arrow-left','i-sm') }}</span></a>{% endif %}
+  <button class="btn block" style="margin-top:12px">Save privacy</button></form>
+<form class="card" method="post" style="margin-top:14px">{{ m.csrf() }}<input type="hidden" name="action" value="password"><h2>Change password</h2>
+  {{ m.pw_field('current', 'Current password') }}{{ m.pw_field('new', 'New password', 'new-password') }}{{ m.pw_field('new2', 'Confirm new password', 'new-password') }}
+  <button class="btn block" style="margin-top:14px">Update password</button></form>
+<div class="card" style="margin-top:14px"><h2>Suggestions</h2>
+  <p class="muted small">CIRQ learns from what you like, comment on and watch on CIRQ (never from anything outside the app) to suggest posts and reels you may enjoy. You can use "Not interested" on any post.</p>
+  <form method="post">{{ m.csrf() }}<input type="hidden" name="action" value="recs">
+    <label class="check"><input type="checkbox" name="personalized_recs" {{ 'checked' if cur.personalized_recs is not false }}> Personalised suggestions</label>
+    <button class="btn sm block">Save</button></form>
+  <form method="post" style="margin-top:10px" data-confirm="Reset your suggestions? CIRQ will forget what it learned about your interests.">{{ m.csrf() }}<input type="hidden" name="action" value="recs"><input type="hidden" name="reset" value="1">
+    <button class="btn sm ghost block">Reset my suggestions</button></form></div>
+<div class="card" style="margin-top:14px"><h2>Blocked accounts</h2>{% for b in blocked %}<div class="person">{{ m.avatar(b, 38) }}<div class="grow">@{{ b.username }}</div>
+  <form method="post" action="{{ url_for('profiles.block', username=b.username) }}">{{ m.csrf() }}<button class="btn sm ghost">Unblock</button></form></div>{% else %}<p class="muted">You haven't blocked anyone.</p>{% endfor %}</div>
+<form class="card" method="post" style="margin-top:14px;border-color:rgba(255,93,108,.4)">{{ m.csrf() }}<input type="hidden" name="action" value="delete"><h2 style="color:var(--danger)">Delete account</h2>
+  <p class="muted small">This permanently removes your profile, posts, stories, messages and uploaded files.</p>
+  {{ m.field('confirm_text', 'Type DELETE to confirm', placeholder='DELETE') }}{{ m.pw_field('confirm_password', 'Password') }}
+  <button class="btn danger block" style="margin-top:14px">Delete my account</button></form>
+<p class="dim small" style="margin-top:16px"><a class="link" href="{{ url_for('legal_pages.guidelines') }}">Community guidelines</a> · <a class="link" href="{{ url_for('legal_pages.privacy') }}">Privacy notice</a></p>
+{% endblock %}

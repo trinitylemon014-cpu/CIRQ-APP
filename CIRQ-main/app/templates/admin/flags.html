@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Feature flags{% endblock %}
+{% block content %}<h1 class="page-title">Feature flags</h1>{% include 'admin/_nav.html' %}
+<div class="card">{% for f in flags %}<div class="person"><div class="grow"><b>{{ f.key }}</b><br><small class="muted">{{ f.description }}</small></div><form method="post">{{ m.csrf() }}<input type="hidden" name="key" value="{{ f.key }}"><button class="btn sm {{ '' if f.enabled else 'ghost' }}">{{ 'On' if f.enabled else 'Off' }}</button></form></div>{% endfor %}
+<div class="person"><div class="grow"><b>PAID_COMPETITIONS_ENABLED</b><br><small class="muted">Server environment variable. Can't be changed from this dashboard.</small></div><span class="chip {{ 'warn' if paid else '' }}">{{ 'On' if paid else 'Off' }}</span></div></div>{% endblock %}

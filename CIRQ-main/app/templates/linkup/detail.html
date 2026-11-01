@@ -1,0 +1,28 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ e.title }}{% endblock %}
+{% block content %}
+<div class="card event-card"><div class="event-cover">{% if e.cover_url %}<img src="{{ media_src({'url': e.cover_url, 'public_id': e.cover_public_id, 'media_type': 'image'}, 900) }}" alt="">{% else %}{{ m.icon('calendar','i-lg') }}{% endif %}</div>
+<div class="event-body">
+  {% if e.status != 'scheduled' %}<span class="chip {{ 'red' if e.status == 'cancelled' else 'green' }}">{{ e.status|capitalize }}</span>{% endif %}
+  <h1 style="font-size:1.8rem;margin-top:8px">{{ e.title }}</h1>
+  <p class="row muted">{{ m.icon('clock','i-sm') }} {{ e.starts_at|event_dt }}</p><p class="row muted">{{ m.icon('pin','i-sm') }} {{ e.venue }}</p>
+  <p class="row muted">{{ m.icon('users','i-sm') }} {{ going_count }} going · {{ interested_count }} interested{% if e.capacity %} · capacity {{ e.capacity }}{% endif %}</p>
+  {% if school %}<p class="row muted">{{ m.icon('school','i-sm') }} {{ school.name }}</p>{% endif %}
+  <div class="row"><span class="muted">Hosted by</span><a class="row" href="{{ url_for('profiles.view', username=host.username) }}">{{ m.avatar(host, 30) }}<b>@{{ host.username }}</b>{{ m.verified(host) }}</a></div>
+  {% if e.description %}<p style="margin-top:14px;white-space:pre-wrap">{{ e.description }}</p>{% endif %}
+  {% if attendees %}<div class="row" style="margin:10px 0">{% for a in attendees %}<a href="{{ url_for('profiles.view', username=a.username) }}" title="@{{ a.username }}">{{ m.avatar(a, 34) }}</a>{% endfor %}</div>{% endif %}
+  {% if e.status == 'scheduled' %}
+  <form method="post" action="{{ url_for('linkup.rsvp', event_id=e.id) }}" class="row wrap" style="margin-top:14px">{{ m.csrf() }}
+    <button class="btn grow" name="status" value="going" {{ 'disabled' if rsvp and rsvp.status == 'going' }}>{{ m.icon('check','i-sm') }} {{ "You're going" if rsvp and rsvp.status == 'going' else 'Going' }}</button>
+    <button class="btn ghost grow" name="status" value="interested">{{ 'Interested ✓' if rsvp and rsvp.status == 'interested' else 'Interested' }}</button>
+    {% if rsvp %}<button class="btn ghost" name="status" value="none">Remove RSVP</button>{% endif %}</form>
+  {% endif %}
+  <div class="row wrap" style="margin-top:12px">
+    {% if e.conversation_id and rsvp and rsvp.status == 'going' %}<a class="btn ghost sm" href="{{ url_for('messages.thread', cid=e.conversation_id) }}">{{ m.icon('message','i-sm') }} Event chat</a>{% endif %}
+    <button class="btn ghost sm" type="button" data-copy="{{ share_url }}">{{ m.icon('share','i-sm') }} Share</button>
+    {% if not is_host %}<button class="btn ghost sm" type="button" data-report="event:{{ e.id }}">{{ m.icon('flag','i-sm') }} Report</button>{% endif %}
+    {% if is_host and e.status == 'scheduled' %}
+      <form method="post" action="{{ url_for('linkup.host_action', event_id=e.id, action='complete') }}">{{ m.csrf() }}<button class="btn ghost sm">Mark completed</button></form>
+      <form method="post" action="{{ url_for('linkup.host_action', event_id=e.id, action='cancel') }}" data-confirm="Cancel this event? Everyone who RSVP'd will be notified.">{{ m.csrf() }}<button class="btn danger sm">Cancel event</button></form>{% endif %}
+  </div>
+</div></div>
+{% endblock %}

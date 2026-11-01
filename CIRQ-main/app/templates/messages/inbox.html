@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Messages{% endblock %}
+{% block content %}
+<h1 class="page-title">Messages</h1>
+<form class="row" method="get" style="margin-bottom:14px"><input class="input" name="q" value="{{ q }}" placeholder="Search chats" aria-label="Search chats"><button class="send" aria-label="Search">{{ m.icon('search') }}</button></form>
+{% for i in items %}<a class="convo {{ 'unread' if i.unread }}" href="{{ url_for('messages.thread', cid=i.conv.id) }}">
+  {% if i.other %}{{ m.avatar(i.other, 52) }}{% else %}<span class="av" style="--s:52px">{{ m.icon('users') }}</span>{% endif %}
+  <div class="grow"><div class="row between"><b>{{ i.title }}</b><small class="dim">{{ i.last.created_at|ago if i.last }}</small></div>
+  <div class="snip">{{ i.snippet }}</div></div>{% if i.unread %}<span class="dot" style="position:static">{{ i.unread }}</span>{% endif %}</a>
+{% else %}{% call m.empty('message','No chats yet','Open a profile and tap Message, or join an event chat.') %}<a class="btn" href="{{ url_for('discover.index') }}">Find students</a>{% endcall %}{% endfor %}
+{% endblock %}

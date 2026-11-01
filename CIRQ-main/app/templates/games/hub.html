@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Games{% endblock %}
+{% block content %}
+<h1 class="page-title">CIRQ <span class="grad-text">Games</span></h1>
+<p class="muted" style="margin-top:-8px">Test your skills. Earn app coins. Climb the leaderboard.</p>
+<div class="card row between" style="margin:14px 0"><div><div class="muted small">Your app coins</div><div class="big-num">{{ cur.coin_balance }}</div></div><a class="btn" href="{{ url_for('wallet.coins') }}">{{ m.icon('wallet','i-sm') }} Wallet</a></div>
+<a class="game-card" href="{{ url_for('games.flip') }}"><div class="row"><div class="icon-tile">{{ m.icon('layers','i-lg') }}</div><div class="grow"><h2 style="margin:0">Guess the Developer</h2><p class="muted" style="margin:4px 0 0">Flip student cards and find VEX. Win {{ config.DEV_CARD_COINS }} coins.</p></div><span class="chip lime">Free</span></div></a>
+<a class="game-card" href="{{ url_for('trivia.index') }}"><div class="row"><div class="icon-tile">{{ m.icon('help','i-lg') }}</div><div class="grow"><h2 style="margin:0">CIRQ Trivia</h2><p class="muted" style="margin:4px 0 0">Answer fast and accurately to rack up points and coins.</p></div>{% if paid_enabled %}<span class="chip warn">UGX {{ '{:,}'.format(config.TRIVIA_ENTRY_FEE_UGX) }}</span>{% else %}<span class="chip lime">Free practice</span>{% endif %}</div></a>
+<a class="game-card" href="{{ url_for('profiles.status') }}"><div class="row"><div class="icon-tile">{{ m.icon('trophy','i-lg') }}</div><div class="grow"><h2 style="margin:0">CIRQ STATUS</h2><p class="muted" style="margin:4px 0 0">Ranks, badges and achievements.</p></div></div></a>
+<div class="section-title"><h2>Leaderboard · developer spotters</h2></div>
+<div class="card">{% for r in board %}<div class="lb-row"><span class="lb-rank">{{ loop.index }}</span>{{ m.avatar(r.user, 38) }}<div class="grow"><b>{{ r.user.display_name }}</b><br><small class="muted">@{{ r.user.username }}</small></div><b class="coin">{{ r.wins * config.DEV_CARD_COINS }}</b></div>{% else %}<div class="empty" style="padding:18px">{{ m.icon('trophy') }}<p>Play to appear here.</p></div>{% endfor %}</div>
+{% endblock %}

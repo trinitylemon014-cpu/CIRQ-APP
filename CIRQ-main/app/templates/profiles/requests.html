@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Follow requests{% endblock %}
+{% block content %}
+<a class="row muted" href="{{ url_for('notifications.index') }}" style="margin-bottom:10px">{{ m.icon('arrow-left') }} Activity</a>
+<h1 class="page-title">Follow requests</h1>
+{% if not cur.is_private %}<div class="card flat" style="margin-bottom:12px"><p class="muted small" style="margin:0">Your account is public, so anyone can follow you without a request. Switch to a private account in <a class="link" href="{{ url_for('profiles.settings') }}">Settings</a> to approve followers yourself.</p></div>{% endif %}
+<div class="card" data-requests>
+  {% for it in items %}{% set p = it.profile %}
+  <div class="person" data-request="{{ p.username }}">
+    <a href="{{ url_for('profiles.view', username=p.username) }}">{{ m.avatar(p, 50) }}</a>
+    <div class="grow"><a href="{{ url_for('profiles.view', username=p.username) }}"><b>{{ p.display_name }}</b>{{ m.verified(p) }}</a><br><small class="muted">@{{ p.username }} · {{ it.at|ago }}</small></div>
+    <button class="btn sm" type="button" data-req-approve="{{ p.username }}">Confirm</button>
+    <button class="btn sm ghost" type="button" data-req-decline="{{ p.username }}">Delete</button>
+  </div>
+  {% endfor %}
+  <div class="empty" data-requests-empty {{ 'hidden' if items }}>{{ m.icon('users') }}<h3>No pending requests</h3><p>When someone asks to follow your private account, you'll see them here.</p></div>
+</div>
+{% endblock %}

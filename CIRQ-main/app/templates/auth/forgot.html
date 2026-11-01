@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Forgot password{% endblock %}
+{% block public %}
+<div class="auth-shell"><div class="auth-card">
+  <div class="auth-logo"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="CIRQ" style="width:72px;height:72px"><h1 style="margin-top:12px;font-size:1.8rem">Recover your account</h1>
+  <p class="muted" style="text-align:center">Tell us who you are. An administrator will review your request, then you'll get a one-time link to choose a new password.</p></div>
+  <form class="card" method="post" novalidate>{{ m.csrf() }}
+    {{ m.field('username', 'Username', placeholder='your.username', autocomplete='username') }}
+    <label for="f-school">Registered school</label>
+    <select class="input" id="f-school" name="school_id" required><option value="">Choose your school</option>{% for s in schools %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
+    <div id="email-block">{{ m.field('email', 'Email you registered with', 'email', placeholder='you@example.com', required=False, autocomplete='email') }}</div>
+    <label class="check"><input type="checkbox" name="no_email_access" data-toggle-manual> I can't use that email any more</label>
+    <div id="manual-block" hidden>
+      {{ m.field('display_name', 'Your name as shown on your CIRQ profile', required=False) }}
+      <label for="f-note">Anything that helps us confirm it's you</label><textarea class="input" id="f-note" name="note" maxlength="300" placeholder="e.g. your class, teacher or school coordinator's name"></textarea>
+      <div class="hint">Manual review: an admin will verify you through your school before sending a link to a new email.</div>
+    </div>
+    <p class="hint">Never enter your current password here. We will never ask for it.</p>
+    <button class="btn block" type="submit">Send request</button>
+  </form>
+  <p style="text-align:center;margin-top:16px"><a class="link" href="{{ url_for('auth.login') }}">Back to log in</a></p>
+</div></div>
+{% endblock %}

@@ -1,0 +1,2 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Link not valid{% endblock %}
+{% block public %}<div class="auth-shell"><div class="card auth-card empty">{{ m.icon('lock') }}<h2>This link isn't valid</h2><p>Reset links work once and expire quickly. You can request a new one.</p><a class="btn" href="{{ url_for('auth.forgot_password') }}">Request again</a></div></div>{% endblock %}

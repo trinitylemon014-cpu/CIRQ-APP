@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Join CIRQ{% endblock %}
+{% block public %}
+<div class="auth-shell"><div class="auth-split"><aside class="auth-art"><img src="{{ url_for('static', filename='images/auth-register.jpg') }}" alt=""><span class="tag">Your school. Your people. Your talent.</span></aside><div class="auth-card card" style="padding:26px">
+  <div class="auth-logo"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="CIRQ"><h1 style="margin-top:14px;font-size:2rem">Join CIRQ</h1><p class="muted">Get <b class="coin" style="display:inline-flex">{{ config.WELCOME_COINS }} app coins</b> when your account is approved</p></div>
+  <form method="post" novalidate>{{ m.csrf() }}
+    {{ m.field('username', 'Username', value=form.get('username',''), placeholder='letters, numbers, . or _', autocomplete='username', hint='3-24 characters. This is what you log in with.') }}
+    {{ m.field('display_name', 'Your name', value=form.get('display_name',''), placeholder='Name shown on your profile', autocomplete='name') }}
+    {{ m.field('email', 'Email', 'email', form.get('email',''), 'you@example.com', autocomplete='email', hint='Private. Used only to recover your account.') }}
+    <label for="f-school">School</label>
+    <select class="input" id="f-school" name="school_id" required><option value="">Choose your school</option>
+      {% for s in schools %}<option value="{{ s.id }}" {{ 'selected' if form.get('school_id') == s.id }}>{{ s.name }}</option>{% endfor %}</select>
+    {% if not schools %}<div class="hint">No schools are listed yet. An administrator needs to add yours first.</div>{% endif %}
+    {{ m.pw_field('password', 'Password', 'new-password') }}<div class="hint">At least 10 characters with a letter and a number.</div>
+    {{ m.pw_field('password2', 'Confirm password', 'new-password') }}
+    <label class="check"><input type="checkbox" name="age_ok" required> I'm 13 or older.</label>
+    <label class="check"><input type="checkbox" name="terms" required> I agree to the <a class="link" href="{{ url_for('legal_pages.guidelines') }}" target="_blank">Community Guidelines</a> and <a class="link" href="{{ url_for('legal_pages.privacy') }}" target="_blank">Privacy Notice</a>.</label>
+    <button class="btn block" type="submit">Create account</button>
+  </form>
+  <p class="muted" style="text-align:center;margin-top:18px">Already a member? <a class="link" href="{{ url_for('auth.login') }}">Log in</a></p>
+</div></div></div>
+{% endblock %}

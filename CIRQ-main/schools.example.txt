@@ -1,0 +1,3 @@
+# One school per line. Replace with the schools you actually serve and double-check spellings before seeding.
+Example International School
+Example Secondary School

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ s.title }}{% endblock %}
+{% block content %}<h1 class="page-title">{{ s.title }}</h1>{% include 'admin/_nav.html' %}
+<div class="card row between wrap"><span class="chip {{ {'draft':'warn','published':'green','closed':'red'}[s.status] }}">{{ s.status }}</span>
+  <div class="row">{% if s.status == 'draft' %}<form method="post" action="{{ url_for('admin.trivia_status', set_id=s.id, status='published') }}">{{ m.csrf() }}<button class="btn sm">Publish to app</button></form>
+  {% elif s.status == 'published' %}<form method="post" action="{{ url_for('admin.trivia_status', set_id=s.id, status='closed') }}">{{ m.csrf() }}<button class="btn sm danger">Close set</button></form>{% endif %}
+  {% if s.status != 'draft' %}<form method="post" action="{{ url_for('admin.trivia_status', set_id=s.id, status='draft') }}">{{ m.csrf() }}<button class="btn sm ghost">Back to draft</button></form>{% endif %}</div></div>
+{% for q in questions %}<div class="card" style="margin-top:10px"><div class="row between"><b>{{ q.position }}. {{ q.prompt }}</b><span class="chip">{{ q.time_limit_seconds }}s</span></div>
+  {% for o in q.options %}<div class="opt {{ 'good' if loop.index0 == q.correct_index }}" style="cursor:default;padding:10px 16px">{{ o }}</div>{% endfor %}
+  {% if s.status == 'draft' %}<form method="post" action="{{ url_for('admin.trivia_delete_question', set_id=s.id, qid=q.id) }}" data-confirm="Delete this question?" style="margin-top:8px">{{ m.csrf() }}<button class="btn sm danger">Delete</button></form>{% endif %}</div>{% endfor %}
+{% if s.status == 'draft' %}<form class="card" method="post" action="{{ url_for('admin.trivia_add_question', set_id=s.id) }}" style="margin-top:14px">{{ m.csrf() }}<h2>Add a question</h2>
+  {{ m.field('prompt', 'Question') }}
+  {% for i in range(4) %}{{ m.field('option' ~ i, 'Option ' ~ 'ABCD'[i]) }}{% endfor %}
+  <div class="grid2"><div><label for="f-correct">Correct answer</label><select class="input" id="f-correct" name="correct">{% for i in range(4) %}<option value="{{ i }}">{{ 'ABCD'[i] }}</option>{% endfor %}</select></div><div><label for="f-t">Time limit (s)</label><input class="input" id="f-t" name="time_limit_seconds" type="number" min="5" max="120" value="20"></div></div>
+  <button class="btn block" style="margin-top:14px">Add question</button></form>
+{% else %}<p class="hint" style="margin-top:12px">Questions are locked while a set is live. Move it back to draft to edit (only possible before anyone has played).</p>{% endif %}{% endblock %}

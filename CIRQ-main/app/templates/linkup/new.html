@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}New event{% endblock %}
+{% block content %}<h1 class="page-title">Create an event</h1>
+<form class="card" method="post" enctype="multipart/form-data">{{ m.csrf() }}
+  {{ m.field('title', 'Title', value=form.get('title',''), placeholder='Inter-school debate night') }}
+  <label for="f-desc">Description</label><textarea class="input" id="f-desc" name="description" maxlength="2000">{{ form.get('description','') }}</textarea>
+  {{ m.field('venue', 'Venue', value=form.get('venue',''), placeholder='School hall, public stadium...', hint='Use a school or public venue. Never post a home address.') }}
+  <label for="f-starts_at">Starts (East Africa Time)</label><input class="input" id="f-starts_at" name="starts_at" type="datetime-local" value="{{ form.get('starts_at','') }}" required>
+  <div class="grid2"><div><label for="f-cap">Capacity (optional)</label><input class="input" id="f-cap" name="capacity" type="number" min="1" max="5000" value="{{ form.get('capacity','') }}"></div>
+  <div><label for="f-vis">Who can see it</label><select class="input" id="f-vis" name="visibility"><option value="public">Everyone</option><option value="school">My school only</option></select></div></div>
+  <label class="file-drop" style="margin-top:14px">{{ m.icon('image') }}<span data-file-label>Cover image (optional)</span><input type="file" name="cover" accept="image/*"></label>
+  <button class="btn block" style="margin-top:14px">Create event</button></form>{% endblock %}

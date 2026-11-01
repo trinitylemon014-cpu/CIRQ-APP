@@ -1,0 +1,3 @@
+{% extends 'base.html' %}{% block title %}{{ title }}{% endblock %}
+{% set bare = true %}
+{% block bare %}<div class="errpage"><div class="code">{{ code }}</div><h1 style="font-size:1.8rem">{{ title }}</h1><p class="muted">{{ msg }}</p><a class="btn" href="/">Back to CIRQ</a></div>{% endblock %}

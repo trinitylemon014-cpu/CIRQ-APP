@@ -1,0 +1,3 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Audit log{% endblock %}
+{% block content %}<h1 class="page-title">Audit log</h1>{% include 'admin/_nav.html' %}
+<div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th></tr></thead><tbody>{% for r in rows %}<tr><td>{{ r.created_at|ago }}</td><td>@{{ r.actor.username if r.actor else 'system' }}</td><td>{{ r.action }}</td><td class="muted small">{{ r.target_type or '' }} {{ (r.target_id or '')[:8] }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No entries.</td></tr>{% endfor %}</tbody></table></div>{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Schools{% endblock %}
+{% block content %}<h1 class="page-title">Schools &amp; verification</h1>{% include 'admin/_nav.html' %}
+<h2>Verification requests</h2>
+{% for r in reqs %}<div class="card" style="margin-bottom:10px"><b>{{ r.school.name }}</b> · requested by <a class="link" href="{{ url_for('profiles.view', username=r.user.username) }}">@{{ r.user.username }}</a><p class="muted">{{ r.evidence_note }}</p>
+  <form class="inline" method="post">{{ m.csrf() }}<input class="input" name="note" placeholder="Note (what you checked)">
+    <button class="btn sm" formaction="{{ url_for('admin.school_request', rid=r.id, decision='approve') }}">Approve &amp; make moderator</button><button class="btn sm danger" formaction="{{ url_for('admin.school_request', rid=r.id, decision='reject') }}">Reject</button></form></div>
+{% else %}<p class="muted">No pending requests.</p>{% endfor %}
+<h2 style="margin-top:22px">Schools</h2>
+<form class="card stack" method="post" enctype="multipart/form-data">{{ m.csrf() }}
+  <div class="row wrap"><input class="input grow" name="name" placeholder="School name" required><input class="input" name="city" placeholder="City" style="max-width:160px"><input class="input" name="country" placeholder="Country" value="Uganda" style="max-width:140px"></div>
+  <div class="row wrap between">
+    <label class="file-drop" style="margin:0;padding:10px 16px">{{ m.icon('image') }} <span data-file-label>School logo (optional)</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+    <button class="btn sm">Add school</button>
+  </div>
+  <small class="muted">A square logo on a transparent or white background looks best. PNG, JPG, WebP or GIF, up to {{ config.MAX_IMAGE_MB }} MB.</small>
+</form>
+<div class="stack" style="margin-top:12px">{% for s in schools %}
+  <div class="card school-row">
+    <div class="row wrap" style="gap:14px;align-items:center">
+      {{ m.school_logo(s, 56) }}
+      <div class="grow"><b>{{ s.name }}</b> {% if s.verified %}<span class="chip violet">Verified</span>{% endif %}<br><small class="muted">{{ s.city or '' }} {{ s.country }}</small></div>
+      <form class="inline" method="post" action="{{ url_for('admin.school_toggle', sid=s.id) }}">{{ m.csrf() }}<button class="btn sm ghost">{{ 'Remove verification' if s.verified else 'Mark verified' }}</button></form>
+    </div>
+    <form class="row wrap" method="post" action="{{ url_for('admin.school_logo', sid=s.id) }}" enctype="multipart/form-data" style="margin-top:12px;gap:10px">{{ m.csrf() }}
+      <label class="file-drop" style="margin:0;padding:8px 14px;border-radius:99px">{{ m.icon('image') }} <span data-file-label>{{ 'Replace logo' if s.logo_url else 'Upload logo' }}</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif" required></label>
+      <button class="btn sm">Save logo</button>
+      {% if s.logo_url %}<button class="btn sm danger" name="remove" value="1" formnovalidate data-confirm-click="Remove this school's logo?">Remove logo</button>{% endif %}
+    </form>
+  </div>{% endfor %}</div>{% endblock %}

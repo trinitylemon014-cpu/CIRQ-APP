@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Results{% endblock %}
+{% block content %}
+<div class="card lime"><div style="font-weight:800;color:rgba(255,255,255,.8)">{{ s.title }}</div><div style="font-size:3.4rem;font-weight:800;line-height:1.05">{{ attempt.points }} pts</div>
+  <div class="row wrap" style="margin-top:10px"><span class="chip" style="background:rgba(255,255,255,.18);color:#fff;border:0">{{ attempt.correct_count }}/{{ attempt.total_questions }} correct</span><span class="chip" style="background:rgba(255,255,255,.18);color:#fff;border:0">Accuracy {{ attempt.accuracy|round|int }}%</span><span class="chip" style="background:rgba(255,255,255,.18);color:#fff;border:0">Avg {{ avg_s }}s</span>{% if rank %}<span class="chip" style="background:rgba(255,255,255,.18);color:#fff;border:0">Rank #{{ rank }}</span>{% endif %}</div>
+  {% if attempt.coins_awarded %}<p style="margin:12px 0 0;font-weight:800">+{{ attempt.coins_awarded }} app coins earned</p>{% endif %}</div>
+<div class="section-title"><h2>Review</h2></div>
+{% for r in review %}<div class="card" style="margin-bottom:10px"><div class="row between"><b>{{ loop.index }}. {{ r.q.prompt }}</b>{% if r.a %}<span class="chip {{ 'green' if r.a.correct else 'red' }}">{{ '+' ~ r.a.points if r.a.correct else '0' }}</span>{% endif %}</div>
+  {% for o in r.q.options %}<div class="opt {{ 'good' if loop.index0 == r.q.correct_index else ('bad' if r.a and r.a.choice == loop.index0 else '') }}" style="cursor:default">{{ o }}{% if r.a and r.a.choice == loop.index0 %} · your answer{% endif %}</div>{% endfor %}
+  {% if r.a and r.a.choice is none %}<p class="hint">Timed out</p>{% endif %}</div>{% endfor %}
+<div class="section-title"><h2>Leaderboard</h2></div>
+<div class="card">{% for b in board %}<div class="person"><b style="width:26px">{{ loop.index }}</b>{{ m.avatar(b.user, 38) }}<div class="grow"><b>{{ b.user.display_name }}</b><br><small class="muted">{{ b.accuracy|round|int }}% accuracy</small></div><b class="coin">{{ b.points }}</b></div>{% endfor %}</div>
+{% endblock %}

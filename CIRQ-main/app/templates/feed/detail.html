@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Post{% endblock %}
+{% block content %}
+<a class="row muted" href="javascript:history.back()" style="margin-bottom:10px">{{ m.icon('arrow-left') }} Back</a>
+{% set p = post %}{% set hide_edit = false %}{% include 'partials/post_card.html' %}
+<div class="card" id="comments" style="margin-top:14px"><h3>Comments <span class="muted" data-comment-count>({{ post.comment_count }})</span></h3>
+  <form data-comment-form action="{{ url_for('feed.add_comment', post_id=post.id) }}" method="post" class="row" style="margin:10px 0">{{ m.csrf() }}
+    <input class="input" name="body" maxlength="500" placeholder="Add a comment" aria-label="Add a comment" required><button class="send" aria-label="Send comment">{{ m.icon('send') }}</button></form>
+  <div data-comment-list>{% for c in comments %}{% include 'partials/comment.html' %}{% else %}<p class="muted" data-no-comments>Be the first to comment.</p>{% endfor %}</div></div>
+{% endblock %}

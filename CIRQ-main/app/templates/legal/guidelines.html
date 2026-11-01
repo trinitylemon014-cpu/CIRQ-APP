@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% block title %}Community Guidelines{% endblock %}
+{% macro body() %}<div class="legal">
+<h1>Community Guidelines</h1><p class="muted">CIRQ is for students. These rules keep it kind and safe.</p>
+<h2>Be kind</h2><ul><li>No bullying, harassment, hate or threats.</li><li>Don't impersonate other people or schools.</li><li>Respect when someone blocks you.</li></ul>
+<h2>Keep it safe</h2><ul><li>Don't share phone numbers, home addresses or other private details.</li><li>Meet at school events and public places. Tell a trusted adult where you're going.</li><li>No sexual, violent or illegal content.</li></ul>
+<h2>Be real</h2><ul><li>No spam, fake accounts or buying followers. Follower ranks are measured from real follows.</li><li>Verified badges are given only after a real review.</li></ul>
+<h2>Reports and consequences</h2><p>Use the Report option on any post, comment, profile, message, story or event. Moderators can remove content, suspend accounts and keep records of their decisions.</p>
+<h2>Paid features</h2><p>Boosts and paid trivia entries (when available) are paid manually by mobile money. Students under 18 need a parent or guardian's permission. Boosts never change CIRQ STATUS ranks.</p></div>{% endmacro %}
+{% block content %}{{ body() }}{% endblock %}
+{% block public %}<div class="auth-shell" style="align-items:start"><div class="auth-card" style="width:min(100%,680px)">{{ body() }}<a class="btn ghost" href="{{ url_for('auth.landing') }}">Back</a></div></div>{% endblock %}

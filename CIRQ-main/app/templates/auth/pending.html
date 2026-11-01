@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Account pending{% endblock %}
+{% block public %}
+<div class="auth-shell"><div class="card auth-card" style="text-align:center">
+  <img src="{{ url_for('static', filename='images/mark.png') }}" alt="" width="84" style="margin:0 auto 14px;border-radius:24px">
+  <h2>You're almost in</h2>
+  <p class="muted">An administrator is reviewing your account to keep CIRQ a safe place for students. Once it's approved you'll get <b class="coin" style="display:inline-flex">{{ config.WELCOME_COINS }} welcome coins</b>.</p>
+  {% if cur and cur.account_status == 'rejected' %}<div class="chip red">Not approved</div>{% else %}<div class="chip warn">{{ m.icon('clock','i-sm') }} Waiting for approval</div>{% endif %}
+  <form method="post" action="{{ url_for('auth.logout') }}" style="margin-top:20px">{{ m.csrf() }}<button class="btn ghost block">Log out</button></form>
+</div></div>
+{% endblock %}

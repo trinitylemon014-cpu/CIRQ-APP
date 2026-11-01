@@ -1,0 +1,38 @@
+{% macro icon(name, cls='') %}<svg class="i {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{% endmacro %}
+
+{% macro avatar(p, size=44, ring=False) %}
+{% set src = avatar_src(p, size * 2) if p else '' %}
+{% if ring %}<span class="av ring" style="--s:{{ size }}px"><span>{% if src %}<img src="{{ src }}" alt="" loading="lazy" style="border:0;border-radius:50%">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}</span></span>
+{% else %}<span class="av" style="--s:{{ size }}px">{% if src %}<img src="{{ src }}" alt="" loading="lazy">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}</span>{% endif %}
+{% endmacro %}
+
+{% macro verified(p) %}{% if p and p.verified %}<span class="verified" title="Verified by CIRQ"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Verified</span></span>{% endif %}{% endmacro %}
+
+{% macro boosted(p) %}{% if p and is_boosted(p) %}<span class="chip lime" title="This account is boosted">{{ icon('rocket','i-sm') }} Boosted</span>{% endif %}{% endmacro %}
+
+{% macro empty(ic, title, text='') %}<div class="card empty">{{ icon(ic) }}<h3>{{ title }}</h3><p>{{ text }}</p>{{ caller() if caller else '' }}</div>{% endmacro %}
+
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro field(name, label, type='text', value='', placeholder='', required=True, hint='', autocomplete='') %}
+<label for="f-{{ name }}">{{ label }}</label>
+<input class="input" id="f-{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ value }}" placeholder="{{ placeholder }}" {% if required %}required{% endif %} {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}>
+{% if hint %}<div class="hint">{{ hint }}</div>{% endif %}
+{% endmacro %}
+
+{% macro pw_field(name, label, autocomplete='current-password') %}
+<label for="f-{{ name }}">{{ label }}</label>
+<div class="field-wrap"><input class="input" id="f-{{ name }}" name="{{ name }}" type="password" required autocomplete="{{ autocomplete }}" style="padding-right:56px">
+<button type="button" class="icon-btn toggle-pw" data-toggle-pw="f-{{ name }}" aria-label="Show or hide password">{{ icon('eye') }}</button></div>
+{% endmacro %}
+
+{# One follow button everywhere. state: 'none' | 'requested' | 'following'. A private account shows "Requested" until approved. #}
+{% macro follow_btn(username, state='none', small=True, private=False) %}<button type="button" class="btn {{ 'sm' if small }} {{ 'following' if state != 'none' }}" data-follow="{{ username }}" data-state="{{ state }}" data-private="{{ 1 if private else 0 }}">{{ 'Following' if state == 'following' else ('Requested' if state == 'requested' else 'Follow') }}</button>{% endmacro %}
+
+{% macro report_btn(ttype, tid, label='Report') %}<button type="button" data-report="{{ ttype }}:{{ tid }}">{{ icon('flag','i-sm') }} {{ label }}</button>{% endmacro %}
+
+{# School logo, or the cap icon when the school has none. size is in px; cls adds layout classes (e.g. 'center'). #}
+{% macro school_logo(school, size=48, cls='') %}{% set src = school_logo_src(school, size * 2) if school else '' %}<span class="school-logo {{ cls }}" style="--s:{{ size }}px">{% if src %}<img src="{{ src }}" alt="{{ school.name }} logo" loading="lazy">{% else %}{{ icon('school') }}{% endif %}</span>{% endmacro %}
+
+{# Music chip for a post or story row that has audio_url. Playback starts on tap (browsers block autoplay with sound). #}
+{% macro music(item) %}{% if item and item.audio_url %}<div class="music" data-music><button class="music-play" type="button" data-music-toggle aria-label="Play music">{{ icon('play','i-sm') }}</button><span class="music-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><div class="music-meta"><b>{{ item.audio_title or 'Music' }}</b><small>{{ icon('music','i-sm') }} Tap to play</small></div><audio preload="none" src="{{ audio_src(item) }}"></audio></div>{% endif %}{% endmacro %}

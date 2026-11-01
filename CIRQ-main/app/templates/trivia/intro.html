@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ s.title }}{% endblock %}
+{% block content %}
+<a class="row muted" href="{{ url_for('trivia.index') }}" style="margin-bottom:10px">{{ m.icon('arrow-left') }} Trivia</a>
+<div class="card"><h1 style="font-size:1.8rem">{{ s.title }}</h1><p class="muted">{{ s.description or '' }}</p>
+  <div class="grid3" style="margin:14px 0"><div class="stat"><b>{{ q_count }}</b><small>Questions</small></div><div class="stat"><b>{{ secs }}s</b><small>Max time</small></div><div class="stat"><b>{{ 200 * q_count }}</b><small>Max points</small></div></div>
+  <h3>Scoring</h3><ul class="muted" style="padding-left:18px"><li><b>100 points</b> for each correct answer.</li><li>Up to <b>+100 speed bonus</b>. The faster you answer, the more you get.</li><li>Timed out or wrong = 0 for that question.</li><li>Time is measured by the server. You get one attempt at each set.</li></ul>
+  {% if paid %}<p class="chip warn">Entry uses 1 trivia entry (UGX {{ '{:,}'.format(fee) }}).</p>{% else %}<p class="chip lime">Free to play: finish the set to earn app coins ({{ config.TRIVIA_POINTS_PER_COIN }} points = 1 coin, up to {{ config.TRIVIA_MAX_COINS }}).</p>{% endif %}
+  {% if s.status != 'published' and not attempt %}<p class="chip">This set is closed.</p>
+  {% elif paid and not attempt and not credit %}<a class="btn block" href="{{ url_for('wallet.pay') }}">Get an entry first</a>
+  {% else %}<form method="post" action="{{ url_for('trivia.start', set_id=s.id) }}">{{ m.csrf() }}<button class="btn block">{{ 'Continue' if attempt else 'Start' }}</button></form>{% endif %}</div>
+{% endblock %}

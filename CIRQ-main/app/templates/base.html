@@ -1,0 +1,122 @@
+{% import 'partials/macros.html' as m with context %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="theme-color" content="#040806">
+  <title>{% block title %}CIRQ{% endblock %} · CIRQ</title>
+  <link rel="icon" href="{{ url_for('static', filename='images/favicon.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon-192.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+{% include 'partials/icons.html' %}
+<div class="flashes" role="status" aria-live="polite">
+  {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, msg in msgs %}
+  <div class="flash {{ cat }}">{{ m.icon('check' if cat == 'success' else ('x' if cat == 'error' else 'bell')) }}<span>{{ msg }}</span><button type="button" data-dismiss aria-label="Dismiss">{{ m.icon('x','i-sm') }}</button></div>
+  {% endfor %}{% endwith %}
+</div>
+
+{% if cur and cur.account_status == 'approved' and not bare %}
+{% set ep = request.blueprint or '' %}
+<div class="shell">
+  <aside class="sidebar" aria-label="Main">
+    <a class="brand" href="{{ url_for('feed.home') }}"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="">CIRQ</a>
+    <a class="nav {{ 'active' if ep == 'feed' }}" href="{{ url_for('feed.home') }}">{{ m.icon('home') }} Home</a>
+    <a class="nav {{ 'active' if ep == 'discover' }}" href="{{ url_for('discover.index') }}">{{ m.icon('compass') }} Discover</a>
+    <a class="nav {{ 'active' if ep == 'reels' }}" href="{{ url_for('reels.index') }}">{{ m.icon('film') }} Reels</a>
+    <a class="nav {{ 'active' if ep == 'linkup' }}" href="{{ url_for('linkup.index') }}">{{ m.icon('calendar') }} LINKUP</a>
+    <a class="nav {{ 'active' if ep == 'messages' }}" href="{{ url_for('messages.inbox') }}">{{ m.icon('message') }} Messages {% set um = unread_msgs() %}{% if um %}<span class="n-badge">{{ um }}</span>{% endif %}</a>
+    <a class="nav {{ 'active' if ep == 'notifications' }}" href="{{ url_for('notifications.index') }}">{{ m.icon('bell') }} Notifications {% set un = unread_notifs() %}{% if un %}<span class="n-badge">{{ un }}</span>{% endif %}</a>
+    <a class="nav {{ 'active' if ep in ('games','trivia') }}" href="{{ url_for('games.hub') }}">{{ m.icon('layers') }} Games &amp; Trivia</a>
+    <a class="nav {{ 'active' if ep == 'schools' }}" href="{{ url_for('schools.index') }}">{{ m.icon('school') }} Schools</a>
+    <a class="nav {{ 'active' if ep == 'wallet' }}" href="{{ url_for('wallet.coins') }}">{{ m.icon('coin') }} Coins</a>
+    <a class="nav" href="{{ url_for('profiles.view', username=cur.username) }}">{{ m.icon('user') }} Profile</a>
+    {% if cur.role in ('admin','moderator') %}<a class="nav {{ 'active' if ep == 'admin' }}" href="{{ url_for('admin.dashboard' if cur.role == 'admin' else 'admin.reports') }}">{{ m.icon('shield') }} Admin</a>{% endif %}
+    <div class="grow"></div>
+    <a class="nav" href="{{ url_for('profiles.settings') }}">{{ m.icon('sliders') }} Settings</a>
+    <form method="post" action="{{ url_for('auth.logout') }}">{{ m.csrf() }}<button class="nav" style="width:100%;border:0;background:none;font:inherit;cursor:pointer;display:flex;align-items:center;gap:14px;padding:13px 16px;color:var(--muted);font-weight:700">{{ m.icon('logout') }} Log out</button></form>
+  </aside>
+
+  <main id="main" class="main">
+    <header class="topbar">
+      <a class="logo" href="{{ url_for('feed.home') }}"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="">CIRQ</a>
+      <div class="actions">
+        <a class="coin" href="{{ url_for('wallet.coins') }}" style="padding:0 6px" aria-label="App coins">{{ cur.coin_balance }}</a>
+        <a class="round-btn" href="{{ url_for('discover.index') }}" aria-label="Search">{{ m.icon('search') }}</a>
+        <a class="round-btn" href="{{ url_for('notifications.index') }}" aria-label="Notifications">{{ m.icon('bell') }}{% if un %}<span class="dot">{{ un if un < 100 else '99+' }}</span>{% endif %}</a>
+      </div>
+    </header>
+    {% block content %}{% endblock %}
+  </main>
+
+  <aside class="rail" aria-label="Your CIRQ">
+    {% set tier = tier_for(0) %}
+    <div class="card"><div class="row">{{ m.avatar(cur, 52) }}<div class="grow"><b>{{ cur.display_name }}</b><br><small class="muted">@{{ cur.username }}</small></div></div>
+      <hr class="divider"><div class="row between"><span class="muted">App coins</span><span class="coin">{{ cur.coin_balance }}</span></div>
+      <a class="btn ghost sm block" style="margin-top:12px" href="{{ url_for('wallet.coins') }}">Open wallet</a></div>
+    <div class="card" style="margin-top:14px"><h3>CIRQ FLIP</h3><p class="muted small">Pick the developer's card and win {{ config.DEV_CARD_COINS }} app coins.</p><a class="btn sm block" href="{{ url_for('games.flip') }}">Play now</a></div>
+    <p class="dim small" style="margin-top:16px"><a href="{{ url_for('legal_pages.guidelines') }}">Guidelines</a> · <a href="{{ url_for('legal_pages.privacy') }}">Privacy</a></p>
+  </aside>
+</div>
+
+<nav class="bottom-nav" aria-label="Main">
+  <div class="pill">
+    <a href="{{ url_for('feed.home') }}" class="{{ 'active' if ep == 'feed' }}" aria-label="Home">{{ m.icon('home') }}<span class="lbl">Home</span></a>
+    <a href="{{ url_for('reels.index') }}" class="{{ 'active' if ep in ('reels','discover') }}" aria-label="Reels">{{ m.icon('film') }}<span class="lbl">Reels</span></a>
+    <button class="fab" type="button" data-open="create-sheet" aria-label="Create">{{ m.icon('plus','i-lg') }}</button>
+    <a href="{{ url_for('messages.inbox') }}" class="{{ 'active' if ep == 'messages' }}" aria-label="Messages">{{ m.icon('message') }}<span class="lbl">Chats</span>{% if um %}<span class="badge-n">{{ um }}</span>{% endif %}</a>
+    <a href="{{ url_for('games.hub') }}" class="{{ 'active' if ep in ('games','trivia','wallet') }}" aria-label="Games">{{ m.icon('layers') }}<span class="lbl">Play</span></a>
+  </div>
+</nav>
+
+<dialog id="create-sheet" aria-label="Create">
+  <div class="row between"><h2 style="margin:0">Create</h2><button class="icon-btn" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
+  <div class="sheet-grid">
+    <a href="{{ url_for('feed.home') }}#composer">{{ m.icon('edit') }} Post</a>
+    <a href="{{ url_for('reels.new') }}">{{ m.icon('film') }} Reel</a>
+    <button type="button" data-open="story-sheet">{{ m.icon('camera') }} Story</button>
+    <a href="{{ url_for('linkup.new') }}">{{ m.icon('calendar') }} Event</a>
+  </div>
+</dialog>
+
+<dialog id="story-sheet" aria-label="New story">
+  <form id="story-form" class="stack" method="post" action="{{ url_for('stories.create') }}" enctype="multipart/form-data" data-story-form>{{ m.csrf() }}
+    <div class="row between"><h2 style="margin:0">New story</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
+    <div class="story-preview" data-media-preview hidden></div>
+    <div class="row wrap" style="gap:10px">
+      <label class="file-drop grow" style="margin:0;padding:12px 16px">{{ m.icon('image') }} <span data-file-label>Photo or video</span><input type="file" name="media" accept="image/*,video/mp4,video/quicktime,video/webm" data-preview></label>
+      <button type="button" class="file-drop cam-btn grow" style="margin:0;padding:12px 16px;justify-content:center" data-camera="#story-form input[name=media]" data-camera-modes="photo,video" data-camera-max="30" data-camera-max-mb="{{ config.MAX_VIDEO_MB }}">{{ m.icon('camera') }} Open camera</button>
+    </div>
+    <input class="input" name="caption" maxlength="150" placeholder="Add a caption" aria-label="Caption">
+    <label class="file-drop" style="margin:0;padding:12px 16px">{{ m.icon('music') }} <span data-file-label>Add music (optional)</span><input type="file" name="audio" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg"></label>
+    <input class="input" name="audio_title" maxlength="80" placeholder="Song title (optional)" aria-label="Song title" data-audio-title hidden>
+    <p class="hint" style="margin:0">Only share music you have the right to use. Stories disappear after 24 hours.</p>
+    <div class="row"><button class="btn grow" type="submit">Share story</button><button class="btn ghost" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="report-dialog" aria-label="Report">
+  <form method="post" action="{{ url_for('feed.report') }}" data-report-form>{{ m.csrf() }}
+    <input type="hidden" name="target_type"><input type="hidden" name="target_id">
+    <h2>Report</h2><p class="muted small">Tell us what's wrong. Moderators review every report.</p>
+    <label for="rep-reason">Reason</label>
+    <select class="input" id="rep-reason" name="reason"><option value="harassment">Harassment or bullying</option><option value="inappropriate">Inappropriate content</option><option value="spam">Spam</option><option value="impersonation">Impersonation</option><option value="unsafe">Unsafe or self-harm</option><option value="other">Something else</option></select>
+    <label for="rep-details">Details (optional)</label><textarea class="input" id="rep-details" name="details" maxlength="500"></textarea>
+    <div class="row" style="margin-top:16px"><button class="btn grow" type="submit">Send report</button><button class="btn ghost" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+
+{% else %}
+<main id="main">{% block bare %}{% block public %}{% endblock %}{% endblock %}</main>
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

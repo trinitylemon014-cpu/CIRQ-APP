@@ -1,0 +1,2 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Registration closed{% endblock %}
+{% block public %}<div class="auth-shell"><div class="card auth-card empty">{{ m.icon('lock') }}<h2>Registration is closed</h2><p>New sign-ups are paused right now. Please check back soon.</p><a class="btn" href="{{ url_for('auth.landing') }}">Back</a></div></div>{% endblock %}

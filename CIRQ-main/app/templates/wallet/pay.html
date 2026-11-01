@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Pay{% endblock %}
+{% block content %}
+<h1 class="page-title">Pay by mobile money</h1>
+{% if not enabled %}{% call m.empty('lock','Payments aren\'t open yet','Paid trivia entries and paid boosts are switched off for now. You can still earn coins and boost with coins.') %}<a class="btn" href="{{ url_for('wallet.coins') }}">Back to wallet</a>{% endcall %}
+{% else %}
+<div class="card"><h2>How it works</h2><ol class="muted" style="padding-left:20px;line-height:1.7"><li>Register the mobile-money number you'll pay from and the name that shows when you send money.</li><li>An admin verifies it (usually within a day).</li><li>Send the money to {% if config.PAYMENT_NUMBER_DISPLAY %}<b>{{ config.PAYMENT_NUMBER_DISPLAY }}</b>{% if config.PAYMENT_ACCOUNT_NAME %} ({{ config.PAYMENT_ACCOUNT_NAME }}){% endif %}{% else %}the number shown by CIRQ admins{% endif %} from your verified number.</li><li>When the admin sees your payment it's credited to your account: a trivia entry or a boost. Nothing is automatic and nothing is taken from your phone by CIRQ.</li></ol></div>
+<div class="card" style="margin-top:14px"><h2>Prices</h2><div class="person"><div class="grow"><b>Trivia entry</b></div><span class="chip lime">UGX {{ '{:,}'.format(fee) }}</span></div>
+  {% for key, (price, days) in plans.items() %}<div class="person"><div class="grow"><b>Boost · {{ days }} days</b></div><span class="chip lime">UGX {{ '{:,}'.format(price) }}</span></div>{% endfor %}
+  <p class="hint">Trivia entries available to you: <b>{{ credits }}</b></p></div>
+<div class="section-title"><h2>Your numbers</h2></div>
+<div class="card">{% for n in numbers %}<div class="person"><div class="grow"><b>{{ n.phone }}</b><br><small class="muted">{{ n.account_name }}</small></div><span class="chip {{ {'approved':'green','pending':'warn','rejected':'red','revoked':'red'}[n.status] }}">{{ n.status|capitalize }}</span></div>{% else %}<p class="muted">No numbers yet.</p>{% endfor %}</div>
+<form class="card" method="post" action="{{ url_for('wallet.register_number') }}" style="margin-top:14px" novalidate>{{ m.csrf() }}
+  <div class="row" style="margin-bottom:4px"><span class="icon-tile game-card" style="padding:0;width:48px;height:48px;display:grid;place-items:center;background:var(--grad-primary);border:0;border-radius:14px;color:#fff">{{ m.icon('wallet','i-lg') }}</span><div><h2 style="margin:0">Mobile Money Payment</h2><small class="muted">Verify your number so an admin can credit your payments</small></div></div>
+  <label for="f-phone">Mobile money number</label><div class="field-icon">{{ m.icon('user') }}<input class="input" id="f-phone" name="phone" type="tel" inputmode="tel" required placeholder="07XX XXX XXX" autocomplete="tel"></div>
+  <label for="f-account_name">Name used to send money</label><div class="field-icon">{{ m.icon('user') }}<input class="input" id="f-account_name" name="account_name" required minlength="2" maxlength="80" placeholder="e.g. NAKATO JANE"></div>
+  <label for="f-net">Network</label><select class="input" id="f-net" name="network"><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option><option value="mobile_money">Other</option></select>
+  <label class="check"><input type="checkbox" name="guardian_confirmed" required> I'm 18 or over, or a parent/guardian has given me permission to make this payment.</label>
+  <button class="btn block">Submit for verification</button>
+  <div class="secure-note">{{ m.icon('shield') }}<div><b style="color:#fff">Payments are manually verified by the CIRQ admin.</b><br>Never share your Mobile Money PIN with anyone, including CIRQ. We never ask for it.</div></div></form>
+{% if payments %}<div class="section-title"><h2>Payments recorded</h2></div><div class="card">{% for p in payments %}<div class="person"><div class="grow"><b>{{ p.purpose|replace('_',' ')|capitalize }}</b><br><small class="dim">{{ p.created_at|ago }}</small></div><b>UGX {{ '{:,}'.format(p.amount_ugx) }}</b></div>{% endfor %}</div>{% endif %}
+{% endif %}
+{% endblock %}

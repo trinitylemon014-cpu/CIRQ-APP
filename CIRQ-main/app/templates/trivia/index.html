@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Trivia{% endblock %}
+{% block content %}
+<h1 class="page-title">Trivia</h1>
+<div class="card lime"><div class="row between"><div><b style="font-size:1.15rem">Fast and right wins</b><p style="margin:4px 0 0;font-weight:600">Points for accuracy plus a speed bonus on every question.</p></div>{{ m.icon('zap','i-lg') }}</div></div>
+{% if paid %}<div class="card row between" style="margin-top:12px"><div><b>Entry: UGX {{ '{:,}'.format(fee) }}</b><br><small class="muted">You have {{ credits }} entr{{ 'y' if credits == 1 else 'ies' }} ready</small></div><a class="btn sm" href="{{ url_for('wallet.pay') }}">Pay for entry</a></div>
+{% else %}<p class="chip lime" style="margin-top:12px">Free to play · earn app coins for every set you finish</p>{% endif %}
+<div class="section-title"><h2>Sets</h2></div>
+{% for s in sets %}<a class="card" style="display:block;margin-bottom:12px" href="{{ url_for('trivia.intro', set_id=s.id) }}"><div class="row"><div class="grow"><h3 style="margin:0">{{ s.title }}</h3><p class="muted small" style="margin:2px 0 0">{{ s.q_count }} questions{% if s.description %} · {{ s.description }}{% endif %}</p></div>
+  {% if s.attempt and s.attempt.status == 'completed' %}<span class="chip green">{{ s.attempt.points }} pts</span>{% elif s.attempt %}<span class="chip warn">Continue</span>{% elif s.status == 'closed' %}<span class="chip">Closed</span>{% else %}<span class="chip lime">Play</span>{% endif %}</div></a>
+{% else %}{% call m.empty('help','No trivia yet','New sets appear here when the CIRQ team publishes them.') %}{% endcall %}{% endfor %}
+{% if board %}<div class="section-title"><h2>Top players</h2></div><div class="card">{% for r in board %}<div class="person"><b style="width:26px">{{ loop.index }}</b>{{ m.avatar(r.user, 40) }}<div class="grow"><b>{{ r.user.display_name }}</b>{{ m.verified(r.user) }}<br><small class="muted">{{ r.sets }} set{{ '' if r.sets == 1 else 's' }}</small></div><b class="coin">{{ r.points }}</b></div>{% endfor %}</div>{% endif %}
+{% endblock %}

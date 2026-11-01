@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Discover{% endblock %}
+{% block content %}
+<h1 class="page-title">Discover</h1>
+<form class="row" method="get"><input type="hidden" name="tab" value="{{ tab }}"><input class="input" name="q" value="{{ q }}" placeholder="Search students, schools, events" aria-label="Search"><button class="send" aria-label="Search">{{ m.icon('search') }}</button></form>
+<div class="tabs">{% for key, label in [('people','People'),('schools','Schools'),('posts','Popular'),('events','Events')] %}<a href="?tab={{ key }}{{ '&q=' ~ q if q }}" class="{{ 'active' if tab == key }}">{{ label }}</a>{% endfor %}</div>
+{% if tab == 'people' %}
+  <form method="get" class="row" style="margin-bottom:10px"><input type="hidden" name="tab" value="people"><input type="hidden" name="q" value="{{ q }}"><select class="input" name="school" onchange="this.form.submit()" aria-label="Filter by school"><option value="">All schools</option>{% for s in all_schools %}<option value="{{ s.id }}" {{ 'selected' if sel_school == s.id }}>{{ s.name }}</option>{% endfor %}</select></form>
+  <div class="card">{% for p in people %}<div class="person"><a href="{{ url_for('profiles.view', username=p.username) }}">{{ m.avatar(p, 48) }}</a>
+    <div class="grow"><a href="{{ url_for('profiles.view', username=p.username) }}"><b>{{ p.display_name }}</b>{{ m.verified(p) }}</a> {{ m.boosted(p) }}<br><small class="muted">@{{ p.username }}{% if p._school %} · {{ p._school.name }}{% endif %}</small></div>
+    {{ m.follow_btn(p.username, p._state, private=p.is_private) }}</div>
+  {% else %}<div class="empty">{{ m.icon('users') }}<p>No students found. Try a different search.</p></div>{% endfor %}</div>
+{% elif tab == 'schools' %}
+  {% for s in schools %}<a class="card row" style="margin-bottom:10px" href="{{ url_for('schools.view', slug=s.slug) }}">{{ m.school_logo(s, 52) }}<div class="grow"><b>{{ s.name }}</b>{% if s.verified %} <span class="chip violet">Verified</span>{% endif %}<br><small class="muted">{{ s.city or '' }}{{ ', ' if s.city }}{{ s.country }}</small></div>{{ m.icon('arrow-left') }}</a>
+  {% else %}{% call m.empty('school','No schools found','') %}{% endcall %}{% endfor %}
+{% elif tab == 'posts' %}
+  {% for p in posts %}{% include 'partials/post_card.html' %}{% else %}{% call m.empty('heart','Nothing trending yet','Public posts from students will show up here as they get likes.') %}{% endcall %}{% endfor %}
+{% else %}
+  {% for e in events %}<a class="card row" style="margin-bottom:10px" href="{{ url_for('linkup.detail', event_id=e.id) }}"><span class="date-pill">{{ (e.starts_at|event_dt)[5:11] }}</span><div class="grow"><b>{{ e.title }}</b><br><small class="muted">{{ e.starts_at|event_dt }} · {{ e.venue }}</small></div></a>
+  {% else %}{% call m.empty('calendar','No upcoming events','Be the first to host one on LINKUP.') %}<a class="btn" href="{{ url_for('linkup.new') }}">Create event</a>{% endcall %}{% endfor %}
+{% endif %}
+{% endblock %}

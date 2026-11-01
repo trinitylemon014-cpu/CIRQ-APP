@@ -1,0 +1,31 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ prof.display_name }}{% endblock %}
+{% block content %}
+{% set mine = prof.id == cur.id %}
+<section class="card hero">
+  {{ m.avatar(prof, 104) }}
+  <h1 style="font-size:1.7rem;margin-bottom:2px">{{ prof.display_name }}{{ m.verified(prof) }}</h1>
+  <div class="muted">@{{ prof.username }}</div>
+  <div class="row wrap" style="justify-content:center;margin-top:10px">
+    <span class="chip green">{{ m.icon('trophy','i-sm') }} {{ stats.tier.name }}</span>
+    {% if school %}<a class="chip" href="{{ url_for('schools.view', slug=school.slug) }}">{{ m.icon('school','i-sm') }} {{ school.name }}{% if school.verified %} ✓{% endif %}</a>{% endif %}
+    {{ m.boosted(prof) }}{% if prof.is_private %}<span class="chip">{{ m.icon('lock','i-sm') }} Private account</span>{% endif %}
+    {% if prof.role == 'admin' %}<span class="chip violet">{{ m.icon('code','i-sm') }} Team</span>{% endif %}
+  </div>
+  {% if prof.bio %}<p style="margin-top:14px">{{ prof.bio }}</p>{% endif %}
+  <div class="stats"><div class="stat"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></div><div class="stat"><b>{{ stats.following|short }}</b><small>Following</small></div><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Reels' if tab == 'reels' else 'Posts' }}</small></div></div>
+  {% if mine %}<div class="row wrap" style="justify-content:center"><a class="btn ghost" href="{{ url_for('profiles.settings') }}">Edit profile</a><a class="btn ghost" href="{{ url_for('profiles.status') }}">CIRQ STATUS</a>{% if prof.is_private %}<a class="btn ghost" href="{{ url_for('profiles.follow_requests') }}">Follow requests{% if pending_requests %} <span class="chip lime">{{ pending_requests }}</span>{% endif %}</a>{% endif %}</div>
+  {% else %}
+  <div class="row" style="justify-content:center">{{ m.follow_btn(prof.username, follow_state, small=False, private=prof.is_private) }}
+    {% if can_message %}<form method="post" action="{{ url_for('messages.start', username=prof.username) }}">{{ m.csrf() }}<button class="btn ghost">{{ m.icon('message','i-sm') }} Message</button></form>
+    {% else %}<button type="button" class="btn ghost" disabled title="Available once {{ prof.username }} approves your request">{{ m.icon('lock','i-sm') }} Message</button>{% endif %}
+    <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="More">{{ m.icon('more') }}</button><div class="menu-list">{{ m.report_btn('profile', prof.id, 'Report profile') }}
+      <form method="post" action="{{ url_for('profiles.block', username=prof.username) }}" data-confirm="Block @{{ prof.username }}? You won't see each other's content.">{{ m.csrf() }}<button class="danger">{{ m.icon('x','i-sm') }} Block</button></form></div></div></div>
+  {% endif %}
+</section>
+{% if achievements %}<div class="tray" style="margin-top:10px">{% for a in achievements %}<span class="chip lime" title="{{ a.description }}">{{ m.icon(a.icon,'i-sm') }} {{ a.name }}</span>{% endfor %}</div>{% endif %}
+<div class="tabs" role="tablist"><a href="?tab=posts" class="{{ 'active' if tab != 'reels' }}">Posts</a><a href="?tab=reels" class="{{ 'active' if tab == 'reels' }}">Reels</a></div>
+{% if not can_see %}{% call m.empty('lock', 'This account is private', ('Your request is waiting for approval.' if follow_state == 'requested' else 'Follow this account to see their photos, videos and stories.')) %}{% endcall %}
+{% elif items %}<div id="feed" data-feed-url="{{ url_for('profiles.view', username=prof.username, tab=tab) }}">{% include 'partials/post_list.html' %}</div>
+  <div class="row" style="justify-content:center;margin-top:16px"><button class="btn ghost" id="load-more" type="button" data-target="#feed" {{ 'hidden' if not cursor }}>Load more</button></div>
+{% else %}{% call m.empty('image', 'Nothing here yet', '') %}{% endcall %}{% endif %}
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Guess the Developer{% endblock %}
+{% block content %}
+<section class="game-hero">
+  <h1 class="neon-title">Guess the<br>Developer<small>Think · Observe · Guess</small></h1>
+  <div class="reward-badge" aria-label="Win {{ dev_coins }} app coins"><span class="coin-big">$</span><div><small>WIN</small><b>{{ dev_coins }}</b><small>APP COINS</small></div></div>
+</section>
+
+<div class="clues" aria-label="Clues">
+  <div class="clue">{{ m.icon('zap') }}<div><b>CLUE 1</b>Builds cool features and loves technology.</div></div>
+  <div class="clue">{{ m.icon('code') }}<div><b>CLUE 2</b>Often seen in the developer community and loves problem solving.</div></div>
+  <div class="clue">{{ m.icon('star') }}<div><b>CLUE 3</b>Always active, helping to make CIRQ better.</div></div>
+  <div class="clue">{{ m.icon('users') }}<div><b>CLUE 4</b>A student with big dreams and a passion for innovation.</div></div>
+</div>
+
+<div id="flip" data-start="{{ url_for('games.start') }}" data-state="{{ url_for('games.state') }}" data-guess="{{ url_for('games.guess') }}" data-mark="{{ url_for('static', filename='images/mark.png') }}" data-max="{{ max_guesses }}">
+  <div class="stage" id="stage">
+    <span class="stage-label">{{ m.icon('star','i-sm') }} THE DEVELOPER {{ m.icon('star','i-sm') }}</span>
+    <div class="pcard mystery" id="mystery" aria-label="Mystery developer card"><span class="face"><span class="in">
+      <svg class="sil" viewBox="0 0 100 120" aria-hidden="true"><circle cx="50" cy="38" r="20" fill="currentColor"/><path d="M10 120c0-34 18-50 40-50s40 16 40 50z" fill="currentColor"/><text class="q" x="50" y="52" text-anchor="middle">?</text></svg>
+      <span class="label">THE DEVELOPER</span><i class="shine"></i></span></span></div>
+  </div>
+  <div class="row between" style="margin-top:16px"><div><b id="flip-msg">Choose the developer card</b><div class="muted small" id="flip-sub">You have {{ max_guesses }} guesses. Flip a card to see who's behind it.</div></div>
+    <div class="hearts" id="flip-hearts" aria-label="Guesses left">{% for i in range(max_guesses) %}<i></i>{% endfor %}</div></div>
+  <div id="flip-result" hidden></div>
+  <div class="deck-title">Choose the developer card</div>
+  <div class="deck" id="flip-deck" aria-live="polite"></div>
+  <button class="btn block" id="flip-start" type="button" style="margin-top:18px">Deal the cards</button>
+</div>
+
+<div class="game-bar">
+  <div class="cell">{{ m.icon('trophy') }}<div><b>Win {{ dev_coins }} app coins</b><br><small class="muted">Pick the right card and claim your reward ({{ daily_cap }} reward per day).</small></div></div>
+  <a class="cell" href="#leaderboard">{{ m.icon('award') }}<div class="grow"><b>Leaderboard</b><br><small class="muted">Top developer-spotters</small></div></a>
+</div>
+
+<div class="section-title" id="leaderboard"><h2>Top guessers</h2></div>
+<div class="card">{% for r in board %}<div class="lb-row"><span class="lb-rank">{{ loop.index }}</span>{{ m.avatar(r.user, 38) }}<div class="grow"><b>{{ r.user.display_name }}</b>{{ m.verified(r.user) }}<br><small class="muted">@{{ r.user.username }}</small></div><span class="chip lime">{{ r.wins }} win{{ '' if r.wins == 1 else 's' }}</span></div>
+{% else %}<div class="empty" style="padding:18px">{{ m.icon('trophy') }}<p>No one has found {{ dev_name }} yet. Be the first!</p></div>{% endfor %}</div>
+
+<div class="card" style="margin-top:14px"><h3>How to play</h3>
+  <ul class="muted" style="padding-left:18px;margin:6px 0 12px"><li>Each round deals face-down cards of real CIRQ students. One of them is the developer, <b>{{ dev_name }}</b>.</li><li>You get <b>{{ max_guesses }} guesses</b>. Flip a card to reveal the student behind it. You can't flip the same card twice.</li><li>Find the developer to win <b class="coin" style="display:inline-flex">{{ dev_coins }} coins</b>.</li><li>The answer is chosen by the server before you play and is never sent to your phone until the round ends. Playing is always free.</li></ul>
+  <div class="row"><span class="chip">Rounds {{ rounds }}</span><span class="chip green">Wins {{ wins }}</span></div></div>
+{% if history %}<div class="section-title"><h2>Your recent rounds</h2></div><div class="card">{% for h in history %}<div class="person"><span class="chip {{ 'green' if h.status == 'won' else 'red' }}">{{ h.status|capitalize }}</span><span class="grow muted">{{ h.guesses_used }} guess{{ '' if h.guesses_used == 1 else 'es' }}</span><small class="dim">{{ h.created_at|ago }}</small></div>{% endfor %}</div>{% endif %}
+{% endblock %}

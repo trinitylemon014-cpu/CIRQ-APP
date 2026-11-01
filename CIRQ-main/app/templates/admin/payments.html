@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Payments{% endblock %}
+{% block content %}<h1 class="page-title">Payments</h1>{% include 'admin/_nav.html' %}
+{% if not enabled %}<div class="card" style="border-color:rgba(255,200,87,.5)"><b>Paid features are switched off.</b> <span class="muted">Set PAID_COMPETITIONS_ENABLED=true on the server when you've completed the legal and child-safety review. Payments can't be recorded while it's off.</span></div>{% endif %}
+<h2 style="margin-top:18px">1 · Verify payer numbers</h2>
+{% for n in pending %}<div class="card" style="margin-bottom:10px"><b>{{ n.phone }}</b> · name shown: <b>{{ n.account_name }}</b> · {{ n.network }}<br><small class="muted">Account @{{ n.user.username }} ({{ n.user.display_name }}) · guardian/age confirmed: {{ 'yes' if n.guardian_confirmed else 'no' }}</small>
+  <form class="inline" method="post" style="margin-top:8px;display:flex">{{ m.csrf() }}<input class="input" name="note" placeholder="Note">
+  <button class="btn sm" formaction="{{ url_for('admin.payer_decide', nid=n.id, decision='approve') }}">Approve</button><button class="btn sm danger" formaction="{{ url_for('admin.payer_decide', nid=n.id, decision='reject') }}">Reject</button></form></div>
+{% else %}<p class="muted">No numbers waiting.</p>{% endfor %}
+<h2 style="margin-top:22px">2 · Record a payment you received</h2>
+<form class="card" method="post" action="{{ url_for('admin.record_payment') }}">{{ m.csrf() }}
+  <label for="pn">Verified number</label><select class="input" id="pn" name="payer_number_id" required><option value="">Choose…</option>{% for n in approved %}<option value="{{ n.id }}">{{ n.phone }} · {{ n.account_name }} (@{{ n.user.username }})</option>{% endfor %}</select>
+  <label for="pp">What was it for?</label><select class="input" id="pp" name="purpose">
+    <option value="trivia_entry">Trivia entry · UGX {{ '{:,}'.format(fee) }} each</option>{% for key, (price, days) in plans.items() %}<option value="{{ key }}">Boost {{ days }} days · UGX {{ '{:,}'.format(price) }}</option>{% endfor %}</select>
+  {{ m.field('amount_ugx', 'Amount received (UGX)', 'number', placeholder='1000') }}
+  {{ m.field('provider_reference', 'Mobile-money transaction ID', placeholder='e.g. 9876543210', hint='Each transaction ID can only be credited once.') }}
+  {{ m.field('note', 'Note (optional)', required=False) }}
+  <button class="btn block" style="margin-top:12px" {{ 'disabled' if not enabled }}>Record &amp; credit</button></form>
+<h2 style="margin-top:22px">Recent payments</h2>
+<div class="table-wrap"><table><thead><tr><th>When</th><th>User</th><th>For</th><th>UGX</th><th>Ref</th></tr></thead><tbody>{% for p in recent %}<tr><td>{{ p.created_at|ago }}</td><td>@{{ p.user.username if p.user }}</td><td>{{ p.purpose }}</td><td>{{ '{:,}'.format(p.amount_ugx) }}</td><td>{{ p.provider_reference }}</td></tr>{% else %}<tr><td colspan="5" class="muted">None yet.</td></tr>{% endfor %}</tbody></table></div>{% endblock %}

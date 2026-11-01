@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}CIRQ STATUS{% endblock %}
+{% block content %}
+<h1 class="page-title">CIRQ STATUS</h1>
+<div class="card lime"><div class="muted" style="color:rgba(255,255,255,.8);font-weight:800">YOUR RANK</div><div class="big-num" style="">{{ stats.tier.name }}</div>
+  <p style="margin:6px 0 10px;font-weight:700">{{ stats.followers }} follower{{ '' if stats.followers == 1 else 's' }}{% if stats.tier.next_name %} · {{ stats.tier.to_next }} more to reach {{ stats.tier.next_name }}{% endif %}</p>
+  <div class="progress" style="background:rgba(255,255,255,.2)"><b style="width:{{ stats.tier.progress }}%;background:#fff"></b></div></div>
+<p class="muted small" style="margin:10px 4px">Ranks come only from real follows. Verification and boosts are separate and never change your rank. Popularity says nothing about your worth.</p>
+<div class="section-title"><h2>Ranks</h2></div>
+<div class="tier-list">{% for name, lo, hi in tiers %}<div class="tier-row {{ 'cur' if name == stats.tier.name }}"><span>{{ name }}</span><span>{{ lo|short }}{{ ' – ' ~ (hi|short) if hi else '+' }}</span></div>{% endfor %}</div>
+<div class="section-title"><h2>Achievements</h2></div>
+<div class="grid3">{% for a in achievements %}<div class="ach {{ 'earned' if a.earned }}">{{ m.icon(a.icon) }}<b>{{ a.name }}</b><small>{{ a.description }}</small></div>{% endfor %}</div>
+{% endblock %}

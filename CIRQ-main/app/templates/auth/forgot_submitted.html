@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Request received{% endblock %}
+{% block public %}<div class="auth-shell"><div class="card auth-card" style="text-align:center">{{ m.icon('shield','i-lg') }}<h2 style="margin-top:8px">Request received</h2>
+<p class="muted">If the details match an account, an administrator will review your request. After approval you'll receive a single-use link by email that expires quickly.</p>
+<p class="muted small">Didn't hear back in a day or two? Check spam, or ask your school coordinator to contact CIRQ support.</p><a class="btn block" href="{{ url_for('auth.login') }}">Back to log in</a></div></div>{% endblock %}
