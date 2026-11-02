@@ -9,6 +9,15 @@
 -- cirq_claim_school_submission_slot function, rate-limit table, school_submissions
 -- table, and the added profile columns/indexes. Dropping these columns discards
 -- school-submission and approval-source history.
+--
+-- Example rollback statements (run only when reverting this feature):
+-- drop function if exists public.cirq_claim_school_submission_slot(text, integer);
+-- drop table if exists public.school_submission_rate_limits;
+-- alter table public.profiles drop column if exists approved_at,
+--   drop column if exists approved_by, drop column if exists approval_source,
+--   drop column if exists auto_approval_blocked, drop column if exists school_verified,
+--   drop column if exists school_submission_id, drop column if exists submitted_school_name;
+-- drop table if exists public.school_submissions;
 
 create table if not exists public.school_submissions (
   id uuid primary key default gen_random_uuid(),

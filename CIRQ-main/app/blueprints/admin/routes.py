@@ -124,12 +124,17 @@ def user_action(uid, action):
                                "session_epoch": target.get("session_epoch", 0) + 1}, id=uid)   # kicks them out immediately
         notify(uid, "moderation", body="Your account was suspended.", dedupe=False)
     elif action == "unsuspend":
-        sb.update("profiles", {"account_status": "approved", "status_note": None}, id=uid)
+        sb.update("profiles", {
+            "account_status": "approved", "status_note": None, "approval_source": "admin",
+            "approved_by": g.user["id"], "approved_at": iso(),
+        }, id=uid, account_status="suspended")
     elif action == "hold_auto_approval":
         if target["account_status"] != "pending":
             abort(400)
         blocked = not target.get("auto_approval_blocked", False)
-        sb.update("profiles", {"auto_approval_blocked": blocked}, id=uid, account_status="pending")
+        if not sb.update("profiles", {"auto_approval_blocked": blocked}, id=uid, account_status="pending"):
+            flash("This account changed while you were reviewing it. Refresh and try again.", "error")
+            return _back("admin.users")
         audit(g.user["id"], "user_auto_approval_hold_set", "profile", uid, blocked=blocked)
         flash("Automatic approval is on hold." if blocked else "Automatic approval is allowed.", "success")
         return _back("admin.users")

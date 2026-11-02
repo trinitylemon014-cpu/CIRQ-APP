@@ -668,7 +668,7 @@ def test_admin_pages_render_for_admin(app, mk, school):
 
 
 def test_role_cannot_be_self_assigned_at_registration(client, db, school):
-    client.post("/register", data={"username": "sneaky", "display_name": "Sneaky", "email": "s@example.com", "school_id": school["id"], "password": "Sup3r-secret-pw", "password2": "Sup3r-secret-pw",
+    client.post("/register", data={"username": "sneaky", "display_name": "Sneaky", "email": "s@example.com", "school_choice": school["name"], "password": "Sup3r-secret-pw", "password2": "Sup3r-secret-pw",
                                    "terms": "on", "age_ok": "on", "role": "admin", "account_status": "approved"})
     p = db.data["profiles"][0]
     assert p["role"] == "student" and p["account_status"] == "pending"

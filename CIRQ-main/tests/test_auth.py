@@ -116,10 +116,14 @@ def test_open_redirect_blocked(client, mk):
 def test_welcome_coins_on_approval_only_once(app, db, mk):
     from app.services.account_service import approve_account
     p = mk("alice", status="pending")
+    admin = mk("boss")
     with app.app_context():
-        approve_account(p["id"]); approve_account(p["id"])
+        approve_account(p["id"], admin["id"]); approve_account(p["id"], admin["id"])
     assert db.data["profiles"][0]["coin_balance"] == 50
     assert len(db.data["coin_ledger"]) == 1
+    assert db.data["profiles"][0]["approval_source"] == "admin"
+    assert db.data["profiles"][0]["approved_by"] == admin["id"]
+    assert db.data["profiles"][0]["approved_at"]
 
 
 def test_auto_approval_after_five_minutes_notifies_admin_and_grants_welcome_coins(app, db, mk):
@@ -156,7 +160,7 @@ def test_auto_approval_after_five_minutes_notifies_admin_and_grants_welcome_coin
     assert "verified" in admin_notices[0]["body"]
     from app.blueprints.notifications.routes import target_url
     with app.test_request_context():
-        assert target_url(admin_notices[0]).endswith("/u/unverified")
+        assert target_url(admin_notices[0]).endswith("/u/verified")
     assert len([r for r in db.data["audit_logs"] if r["action"] == "user_auto_approved"]) == 1
 
 

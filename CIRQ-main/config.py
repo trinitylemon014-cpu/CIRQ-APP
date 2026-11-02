@@ -45,6 +45,12 @@ class Config:
     PAID_COMPETITIONS_ENABLED = _bool("PAID_COMPETITIONS_ENABLED", False)
     AUTO_APPROVE_AFTER_MINUTES = _int("AUTO_APPROVE_AFTER_MINUTES", 5)
     NEW_SCHOOL_SUBMISSIONS_PER_IP_PER_DAY = _int("NEW_SCHOOL_SUBMISSIONS_PER_IP_PER_DAY", 3)
+    AUTO_APPROVAL_BLOCKED_EMAIL_DOMAINS = [
+        d.strip().lower() for d in os.environ.get("AUTO_APPROVAL_BLOCKED_EMAIL_DOMAINS", "").split(",") if d.strip()
+    ]
+    AUTO_APPROVAL_BLOCKED_IPS = [
+        ip.strip() for ip in os.environ.get("AUTO_APPROVAL_BLOCKED_IPS", "").split(",") if ip.strip()
+    ]
     CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
     # App coins, boosts and trivia (UGX amounts are manual mobile-money payments; no in-app processor)

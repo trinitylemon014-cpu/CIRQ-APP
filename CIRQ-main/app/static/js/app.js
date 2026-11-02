@@ -43,10 +43,16 @@
   }));
   $$("[data-mobile-menu-close]").forEach((button) => button.addEventListener("click", () => closePageMenu()));
   pageMenu && pageMenu.addEventListener("click", (event) => {
-    if (event.target.closest("a")) closePageMenu(false);
+    if (event.target.closest("a")) closePageMenu();
+  });
+  document.addEventListener("focusin", (event) => {
+    if (pageMenu && pageMenu.classList.contains("is-open") && !pageMenu.contains(event.target)) {
+      const first = menuFocusables()[0];
+      if (first) first.focus({ preventScroll: true });
+    }
   });
   document.addEventListener("keydown", (event) => {
-    if (!pageMenu || pageMenu.hidden) return;
+    if (!pageMenu || pageMenu.hidden || !pageMenu.classList.contains("is-open")) return;
     if (event.key === "Escape") {
       event.preventDefault();
       closePageMenu();

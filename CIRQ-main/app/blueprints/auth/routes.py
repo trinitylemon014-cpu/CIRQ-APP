@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import ipaddress
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, g, current_app, abort, jsonify
 from app.extensions import db, limiter, csrf
 from app.services import supabase_service as sb, auth_service
@@ -46,6 +47,25 @@ def _registration_school(choice, submitted_name, schools):
     if existing:
         return existing, None, None, None, None
     return None, None, None, None, "Choose a listed school or select “My school isn't listed”."
+
+
+def _auto_approval_blocked(email):
+    domain = email.rsplit("@", 1)[-1].lower()
+    blocked_domains = current_app.config["AUTO_APPROVAL_BLOCKED_EMAIL_DOMAINS"]
+    if any(domain == item or domain.endswith("." + item) for item in blocked_domains):
+        return True
+
+    address = request.remote_addr
+    if not address:
+        return bool(current_app.config["AUTO_APPROVAL_BLOCKED_IPS"])
+    try:
+        parsed_address = ipaddress.ip_address(address)
+        networks = [ipaddress.ip_network(item, strict=False)
+                    for item in current_app.config["AUTO_APPROVAL_BLOCKED_IPS"]]
+    except ValueError:
+        current_app.logger.error("invalid IP address or AUTO_APPROVAL_BLOCKED_IPS configuration; disabling automatic approval")
+        return True
+    return any(parsed_address in network for network in networks)
 
 
 def _safe_next(target):
@@ -120,8 +140,9 @@ def register():
         profile_values = {
             "id": uid, "username": username, "display_name": display,
             "school_id": school["id"] if school else None,
-            "school_verified": bool(school and school.get("verified")),
+            "school_verified": bool(school),
             "submitted_school_name": submitted_school,
+            "auto_approval_blocked": _auto_approval_blocked(email),
             "account_status": "pending", "terms_accepted_at": iso(),
         }
         try:
@@ -197,7 +218,7 @@ def pending():
     remaining = max(0, int(deadline - utcnow().timestamp()))
     return render_template("auth/pending.html",
                            email_verified=bool(g.user.get("email_verified_at")),
-                           verification_sent=session.pop("email_verification_sent", None),
+                           verification_sent=session.get("email_verification_sent"),
                            auto_approve_minutes=current_app.config["AUTO_APPROVE_AFTER_MINUTES"],
                            seconds_remaining=remaining)
 

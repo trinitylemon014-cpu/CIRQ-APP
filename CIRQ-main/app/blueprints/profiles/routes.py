@@ -181,7 +181,7 @@ def settings():
                 flash("Choose a school from the list.", "error")
             else:
                 sb.update("profiles", {
-                    "school_id": school["id"], "school_verified": bool(school.get("verified")),
+                    "school_id": school["id"], "school_verified": True,
                     "school_submission_id": None, "submitted_school_name": None,
                 }, id=me["id"])
                 flash("Your school was updated.", "success")

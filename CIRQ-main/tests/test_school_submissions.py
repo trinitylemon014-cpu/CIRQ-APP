@@ -63,6 +63,20 @@ def test_school_submission_ip_daily_cap_is_persistent(app, db, school):
     assert len(db.data["school_submissions"]) == 3
 
 
+def test_blocked_email_domain_and_ip_are_flagged_for_manual_review(app, db, school):
+    app.config["AUTO_APPROVAL_BLOCKED_EMAIL_DOMAINS"] = ["mailinator.com"]
+    app.config["AUTO_APPROVAL_BLOCKED_IPS"] = ["203.0.113.0/24"]
+
+    domain_client = app.test_client()
+    domain_client.environ_base["REMOTE_ADDR"] = "198.51.100.10"
+    assert register(domain_client, "domainflag", school["name"], email="student@mailinator.com").status_code == 302
+    ip_client = app.test_client()
+    ip_client.environ_base["REMOTE_ADDR"] = "203.0.113.42"
+    assert register(ip_client, "ipflag", school["name"]).status_code == 302
+
+    assert all(p["auto_approval_blocked"] for p in db.data["profiles"] if p["username"] in ("domainflag", "ipflag"))
+
+
 def test_admin_can_approve_school_and_auto_approved_accounts_are_listed(client, app, db, mk, school):
     register(client, "schoolkid", "My school isn't listed", submitted_school_name="North Campus")
     submission = db.data["school_submissions"][0]
@@ -86,3 +100,23 @@ def test_admin_can_approve_school_and_auto_approved_accounts_are_listed(client, 
     response = admin_client.get("/admin/auto-approved")
     assert response.status_code == 200
     assert b"@autouser" in response.data
+
+
+def test_admin_can_reject_school_and_student_can_choose_again(client, app, db, mk, school):
+    register(client, "rechoose", "My school isn't listed", submitted_school_name="Old Campus")
+    profile = next(p for p in db.data["profiles"] if p["username"] == "rechoose")
+    submission = db.data["school_submissions"][0]
+    admin = mk("rejectadmin", role="admin")
+    admin_client = app.test_client()
+    login(admin_client, admin["username"])
+
+    response = admin_client.post(f"/admin/school-submissions/{submission['id']}/reject")
+    assert response.status_code == 302
+    assert profile["school_id"] is None and profile["school_submission_id"] is None
+
+    admin_client.post(f"/admin/users/{profile['id']}/approve")
+    assert client.get("/settings").status_code == 200
+    response = client.post("/settings", data={"action": "school", "school_id": school["id"]})
+    assert response.status_code == 302
+    assert profile["school_id"] == school["id"]
+    assert profile["school_verified"] is True

@@ -100,6 +100,8 @@ cirq/
    **Then run `migrations/2026_11_01_reel_saves.sql`** (safe to re-run) to add private reel bookmarks and the shared stream index.
    **Then run `migrations/2026_11_02_developer_card_settings.sql`** (safe to re-run) to add the independent editable CIRQ FLIP developer card.
    **Then run `migrations/2026_11_02_boost_ads.sql`** (safe to re-run) to allow boosted users to create sponsored ads for posts and reels feeds.
+   **Then run `migrations/2026_11_03_school_submissions_and_approval.sql`** (safe to re-run) to add pending-school review, protected profile approval metadata, and the per-IP school-submission limiter.
+   This migration's rollback notes are at its top. Do not remove its rate-limit function/table while the registration route is deployed.
    Reels are retained unless their creator deletes them; the archive loads five at a time, newest first, and refreshes new posts without resetting the current scroll position.
 3. **Project Settings → API**: copy the Project URL into `SUPABASE_URL`, the anon/publishable key into
    `SUPABASE_ANON_KEY`, and the service-role/secret key into `SUPABASE_SERVICE_ROLE_KEY`.
@@ -171,9 +173,19 @@ flask --app wsgi cleanup-expired
 free scheduler instead, call `POST {APP_BASE_URL}/admin/internal/cleanup` hourly with header `Authorization: Bearer <CRON_SECRET>`.
 Stories are also hidden by the database query the moment they expire, never just by the browser.
 
-**Pending account approval:** Render runs a separate cron job every minute. Accounts still pending more than five minutes
-after signup are automatically approved, including accounts whose email is not verified, and approved administrators receive
-an in-app notification. Configure the `APP_BASE_URL` and `CRON_SECRET` values on both cron services. For another scheduler,
+**Pending account approval:** Render runs a separate cron job every minute. Accounts still pending after the configured
+`AUTO_APPROVE_AFTER_MINUTES` delay are automatically approved only if their CIRQ email-verification link was confirmed
+and an administrator has not placed an auto-approval hold. Admin approval remains available sooner. Approval source and
+timestamp are recorded, administrators are notified, and system-approved accounts appear under **Auto-approved (needs review)**.
+The waiting page polls the same conditional approval service, so an eligible account is not stranded by a Render restart.
+**Unlisted schools:** registration accepts a listed school or a school suggestion. New suggestions are rate-limited per
+IP/day and grouped by normalized name. Admins can approve a school, merge it into an existing school, or reject it; rejected
+students can choose a listed school in Settings after account approval. The migration stores only a keyed hash for the daily
+IP cap, not the raw address.
+Set `AUTO_APPROVAL_BLOCKED_EMAIL_DOMAINS` to a comma-separated list of banned or disposable email domains and
+`AUTO_APPROVAL_BLOCKED_IPS` to IPs/CIDR ranges when your deployment has such a list; accounts matching either setting are
+held for manual review. Admins can also place a per-account hold from **Admin → Users**.
+Configure the `APP_BASE_URL` and `CRON_SECRET` values on both cron services. For another scheduler,
 call `POST {APP_BASE_URL}/admin/internal/auto-approve-pending` every minute with header
 `Authorization: Bearer $CRON_SECRET`.
 

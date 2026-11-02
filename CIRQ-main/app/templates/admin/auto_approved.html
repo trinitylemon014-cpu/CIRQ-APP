@@ -6,7 +6,7 @@
   <td><a class="link" href="{{ url_for('profiles.view', username=u.username) }}">@{{ u.username }}</a><br><small class="muted">{{ u.display_name }}</small></td>
   <td>{{ u.approved_at|ago }} ago</td><td>{{ 'Verified' if u.email_verified_at else 'Not verified' }}</td>
   <td>
-    <form class="inline" method="post" action="{{ url_for('admin.user_action', uid=u.id, action='suspend') }}" data-confirm="Suspend @{{ u.username }}?">{{ m.csrf() }}<input class="input" name="note" placeholder="Reason" required><button class="btn sm danger">Suspend</button></form>
+    <form class="inline" method="post" action="{{ url_for('admin.user_action', uid=u.id, action='suspend') }}" data-confirm="Suspend @{{ u.username }}?">{{ m.csrf() }}<input type="hidden" name="note" value="Needs review after automatic approval"><button class="btn sm danger">Suspend</button></form>
     <form class="inline" method="post" action="{{ url_for('admin.user_action', uid=u.id, action='remove') }}" data-confirm="Permanently remove @{{ u.username }} and their account data?">{{ m.csrf() }}<button class="btn sm danger">Remove</button></form>
   </td>
 </tr>{% else %}<tr><td colspan="4" class="muted">No auto-approved accounts need review.</td></tr>{% endfor %}

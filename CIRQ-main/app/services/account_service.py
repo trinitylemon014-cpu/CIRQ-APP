@@ -66,7 +66,7 @@ def auto_approve_if_due(profile):
 def auto_approve_stale_accounts():
     """Approve eligible accounts that remained pending beyond the configured delay."""
     cutoff = iso(utcnow() - timedelta(minutes=current_app.config["AUTO_APPROVE_AFTER_MINUTES"]))
-    pending = (db().table("profiles").select("id,username,created_at,email_verified_at,auto_approval_blocked")
+    pending = (db().table("profiles").select("id,username,account_status,created_at,email_verified_at,auto_approval_blocked")
                .eq("account_status", "pending")
                .lt("created_at", cutoff).order("created_at").limit(500).execute().data or [])
     if not pending:

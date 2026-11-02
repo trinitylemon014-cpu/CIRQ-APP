@@ -4,6 +4,7 @@ import click
 import httpx
 from urllib.parse import urlparse
 from flask import Flask, g, session, render_template, request, jsonify, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config, DevConfig, TestConfig, validate_config
 from app.extensions import csrf, limiter
 from app.services import supabase_service as sb, cloudinary_service as cs
@@ -19,6 +20,8 @@ def create_app(config_object=None, clients=None):
     if config_object is None:
         config_object = DevConfig if os.environ.get("FLASK_ENV") == "development" else Config
     app.config.from_object(config_object)
+    if app.config["ENV"] == "production":
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     if not app.config["TESTING"]:
@@ -180,7 +183,10 @@ def register_cli(app):
             raise click.ClickException(" ".join(probs))
         uid = auth_service.create_auth_user(email.strip().lower(), password)
         sb.insert("profiles", {"id": uid, "username": username, "display_name": display_name, "role": "admin",
-                               "account_status": "approved", "email_verified_at": iso()})
+                               "account_status": "approved", "email_verified_at": iso(),
+                               "approval_source": "admin", "approved_at": iso()})
+        from app.services.audit_service import audit
+        audit(None, "bootstrap_admin_approved", "profile", uid, username=username)
         click.echo(f"Administrator '{username}' created.")
 
     @app.cli.command("cleanup-expired")
