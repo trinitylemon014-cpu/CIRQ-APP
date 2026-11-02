@@ -643,7 +643,7 @@
       const rs = $$("[data-reel]", reels); const cur = rs.findIndex((r) => { const b = r.getBoundingClientRect(), c = reels.getBoundingClientRect(); return Math.abs(b.top - c.top) < c.height / 2; });
       if ((e.key === "ArrowDown" || e.key === "j") && rs.length) { e.preventDefault(); rs[Math.min(rs.length - 1, cur + 1)].scrollIntoView({ behavior: "smooth" }); }
       if ((e.key === "ArrowUp" || e.key === "k") && rs.length) { e.preventDefault(); rs[Math.max(0, cur - 1)].scrollIntoView({ behavior: "smooth" }); }
-      if (e.key === " " && cur >= 0) { e.preventDefault(); const v = vid(rs[cur]); v.paused ? v.play().catch(() => {}) : v.pause(); }
+      if (e.key === " " && cur >= 0) { const v = vid(rs[cur]); if (v) { e.preventDefault(); v.paused ? v.play().catch(() => {}) : v.pause(); } }
       if (e.key === "m") { const b = $("[data-reel-mute]", reels); b && b.click(); }
     });
 

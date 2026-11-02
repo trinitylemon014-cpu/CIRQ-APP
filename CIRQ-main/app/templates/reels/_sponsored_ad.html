@@ -1,0 +1,10 @@
+<section class="reel sponsored-reel" data-reel data-id="boost-ad-{{ sponsored_ad.id }}" aria-label="Sponsored account ad">
+  <img class="sponsored-reel-image" src="{{ sponsored_ad.image }}" alt="Sponsored image from {{ sponsored_ad.name }}">
+  <div class="sponsored-reel-shade"></div>
+  <div class="sponsored-reel-copy">
+    <span class="chip lime">Sponsored · Boosted account</span>
+    <h2>{{ sponsored_ad.headline }}</h2>
+    <p>{{ sponsored_ad.body }}</p>
+    <a class="btn" href="{{ url_for('profiles.view', username=sponsored_ad.username) }}">View @{{ sponsored_ad.username }}</a>
+  </div>
+</section>

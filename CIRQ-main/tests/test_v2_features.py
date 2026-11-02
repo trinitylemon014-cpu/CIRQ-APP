@@ -1,8 +1,9 @@
 """School logos, music on posts/stories, comments on stories, and likes on comments."""
 import io
+from datetime import timedelta
 from tests.conftest import MP4, login
 from tests.test_stories_privacy import story, FETCH, make_private
-from app.utils import iso, hours_from_now
+from app.utils import iso, hours_from_now, utcnow
 
 MP3 = b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"\x00" * 64          # ID3-tagged MP3 header
 WAV = b"RIFF\x24\x00\x00\x00WAVEfmt " + b"\x00" * 32
@@ -59,6 +60,58 @@ def test_only_admins_can_edit_game_developer_card_and_bad_images_are_rejected(ap
     boss = adm(app, mk)
     boss.post("/admin/developer-card", data={"display_name": "Should not save", "image": (io.BytesIO(b"not an image"), "x.png")}, content_type="multipart/form-data")
     assert db.data["developer_card_settings"][0]["display_name"] is None
+
+
+def test_boosted_user_can_create_ad_shown_in_posts_and_reels_and_it_expires(app, as_user, db, png, uploads):
+    owner, profile = as_user("promoted")
+    db.table("profiles").update({"boosted_until": iso(utcnow() + timedelta(days=2))}).eq("id", profile["id"]).execute()
+    saved = owner.post("/coins/boost-ad", data={
+        "headline": "Join our campus club",
+        "body": "Meet students who love building creative projects.",
+        "image": (io.BytesIO(png), "club.png"),
+    }, content_type="multipart/form-data")
+    assert saved.status_code == 302
+    ad = db.data["boost_ads"][0]
+    assert ad["image_public_id"].startswith("cirq/boost-ads/")
+
+    viewer, viewer_profile = as_user("adviewer")
+    from app.services.boost_ad_service import for_viewer
+    with app.app_context():
+        assert for_viewer(viewer_profile["id"])["id"] == ad["id"]
+    feed_response = viewer.get("/feed")
+    reel_response = viewer.get("/reels")
+    assert feed_response.status_code == reel_response.status_code == 200
+    post_feed = feed_response.get_data(as_text=True)
+    reel_feed = reel_response.get_data(as_text=True)
+    assert "data-sponsored-ad" in post_feed and "Join our campus club" in post_feed and "Sponsored" in post_feed
+    assert 'data-id="boost-ad-' in reel_feed and "Join our campus club" in reel_feed
+    for i in range(3):
+        viewer.post("/posts", data={"caption": f"Organic post {i}"})
+    post_feed = viewer.get("/feed").get_data(as_text=True)
+    assert post_feed.index("Organic post 2") < post_feed.index("data-sponsored-ad")
+
+    own_feed = owner.get("/feed").get_data(as_text=True)
+    assert "data-sponsored-ad" not in own_feed
+    blocked_viewer, blocked_profile = as_user("blockedadviewer")
+    db.table("blocks").insert({"blocker_id": blocked_profile["id"], "blocked_id": profile["id"]}).execute()
+    assert "data-sponsored-ad" not in blocked_viewer.get("/feed").get_data(as_text=True)
+    db.table("profiles").update({"boosted_until": iso(utcnow() - timedelta(seconds=1))}).eq("id", profile["id"]).execute()
+    assert "data-sponsored-ad" not in viewer.get("/feed").get_data(as_text=True)
+    assert 'data-id="boost-ad-' not in viewer.get("/reels").get_data(as_text=True)
+
+    db.table("profiles").update({"boosted_until": iso(utcnow() + timedelta(days=1))}).eq("id", profile["id"]).execute()
+    owner.post("/coins/boost-ad", data={"remove": "1"})
+    assert not db.data["boost_ads"] and ad["image_public_id"] in uploads["destroyed"]
+
+
+def test_unboosted_user_cannot_create_promoted_ad(app, as_user, db, png):
+    owner, _ = as_user("notboosted")
+    result = owner.post("/coins/boost-ad", data={
+        "headline": "Promote me",
+        "body": "A message about my account.",
+        "image": (io.BytesIO(png), "ad.png"),
+    }, content_type="multipart/form-data")
+    assert result.status_code == 302 and not db.data.get("boost_ads")
 
 
 def test_logo_shows_on_school_page_instead_of_cap_icon(app, as_user, mk, db, school):

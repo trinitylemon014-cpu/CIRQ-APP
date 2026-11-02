@@ -40,6 +40,7 @@ DEFAULTS = {
     "community_members": dict(role="member"),
     "feature_flags": dict(enabled=False),
     "developer_card_settings": dict(display_name=None, image_url=None, image_public_id=None, updated_by=None),
+    "boost_ads": {},
     "email_verifications": dict(used_at=None),
     "post_media": dict(delivery_type="upload"),
 }
@@ -48,6 +49,7 @@ PKS = {"likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
        "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",)}
 UNIQUES = {"profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
+           "boost_ads": [("user_id",)],
            "trivia_answers": [("attempt_id", "question_id")], "trivia_attempts": [("set_id", "user_id")],
            "payments": [("provider_reference",)], "conversations": [("dm_key",)], "reports": [("reporter_id", "target_type", "target_id")],
            "trivia_questions": [("set_id", "position")], "communities": [("school_id",)]}

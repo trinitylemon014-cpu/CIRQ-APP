@@ -1,2 +1,7 @@
-{% for p in posts %}{% include 'partials/post_card.html' %}{% endfor %}
+{% for p in posts %}
+  {% include 'partials/post_card.html' %}
+  {% if sponsored_ad and loop.index == 3 %}{% include 'partials/sponsored_post_ad.html' %}{% endif %}
+{% endfor %}
+{% if sponsored_ad and posts and posts|length < 3 %}{% include 'partials/sponsored_post_ad.html' %}{% endif %}
+{% if sponsored_ad and not posts %}{% include 'partials/sponsored_post_ad.html' %}{% endif %}
 {% if cursor %}<div data-more-cursor="{{ cursor }}" hidden></div>{% endif %}

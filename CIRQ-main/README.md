@@ -99,6 +99,7 @@ cirq/
    **Then run `migrations/2026_11_01_reel_archive.sql`** (safe to re-run) to add the index used by the unlimited reels archive.
    **Then run `migrations/2026_11_01_reel_saves.sql`** (safe to re-run) to add private reel bookmarks and the shared stream index.
    **Then run `migrations/2026_11_02_developer_card_settings.sql`** (safe to re-run) to add the independent editable CIRQ FLIP developer card.
+   **Then run `migrations/2026_11_02_boost_ads.sql`** (safe to re-run) to allow boosted users to create sponsored ads for posts and reels feeds.
    Reels are retained unless their creator deletes them; the archive loads five at a time, newest first, and refreshes new posts without resetting the current scroll position.
 3. **Project Settings → API**: copy the Project URL into `SUPABASE_URL`, the anon/publishable key into
    `SUPABASE_ANON_KEY`, and the service-role/secret key into `SUPABASE_SERVICE_ROLE_KEY`.
@@ -232,7 +233,9 @@ other students exist the game says so. It never invents users.
 Admins can update the developer card's name and image under **Admin → Developer card**; these are stored independently from user profiles.
 
 **Coins & boosts.** Every coin change goes through the database function `cirq_apply_coins` (atomic, idempotent, never negative).
-50 welcome coins on approval. 1000 coins buy a 3-day boost (Boosted badge + listed first in Discover). Boosts never affect CIRQ STATUS.
+50 welcome coins on approval. 1000 coins buy a 3-day boost (Boosted badge + listed first in Discover). While boosted, users can create
+a custom sponsored ad with an image, headline, and text; it rotates through other students' posts and reels feeds and stops when the
+boost expires. Boosts never affect CIRQ STATUS.
 
 **Trivia.** Admin builds a set (**Admin → Trivia**), publishes it. Per question: 100 points if right + up to 100 speed bonus; time is
 measured from the moment the server served the question, late answers score 0, answers are shown only after the set is finished. Coins =

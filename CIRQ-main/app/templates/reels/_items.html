@@ -27,3 +27,5 @@
     </div>
   </div>
 </section>{% endif %}{% endfor %}
+{% if sponsored_ad and reels|length < 3 %}{% include 'reels/_sponsored_ad.html' %}{% endif %}
+{% if sponsored_ad and reels|length >= 3 %}{% for r in reels %}{% if loop.index == 3 %}{% include 'reels/_sponsored_ad.html' %}{% endif %}{% endfor %}{% endif %}

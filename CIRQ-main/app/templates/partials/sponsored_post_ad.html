@@ -1,0 +1,7 @@
+<article class="card sponsored-post" data-sponsored-ad="{{ sponsored_ad.id }}">
+  <div class="sponsored-label"><span>Sponsored</span><span class="chip lime">Boosted account</span></div>
+  <a class="sponsored-post-owner" href="{{ url_for('profiles.view', username=sponsored_ad.username) }}"><b>{{ sponsored_ad.name }}</b><small>@{{ sponsored_ad.username }}</small></a>
+  <img class="sponsored-post-image" src="{{ sponsored_ad.image }}" alt="Sponsored image from {{ sponsored_ad.name }}" loading="lazy">
+  <div class="sponsored-post-copy"><h3>{{ sponsored_ad.headline }}</h3><p>{{ sponsored_ad.body }}</p></div>
+  <a class="btn sm" href="{{ url_for('profiles.view', username=sponsored_ad.username) }}">View account</a>
+</article>

@@ -8,6 +8,22 @@
   <form method="post" action="{{ url_for('wallet.boost_with_coins') }}" style="margin-top:12px">{{ m.csrf() }}<button class="btn block" {{ 'disabled' if me.coin_balance < cost }}>Boost with {{ cost }} coins</button></form>
   {% if me.coin_balance < cost %}<div class="progress" style="margin-top:10px"><b style="width:{{ [100, (me.coin_balance * 100 // cost)]|min }}%"></b></div><p class="hint">{{ cost - me.coin_balance }} more coins to go.</p>{% endif %}
   {% if paid_enabled %}<hr class="divider"><a class="link" href="{{ url_for('wallet.pay') }}">Or pay by mobile money →</a>{% endif %}</div>
+<div class="card" style="margin-top:14px"><h2>Promote your account</h2>
+  {% if boosted %}
+    <p class="muted small">Create a sponsored ad that appears in students’ posts and reels feeds while your boost is active. The ad links to your profile.</p>
+    {% if ad %}<div class="boost-ad-preview"><img src="{{ ad.image_src }}" alt="Your promoted ad"><div><span class="chip lime">Sponsored · Boosted</span><h3>{{ ad.headline }}</h3><p class="muted">{{ ad.body }}</p></div></div>{% endif %}
+    <form class="stack" method="post" action="{{ url_for('wallet.save_boost_ad') }}" enctype="multipart/form-data">
+      {{ m.csrf() }}
+      <label>Ad headline<input class="input" name="headline" maxlength="80" minlength="2" value="{{ ad.headline if ad else '' }}" required></label>
+      <label>Message<textarea class="input" name="body" maxlength="300" minlength="5" required>{{ ad.body if ad else '' }}</textarea></label>
+      <label class="file-drop" style="width:fit-content">{{ m.icon('image') }} <span data-file-label>{{ 'Replace ad image' if ad else 'Choose ad image' }}</span><input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" {{ 'required' if not ad }}></label>
+      <small class="muted">PNG, JPG, WebP or GIF, up to {{ config.MAX_IMAGE_MB }} MB. Ad text is checked automatically against CIRQ community guidelines.</small>
+      <div class="row wrap"><button class="btn">{{ 'Update promoted ad' if ad else 'Create promoted ad' }}</button>
+        {% if ad %}<button class="btn danger" name="remove" value="1" formnovalidate data-confirm-click="Remove your promoted ad?">Remove ad</button>{% endif %}
+      </div>
+    </form>
+  {% else %}<p class="muted small">Boost your account to create a sponsored ad. It will appear in students’ posts and reels feeds while the boost is active.</p>{% endif %}
+</div>
 <div class="section-title"><h2>History</h2></div>
 <div class="card">{% for h in history %}<div class="person"><div class="grow"><b>{{ {'welcome':'Welcome bonus','dev_card':'Found the developer','trivia':'Trivia reward','boost_spend':'Account boost','admin_adjust':'Adjustment'}.get(h.reason, h.reason) }}</b><br><small class="dim">{{ h.created_at|ago }}</small></div>
   <b style="color:{{ 'var(--lime)' if h.amount > 0 else 'var(--danger)' }}">{{ '+' if h.amount > 0 }}{{ h.amount }}</b></div>{% else %}<p class="muted">No coin activity yet.</p>{% endfor %}</div>

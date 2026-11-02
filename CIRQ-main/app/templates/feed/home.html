@@ -21,7 +21,7 @@
 
 <div id="feed" data-feed-url="{{ url_for('feed.home') }}" style="margin-top:14px">
   {% if posts %}{% include 'partials/post_list.html' %}
-  {% else %}{% call m.empty('users', 'Your feed is waiting', 'Follow classmates or share your first post to get things going.') %}<a class="btn" href="{{ url_for('discover.index') }}">Find students</a>{% endcall %}{% endif %}
+  {% else %}{% call m.empty('users', 'Your feed is waiting', 'Follow classmates or share your first post to get things going.') %}<a class="btn" href="{{ url_for('discover.index') }}">Find students</a>{% endcall %}{% if sponsored_ad %}{% include 'partials/sponsored_post_ad.html' %}{% endif %}{% endif %}
 </div>
 {% if posts %}<div class="row" style="justify-content:center;margin-top:16px"><button class="btn ghost" id="load-more" type="button" data-target="#feed" {{ 'hidden' if not cursor }}>Load more</button></div>{% endif %}
 

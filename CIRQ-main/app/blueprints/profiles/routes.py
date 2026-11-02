@@ -237,6 +237,9 @@ def _erase_account(me):
         cs.destroy(s.get("audio_public_id"), "audio")
     for p in sb.select("posts", author_id=me["id"]):
         cs.destroy(p.get("audio_public_id"), "audio")      # music clips on posts
+    ad = sb.get("boost_ads", user_id=me["id"])
+    if ad:
+        cs.destroy(ad.get("image_public_id"))
     cs.destroy(me.get("avatar_public_id"))
     auth_service.delete_auth_user(me["id"])
 

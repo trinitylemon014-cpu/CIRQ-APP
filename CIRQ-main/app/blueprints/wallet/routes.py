@@ -3,8 +3,10 @@ import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, current_app, abort
 from app.decorators import login_required
 from app.extensions import limiter
-from app.services import supabase_service as sb, coin_service, social
-from app.utils import clean_text
+from app.services import supabase_service as sb, coin_service, social, cloudinary_service as cs
+from app.services.cloudinary_service import UploadError
+from app.services.moderation_service import check_text
+from app.utils import clean_text, iso
 
 bp = Blueprint("wallet", __name__)
 
@@ -24,8 +26,11 @@ def normalize_phone(raw):
 def coins():
     me = sb.get("profiles", id=g.user["id"])
     cfg = current_app.config
+    ad = sb.get("boost_ads", user_id=me["id"])
+    if ad:
+        ad["image_src"] = cs.media_src({"url": ad["image_url"], "public_id": ad["image_public_id"], "media_type": "image"}, 480)
     return render_template("wallet/coins.html", me=me, history=coin_service.history(me["id"]), boosted=coin_service.is_boosted(me),
-                           cost=cfg["COIN_BOOST_COST"], days=cfg["COIN_BOOST_DAYS"])
+                           cost=cfg["COIN_BOOST_COST"], days=cfg["COIN_BOOST_DAYS"], ad=ad)
 
 
 @bp.post("/coins/boost")
@@ -36,6 +41,61 @@ def boost_with_coins():
     if ok:
         social.grant_achievement(g.user["id"], "booster")
     flash(msg, "success" if ok else "error")
+    return redirect(url_for("wallet.coins"))
+
+
+@bp.post("/coins/boost-ad")
+@login_required
+@limiter.limit("6 per hour")
+def save_boost_ad():
+    me = sb.get("profiles", id=g.user["id"])
+    if not coin_service.is_boosted(me):
+        flash("An active account boost is required to create or edit a promoted ad.", "error")
+        return redirect(url_for("wallet.coins"))
+
+    existing = sb.get("boost_ads", user_id=me["id"])
+    if request.form.get("remove"):
+        if existing:
+            sb.delete("boost_ads", user_id=me["id"])
+            cs.destroy(existing.get("image_public_id"))
+        flash("Your promoted ad was removed.", "info")
+        return redirect(url_for("wallet.coins"))
+
+    headline = clean_text(request.form.get("headline"), 80)
+    body = clean_text(request.form.get("body"), 300)
+    if len(headline) < 2 or len(body) < 5:
+        flash("Enter an ad headline and a message of at least 5 characters.", "error")
+        return redirect(url_for("wallet.coins"))
+    for text in (headline, body):
+        ok, why = check_text(text)
+        if not ok:
+            flash(why, "error")
+            return redirect(url_for("wallet.coins"))
+
+    image = request.files.get("image")
+    uploaded = None
+    if image and image.filename:
+        try:
+            uploaded = cs.upload(image, "boost-ads", me["id"], allow_video=False)
+        except UploadError as e:
+            flash(str(e), "error")
+            return redirect(url_for("wallet.coins"))
+    if not uploaded and not existing:
+        flash("Choose an image for your promoted ad.", "error")
+        return redirect(url_for("wallet.coins"))
+
+    values = {"user_id": me["id"], "headline": headline, "body": body, "updated_at": iso()}
+    if uploaded:
+        values.update(image_url=uploaded["url"], image_public_id=uploaded["public_id"])
+    else:
+        values.update(image_url=existing["image_url"], image_public_id=existing["image_public_id"])
+    if existing:
+        sb.update("boost_ads", values, user_id=me["id"])
+        if uploaded and existing.get("image_public_id"):
+            cs.destroy(existing["image_public_id"])
+    else:
+        sb.insert("boost_ads", values)
+    flash("Your promoted ad is saved. It will be shown while your boost is active.", "success")
     return redirect(url_for("wallet.coins"))
 
 

@@ -2,7 +2,7 @@ from collections import Counter
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, abort, current_app
 from app.decorators import login_required
 from app.extensions import limiter
-from app.services import supabase_service as sb, cloudinary_service as cs, social, recommender
+from app.services import supabase_service as sb, cloudinary_service as cs, social, recommender, boost_ad_service
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
 from app.services.notification_service import notify
@@ -85,13 +85,15 @@ def home():
     before = request.args.get("before")
     posts, cursor = feed_posts(g.user["id"], before)
     posts = with_suggestions(g.user, posts)
+    sponsored_ad = boost_ad_service.for_viewer(g.user["id"], before or "")
     if request.args.get("partial"):
-        return render_template("partials/post_list.html", posts=posts, cursor=cursor)
+        return render_template("partials/post_list.html", posts=posts, cursor=cursor, sponsored_ad=sponsored_ad)
     tray = story_tray(g.user["id"])
     suggestions = [p for p in sb.select("profiles", account_status="approved", school_id=g.user.get("school_id"), limit=8)
                    if p["id"] != g.user["id"] and not social.is_following(g.user["id"], p["id"])
                    and not social.has_requested(g.user["id"], p["id"])][:4]
-    return render_template("feed/home.html", posts=posts, cursor=cursor, tray=tray, suggestions=suggestions)
+    return render_template("feed/home.html", posts=posts, cursor=cursor, tray=tray, suggestions=suggestions,
+                           sponsored_ad=sponsored_ad)
 
 
 def _save_media(file, kind_folder, post_id, owner_id, allow_video=True):

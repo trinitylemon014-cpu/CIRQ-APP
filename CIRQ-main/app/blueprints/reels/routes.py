@@ -5,7 +5,7 @@ import uuid
 from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, current_app, abort
 from app.decorators import login_required
 from app.extensions import limiter, db
-from app.services import supabase_service as sb, cloudinary_service as cs, social
+from app.services import supabase_service as sb, cloudinary_service as cs, social, boost_ad_service
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
 from app.utils import clean_text, parse_dt
@@ -103,10 +103,12 @@ def index():
              if row["user_id"] == me["id"]} if page else set()
     for reel in page:
         reel["saved"] = reel["id"] in saved
+    sponsored_ad = boost_ad_service.for_viewer(me["id"], request.args.get(direction, ""))
     if request.args.get("partial"):
         rendered_page = page if direction == "before" else sorted(
             page, key=lambda r: (parse_dt(r["created_at"]), r["id"]), reverse=True)
-        resp = make_response(render_template("reels/_items.html", reels=rendered_page, cursor=cursor, following=following))
+        resp = make_response(render_template("reels/_items.html", reels=rendered_page, cursor=cursor, following=following,
+                                             sponsored_ad=sponsored_ad))
         resp.headers["X-Next-Cursor"] = cursor or ""
         if direction == "after":
             resp.headers["X-After-Cursor"] = after_cursor or ""
@@ -115,7 +117,7 @@ def index():
             resp.headers["X-Newest-Cursor"] = _cursor_for(page[0])
         return resp
     return render_template("reels/index.html", reels=page, cursor=cursor, newest=(_cursor_for(page[0]) if page else ""),
-                           following=following)
+                           following=following, sponsored_ad=sponsored_ad)
 
 
 @bp.get("/reels/new")
