@@ -1,14 +1,22 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, g, abort, jsonify
+import uuid
+
+import httpx
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, g, abort, jsonify
+from postgrest.exceptions import APIError
+from storage3.exceptions import StorageException
 from app.decorators import login_required
 from app.extensions import limiter, db
 from app.services import supabase_service as sb, cloudinary_service as cs, social
 from app.services.cloudinary_service import UploadError
+from app.services import chat_attachments as ca
+from app.services.chat_attachments import AttachmentError
 from app.services.messaging import dm_key, find_dm, get_or_create_dm   # dm_key re-exported for older imports
 from app.services.moderation_service import check_text
 from app.services.notification_service import notify
 from app.utils import clean_text, iso, parse_dt, utcnow
 
 bp = Blueprint("messages", __name__, url_prefix="/messages")
+attachments_bp = Blueprint("attachments_api", __name__, url_prefix="/api/attachments")
 PAGE = 30
 
 
@@ -33,6 +41,9 @@ def _conv_or_404(cid):
 def _decorate(msgs):
     senders = sb.by_id("profiles", [m["sender_id"] for m in msgs])
     stories = sb.by_id("stories", [m.get("story_id") for m in msgs])
+    attachments = {}
+    for row in sb.in_("message_attachments", "message_id", [m["id"] for m in msgs]):
+        attachments.setdefault(row["message_id"], []).append(row)
     now = utcnow()
     for m in msgs:
         m["sender"] = senders.get(m["sender_id"])
@@ -42,6 +53,7 @@ def _decorate(msgs):
         m["story"] = {"src": cs.media_src(st, 160, thumb=True)} if st and exp and exp > now and st["moderation_status"] == "ok" else None
         if m.get("media_public_id"):
             m["media_row"] = {"url": m["media_url"], "public_id": m["media_public_id"], "media_type": m["media_type"], "delivery_type": "authenticated"}
+        m["attachments"] = attachments.get(m["id"], [])
     return msgs
 
 
@@ -172,6 +184,112 @@ def send(cid):
     return jsonify(html=render_template("messages/_bubbles.html", msgs=[msg]), ts=msg["created_at"])
 
 
+def _attachment_conversation_allowed(conv, members, uid):
+    others = [member["user_id"] for member in members if member["user_id"] != uid]
+    blocked = social.blocked_between(uid)
+    if any(other_id in blocked for other_id in others):
+        return False
+    if conv["kind"] == "dm":
+        other = sb.get("profiles", id=others[0]) if others else None
+        return bool(other) and social.can_message(g.user, other)
+    return True
+
+
+def _attachment_response(message):
+    msg = _decorate([message])[0]
+    return jsonify(html=render_template("messages/_bubbles.html", msgs=[msg]), ts=msg["created_at"])
+
+
+@attachments_bp.post("/conversations/<cid>/messages")
+@login_required
+@limiter.limit("8 per hour")
+def send_with_attachments(cid):
+    conv = _conv_or_404(cid)
+    me = g.user["id"]
+    members = sb.select("conversation_members", conversation_id=cid)
+    if not _attachment_conversation_allowed(conv, members, me):
+        return jsonify(error="You can't send attachments in this chat."), 403
+
+    raw_message_id = request.form.get("message_id", "")
+    try:
+        message_id = str(uuid.UUID(raw_message_id))
+    except (ValueError, AttributeError):
+        return jsonify(error="Invalid message request. Please try again."), 400
+
+    existing = sb.get("messages", id=message_id)
+    if existing:
+        if existing["sender_id"] != me or existing["conversation_id"] != cid:
+            return jsonify(error="That message request has already been used."), 409
+        if existing.get("attachment_count", 0):
+            saved_attachments = sb.select("message_attachments", message_id=message_id)
+            if len(saved_attachments) < existing["attachment_count"]:
+                return jsonify(error="That upload is still finishing. Retry in a moment."), 503
+        return _attachment_response(existing)
+
+    body = clean_text(request.form.get("body"), 2000)
+    files = [file for file in request.files.getlist("attachments") if file and file.filename]
+    if len(files) > current_app.config["CHAT_ATTACHMENT_MAX_FILES"]:
+        return jsonify(error=f"You can attach up to {current_app.config['CHAT_ATTACHMENT_MAX_FILES']} files per message."), 400
+    if not body and not files:
+        return jsonify(error="Write a message or attach at least one file."), 400
+    ok, why = check_text(body)
+    if not ok:
+        return jsonify(error=why), 400
+
+    try:
+        prepared = [ca.validate_upload(file) for file in files]
+        batch_limit = current_app.config["CHAT_ATTACHMENT_BATCH_MAX_MB"] * 1024 * 1024
+        if sum(item["size_bytes"] for item in prepared) > batch_limit:
+            raise AttachmentError(
+                f"Attachments in one message can total up to {current_app.config['CHAT_ATTACHMENT_BATCH_MAX_MB']} MB.",
+                413,
+            )
+    except AttachmentError as error:
+        return jsonify(error=str(error)), error.status_code
+
+    message = sb.insert("messages", {
+        "id": message_id,
+        "conversation_id": cid,
+        "sender_id": me,
+        "body": body or None,
+        "attachment_count": len(prepared),
+    })
+    uploaded_paths, saved = [], []
+    try:
+        for item in prepared:
+            path = f"{cid}/{message_id}/{uuid.uuid4().hex}_{item['safe_filename']}"
+            ca.upload_to_storage(path, item["data"], item["mime_type"])
+            uploaded_paths.append(path)
+            saved.append(sb.insert("message_attachments", {
+                "message_id": message_id,
+                "uploader_id": me,
+                "storage_path": path,
+                "original_filename": item["original_filename"],
+                "mime_type": item["mime_type"],
+                "size_bytes": item["size_bytes"],
+                "kind": item["kind"],
+                "width": item["width"],
+                "height": item["height"],
+                "duration": item["duration"],
+            }))
+    except (APIError, StorageException, httpx.HTTPError):
+        current_app.logger.exception("chat attachment upload failed")
+        try:
+            ca.remove_from_storage(uploaded_paths)
+        except (StorageException, httpx.HTTPError):
+            current_app.logger.exception("chat attachment cleanup failed")
+        sb.delete("messages", id=message_id)
+        return jsonify(error="The upload failed. Your message wasn't sent; please retry."), 502
+
+    for member in members:
+        if member["user_id"] != me:
+            notify(member["user_id"], "message", me, "conversation", cid, body=(conv.get("title") or ""))
+    sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=me)
+    message["sender"] = g.user
+    message["attachments"] = saved
+    return jsonify(html=render_template("messages/_bubbles.html", msgs=[message]), ts=message["created_at"])
+
+
 @bp.get("/<cid>/poll")
 @login_required
 @limiter.limit("90 per minute")
@@ -187,3 +305,70 @@ def poll(cid):
         sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=g.user["id"])
         db().table("notifications").update({"read_at": iso()}).eq("user_id", g.user["id"]).eq("kind", "message").eq("ref_id", cid).is_("read_at", "null").execute()
     return jsonify(html=render_template("messages/_bubbles.html", msgs=rows) if rows else "", ts=rows[-1]["created_at"] if rows else after)
+
+
+def _attachment_or_404(attachment_id):
+    attachment = sb.get("message_attachments", id=attachment_id)
+    if not attachment:
+        abort(404)
+    message = sb.get("messages", id=attachment["message_id"])
+    if not message or message["moderation_status"] != "ok" or attachment["uploader_id"] != message["sender_id"]:
+        abort(404)
+    conv = _conv_or_404(message["conversation_id"])
+    members = sb.select("conversation_members", conversation_id=conv["id"])
+    if not _attachment_conversation_allowed(conv, members, g.user["id"]):
+        abort(404)
+    return attachment
+
+
+@attachments_bp.get("/<attachment_id>/view")
+@login_required
+@limiter.limit("180 per minute")
+def view_attachment(attachment_id):
+    attachment = _attachment_or_404(attachment_id)
+    try:
+        url = ca.signed_url(attachment["storage_path"])
+    except (StorageException, httpx.HTTPError):
+        current_app.logger.exception("chat attachment signed URL creation failed")
+        return jsonify(error="This attachment is temporarily unavailable."), 502
+    if not url:
+        return jsonify(error="This attachment is temporarily unavailable."), 502
+    response = redirect(url, code=302)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@attachments_bp.get("/<attachment_id>/preview-url")
+@login_required
+@limiter.limit("60 per minute")
+def attachment_preview_url(attachment_id):
+    attachment = _attachment_or_404(attachment_id)
+    if attachment["mime_type"] != "application/pdf":
+        abort(404)
+    try:
+        url = ca.signed_url(attachment["storage_path"])
+    except (StorageException, httpx.HTTPError):
+        current_app.logger.exception("chat attachment preview URL creation failed")
+        return jsonify(error="This attachment is temporarily unavailable."), 502
+    if not url:
+        return jsonify(error="This attachment is temporarily unavailable."), 502
+    response = jsonify(url=url)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@attachments_bp.get("/<attachment_id>/download")
+@login_required
+@limiter.limit("60 per minute")
+def download_attachment(attachment_id):
+    attachment = _attachment_or_404(attachment_id)
+    try:
+        url = ca.signed_url(attachment["storage_path"], attachment["original_filename"])
+    except (StorageException, httpx.HTTPError):
+        current_app.logger.exception("chat attachment download URL creation failed")
+        return jsonify(error="This attachment is temporarily unavailable."), 502
+    if not url:
+        return jsonify(error="This attachment is temporarily unavailable."), 502
+    response = redirect(url, code=302)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response

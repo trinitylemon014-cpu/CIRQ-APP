@@ -5,11 +5,12 @@ authorization. Row Level Security in schema.sql is a second layer that protects 
 anon key is ever used directly.
 """
 from supabase import create_client
+from supabase.lib.client_options import SyncClientOptions
 from app.extensions import db
 
 
 def make_client(url, key):
-    return create_client(url, key)
+    return create_client(url, key, options=SyncClientOptions(storage_client_timeout=100))
 
 
 def _filter(q, eq):

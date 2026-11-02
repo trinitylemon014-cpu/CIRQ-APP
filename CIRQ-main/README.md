@@ -126,11 +126,22 @@ Counters (`like_count`, `comment_count`) are maintained by triggers; follower co
 1. Create a free account → **Dashboard** shows *Cloud name*, *API Key*, *API Secret* → put them in `.env`.
 2. That's it: uploads are made **server-side** with the secret (it never reaches the browser). Files go under `cirq/…`
    folders. Public media (posts, reels, stories, avatars, event covers) uses normal delivery with auto format/quality;
-   **chat attachments are uploaded as `authenticated` assets and shown through signed URLs.**
-3. Supabase stores only references (URL, `public_id`, type, size, owner…), never file bytes.
-4. **Cleanup policy:** deleting a post/story/account destroys its Cloudinary files. Expired stories are removed by the
-   cleanup job (section 9). Limits: images 8 MB, videos 60 MB (`MAX_IMAGE_MB`, `MAX_VIDEO_MB`). Content is verified by real
-   file signature, not just extension.
+   existing chat media remains on authenticated Cloudinary delivery.
+3. **New chat attachments use a separate private Supabase Storage bucket** (`chat-attachments`). Run
+    [`migrations/2026_11_02_chat_attachments.sql`](./migrations/2026_11_02_chat_attachments.sql) in the Supabase SQL Editor
+    after the main schema. The migration creates/configures the bucket as private (50 MiB hard ceiling per object; the
+    application enforces the per-file defaults) and adds message
+    attachment metadata plus participant/block-aware RLS. Do not make the bucket public or add browser read policies:
+    Flask uses the server-only service role, checks chat membership and blocks, then redirects to short-lived signed URLs.
+4. Supabase stores references to Cloudinary media and the bytes/metadata for new chat files in this private bucket.
+    Chat upload limits default to 50 MiB per video and 25 MiB per other file. A message can include up to 10 files and
+    85 MiB total; `CHAT_ATTACHMENT_VIDEO_MAX_MB`, `CHAT_ATTACHMENT_OTHER_MAX_MB`,
+    `CHAT_ATTACHMENT_MAX_FILES`, and `CHAT_ATTACHMENT_BATCH_MAX_MB` can adjust those limits within Render's request ceiling.
+    If you raise the video limit above 50 MiB, also raise the bucket's `file_size_limit` in Supabase; the platform-level
+    Storage limit must allow it too. Flask accepts up to 95 MiB per request, below Render's 100 MB request-body limit.
+5. **Cleanup policy:** deleting a post/story/account destroys its Cloudinary files. Expired stories are removed by the
+    cleanup job (section 9). Limits: images 8 MB, videos 60 MB (`MAX_IMAGE_MB`, `MAX_VIDEO_MB`). Content is verified by real
+    file signature, not just extension.
 
 ## 7. Email (password recovery + email verification)
 

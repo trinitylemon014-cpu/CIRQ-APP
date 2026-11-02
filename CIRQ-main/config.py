@@ -69,7 +69,15 @@ class Config:
     MAX_VIDEO_MB = _int("MAX_VIDEO_MB", 60)
     MAX_AUDIO_MB = _int("MAX_AUDIO_MB", 10)              # music clips for posts and stories
     MAX_AUDIO_SECONDS = _int("MAX_AUDIO_SECONDS", 90)
-    MAX_CONTENT_LENGTH = (_int("MAX_VIDEO_MB", 60) + _int("MAX_AUDIO_MB", 10) + 5) * 1024 * 1024   # a video plus a music clip in one request
+    CHAT_ATTACHMENT_VIDEO_MAX_MB = _int("CHAT_ATTACHMENT_VIDEO_MAX_MB", 50)
+    CHAT_ATTACHMENT_OTHER_MAX_MB = _int("CHAT_ATTACHMENT_OTHER_MAX_MB", 25)
+    CHAT_ATTACHMENT_MAX_FILES = _int("CHAT_ATTACHMENT_MAX_FILES", 10)
+    CHAT_ATTACHMENT_BATCH_MAX_MB = min(_int("CHAT_ATTACHMENT_BATCH_MAX_MB", 85), 90)
+    CHAT_ATTACHMENT_SIGNED_URL_SECONDS = _int("CHAT_ATTACHMENT_SIGNED_URL_SECONDS", 900)
+    MAX_CONTENT_LENGTH = min(max(
+        _int("MAX_VIDEO_MB", 60) + _int("MAX_AUDIO_MB", 10) + 5,
+        CHAT_ATTACHMENT_BATCH_MAX_MB + 5,
+    ), 95) * 1024 * 1024  # keep multipart headroom while staying below Render's request-size ceiling
     STORY_TTL_HOURS = _int("STORY_TTL_HOURS", 24)
     RESET_TOKEN_MINUTES = _int("RESET_TOKEN_MINUTES", 30)
     PAGE_SIZE = _int("PAGE_SIZE", 10)

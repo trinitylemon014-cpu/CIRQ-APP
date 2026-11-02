@@ -10,12 +10,48 @@
     {% if not msgs %}<p class="muted" style="text-align:center;margin:auto">No messages yet. Say hello!</p>{% endif %}
   </div>
   {% if can_send %}
-  <form class="chat-form" id="chat-form" action="{{ url_for('messages.send', cid=conv.id) }}" method="post" enctype="multipart/form-data">{{ m.csrf() }}
-    <label class="icon-btn" style="margin:0;cursor:pointer" aria-label="Attach a photo or video">{{ m.icon('image') }}<input type="file" name="attachment" accept="image/*,video/mp4,video/quicktime,video/webm" hidden></label>
-    <input type="text" name="body" maxlength="2000" placeholder="Message" aria-label="Message" autocomplete="off">
-    <button class="send" aria-label="Send">{{ m.icon('send') }}</button></form>
+  <div class="chat-composer" data-max-files="{{ config.CHAT_ATTACHMENT_MAX_FILES }}">
+    <div class="chat-file-previews" id="chat-file-previews" hidden></div>
+    <div class="chat-upload-status" id="chat-upload-status" hidden aria-live="polite">
+      <progress id="chat-upload-progress" max="100" value="0"></progress>
+      <span id="chat-upload-label">Uploading…</span>
+      <button type="button" class="btn sm ghost" id="chat-upload-cancel">Cancel</button>
+      <button type="button" class="btn sm ghost" id="chat-upload-retry" hidden>Retry</button>
+    </div>
+    <form class="chat-form" id="chat-form" action="{{ url_for('messages.send', cid=conv.id) }}"
+      data-attachment-action="{{ url_for('attachments_api.send_with_attachments', cid=conv.id) }}" method="post" enctype="multipart/form-data">
+      {{ m.csrf() }}
+      <label class="icon-btn chat-attach-btn" style="margin:0;cursor:pointer" aria-label="Attach files">📎<input id="chat-file-input" type="file" name="attachments" multiple
+        accept=".jpg,.jpeg,.png,.gif,.webp,.heic,.mp4,.mov,.webm,.mkv,.avi,.3gp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.zip,.mp3,.m4a,.wav,.ogg" hidden></label>
+      <input type="text" name="body" maxlength="2000" placeholder="Message" aria-label="Message" autocomplete="off">
+      <button class="send" type="submit" aria-label="Send">{{ m.icon('send') }}</button>
+    </form>
+  </div>
   {% else %}
   <div class="chat-locked">{{ m.icon('lock','i-sm') }}<span>{% if other %}@{{ other.username }} has a private account. You can send messages once they approve your follow request.{% else %}You can't send messages in this chat.{% endif %}</span></div>
   {% endif %}
 </div>
+<dialog class="chat-modal chat-lightbox" id="chat-lightbox" aria-label="Image preview">
+  <div class="chat-modal-head">
+    <div class="row">
+      <button type="button" class="btn sm ghost" data-zoom="out" aria-label="Zoom out">−</button>
+      <button type="button" class="btn sm ghost" data-zoom="in" aria-label="Zoom in">+</button>
+    </div>
+    <div class="row">
+      <a class="btn sm ghost" data-lightbox-download download>Download</a>
+      <button type="button" class="icon-btn" data-close aria-label="Close preview">{{ m.icon('x') }}</button>
+    </div>
+  </div>
+  <div class="chat-lightbox-image-wrap"><img id="chat-lightbox-image" alt="Attachment preview"></div>
+</dialog>
+<dialog class="chat-modal chat-pdf-modal" id="chat-pdf-modal" aria-label="PDF preview">
+  <div class="chat-modal-head">
+    <b id="chat-pdf-title"></b>
+    <div class="row">
+      <a class="btn sm ghost" id="chat-pdf-download" download>Download</a>
+      <button type="button" class="icon-btn" data-close aria-label="Close PDF preview">{{ m.icon('x') }}</button>
+    </div>
+  </div>
+  <iframe id="chat-pdf-frame" title="PDF preview" src="about:blank"></iframe>
+</dialog>
 {% endblock %}

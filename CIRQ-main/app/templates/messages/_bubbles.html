@@ -3,4 +3,34 @@
   {% if msg.sender_id != cur.id and conv_is_group is not defined %}<span class="sender">{{ msg.sender.username if msg.sender }}</span>{% endif %}
   {% if msg.story_reply %}<div class="story-ref">{% if msg.story %}<img src="{{ msg.story.src }}" alt="" loading="lazy">{% else %}<span class="ph">{{ m.icon('circle','i-sm') }}</span>{% endif %}<span>{{ 'You replied to their story' if msg.sender_id == cur.id else 'Replied to your story' }}{% if not msg.story %}<small> · no longer available</small>{% endif %}</span></div>{% endif %}
   {% if msg.media_row %}{% if msg.media_type == 'video' %}<video src="{{ media_src(msg.media_row, 480) }}" controls preload="none" playsinline></video>{% else %}<img src="{{ media_src(msg.media_row, 480) }}" alt="Attachment" loading="lazy">{% endif %}{% endif %}
+  {% if msg.attachments %}
+    {% set image_attachments = msg.attachments|selectattr('kind', 'equalto', 'image')|list %}
+    {% if image_attachments %}<div class="chat-image-grid count-{{ [image_attachments|length, 4]|min }}">
+      {% for item in image_attachments %}<button type="button" class="chat-image-thumb" data-lightbox-src="{{ url_for('attachments_api.view_attachment', attachment_id=item.id) }}"
+        data-download-src="{{ url_for('attachments_api.download_attachment', attachment_id=item.id) }}" aria-label="Open {{ item.original_filename }}">
+        <img data-lazy-src="{{ url_for('attachments_api.view_attachment', attachment_id=item.id) }}" alt="{{ item.original_filename }}" loading="lazy">
+      </button>{% endfor %}
+    </div>{% endif %}
+    {% for item in msg.attachments %}
+      {% set view_url = url_for('attachments_api.view_attachment', attachment_id=item.id) %}
+      {% set download_url = url_for('attachments_api.download_attachment', attachment_id=item.id) %}
+      {% if item.kind == 'video' %}
+        <div class="chat-video-attachment"><video controls preload="metadata" playsinline
+          poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'%3E%3Crect width='640' height='360' fill='%23071829'/%3E%3Ccircle cx='320' cy='180' r='48' fill='%238b2cff'/%3E%3Cpath d='M306 152v56l48-28z' fill='white'/%3E%3C/svg%3E"
+          data-lazy-src="{{ view_url }}"></video>
+          <a class="chat-download" href="{{ download_url }}">Download video</a></div>
+      {% elif item.kind == 'audio' %}
+        <audio class="chat-audio-attachment" controls preload="none" data-lazy-src="{{ view_url }}"></audio>
+        <a class="chat-download" href="{{ download_url }}">Download audio</a>
+      {% elif item.kind == 'document' %}
+        <div class="chat-document-card">
+          <span class="chat-file-type">{{ item.original_filename.rsplit('.', 1)[-1]|upper if '.' in item.original_filename else 'FILE' }}</span>
+          <span class="chat-document-info"><b>{{ item.original_filename }}</b><small>{{ (item.size_bytes / 1048576)|round(1) }} MB</small></span>
+          {% if item.mime_type == 'application/pdf' %}<button type="button" class="btn sm ghost" data-pdf-preview-url="{{ url_for('attachments_api.attachment_preview_url', attachment_id=item.id) }}"
+            data-download-src="{{ download_url }}" data-title="{{ item.original_filename }}">Preview</button>{% endif %}
+          <a class="btn sm ghost" href="{{ download_url }}">Download</a>
+        </div>
+      {% endif %}
+    {% endfor %}
+  {% endif %}
   {% if msg.body %}{{ msg.body }}{% endif %}<span class="meta">{{ msg.created_at|ago }}{% if msg.sender_id != cur.id %} · <a href="#" data-report="message:{{ msg.id }}" style="text-decoration:underline">report</a>{% endif %}</span></div>{% endfor %}

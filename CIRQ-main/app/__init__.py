@@ -1,6 +1,7 @@
 import logging
 import os
 import click
+from urllib.parse import urlparse
 from flask import Flask, g, session, render_template, request, jsonify, url_for
 from config import Config, DevConfig, TestConfig, validate_config
 from app.extensions import csrf, limiter
@@ -44,6 +45,7 @@ def create_app(config_object=None, clients=None):
     from app.blueprints.stories.routes import bp as stories_bp
     from app.blueprints.linkup.routes import bp as linkup_bp
     from app.blueprints.messages.routes import bp as messages_bp
+    from app.blueprints.messages.routes import attachments_bp
     from app.blueprints.notifications.routes import bp as notifications_bp
     from app.blueprints.games.routes import bp as games_bp
     from app.blueprints.schools.routes import bp as schools_bp
@@ -53,7 +55,7 @@ def create_app(config_object=None, clients=None):
     from app.blueprints.trivia.routes import bp as trivia_bp
     from app.blueprints.recs.routes import bp as recs_bp
     for b in (auth_bp, feed_bp, profiles_bp, discover_bp, reels_bp, stories_bp, linkup_bp, messages_bp,
-              notifications_bp, games_bp, schools_bp, admin_bp, wallet_bp, trivia_bp, recs_bp, legal_bp):
+              notifications_bp, attachments_bp, games_bp, schools_bp, admin_bp, wallet_bp, trivia_bp, recs_bp, legal_bp):
         app.register_blueprint(b)
 
     @app.before_request
@@ -76,9 +78,12 @@ def create_app(config_object=None, clients=None):
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)")
+        parsed_storage_url = urlparse(app.config.get("SUPABASE_URL", ""))
+        storage_origin = f"{parsed_storage_url.scheme}://{parsed_storage_url.netloc}" if parsed_storage_url.netloc else ""
         resp.headers.setdefault("Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com; "
-            "media-src 'self' blob: https://res.cloudinary.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            f"default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com {storage_origin}; "
+            f"media-src 'self' blob: https://res.cloudinary.com {storage_origin}; frame-src 'self' {storage_origin}; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
         if g.get("user"):
             resp.headers["Cache-Control"] = "no-store"

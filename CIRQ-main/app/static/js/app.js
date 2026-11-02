@@ -789,23 +789,230 @@
     const bottom = () => (box.scrollTop = box.scrollHeight); bottom();
     let last = chat.dataset.last || "";
     const keepLast = () => { const m = $$(".msg", box).pop(); if (m) last = m.dataset.ts; };
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault(); const btn = $("button", form);
-      if (!form.body.value.trim() && !form.attachment.files.length) return;
-      btn.disabled = true;
-      try {
-        const r = await api(form.action, { body: new FormData(form) });
-        const empty = $("p.muted", box); empty && empty.remove();
-        box.insertAdjacentHTML("beforeend", r.html); last = r.ts; form.reset(); bottom();
-      } catch (err) { toast(err.message, "error"); }
-      btn.disabled = false; form.body.focus();
+    const formInput = form && $("#chat-file-input", form);
+    const previews = $("#chat-file-previews"), status = $("#chat-upload-status");
+    const progress = $("#chat-upload-progress"), statusLabel = $("#chat-upload-label");
+    const cancelUpload = $("#chat-upload-cancel"), retryUpload = $("#chat-upload-retry");
+    const maxFiles = Number($(".chat-composer")?.dataset.maxFiles || 10);
+    const selected = [];
+    let uploadRequest = null, messageRequestId = null, retryLocked = false;
+    const prettySize = (bytes) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    const newMessageId = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 3 | 8)).toString(16);
     });
-    form.attachment.addEventListener("change", () => { if (form.attachment.files[0]) toast("Attached: " + form.attachment.files[0].name, "info"); });
+    function renderPreviews() {
+      previews.replaceChildren();
+      previews.hidden = !selected.length;
+      selected.forEach((item, index) => {
+        const card = document.createElement("div"); card.className = "chat-file-preview";
+        const file = item.file, mime = file.type || "", extension = file.name.includes(".") ? file.name.split(".").pop().toUpperCase() : "FILE";
+        if (mime.startsWith("image/") || mime.startsWith("video/")) {
+          const media = document.createElement(mime.startsWith("video/") ? "video" : "img");
+          media.src = item.url; media.alt = mime.startsWith("video/") ? "" : file.name;
+          if (media.tagName === "VIDEO") { media.muted = true; media.preload = "metadata"; }
+          card.append(media);
+        } else {
+          const icon = document.createElement("span"); icon.className = "chat-file-type"; icon.textContent = extension;
+          card.append(icon);
+        }
+        const detail = document.createElement("span"); detail.className = "chat-file-preview-text";
+        const name = document.createElement("b"); name.textContent = file.name;
+        const size = document.createElement("small"); size.textContent = prettySize(file.size);
+        detail.append(name, size); card.append(detail);
+        const remove = document.createElement("button"); remove.type = "button"; remove.className = "chat-file-preview-x";
+        remove.textContent = "×"; remove.setAttribute("aria-label", `Remove ${file.name}`);
+        remove.disabled = retryLocked || Boolean(uploadRequest);
+        remove.addEventListener("click", () => {
+          if (retryLocked || uploadRequest) return;
+          URL.revokeObjectURL(item.url); selected.splice(index, 1); messageRequestId = null; renderPreviews();
+        });
+        card.append(remove); previews.append(card);
+      });
+    }
+    function addFiles(files) {
+      if (!form || retryLocked || uploadRequest) return;
+      const incoming = [...files];
+      if (selected.length + incoming.length > maxFiles) { toast(`You can attach up to ${maxFiles} files per message.`, "error"); return; }
+      incoming.forEach((file) => selected.push({ file, url: URL.createObjectURL(file) }));
+      renderPreviews();
+    }
+    function lockComposer(locked) {
+      if (!form) return;
+      form.elements.namedItem("body").disabled = locked;
+      formInput.disabled = locked;
+      $(".send", form).disabled = locked;
+      $$(".chat-file-preview-x", previews).forEach((button) => { button.disabled = locked; });
+    }
+    function showFailure(message, canRetry) {
+      uploadRequest = null; status.hidden = false; statusLabel.textContent = message;
+      cancelUpload.hidden = true; retryUpload.hidden = !canRetry; progress.value = 0;
+      retryLocked = canRetry; lockComposer(canRetry);
+      if (!canRetry) messageRequestId = null;
+      toast(message, "error");
+    }
+    function clearSelected() {
+      selected.forEach((item) => URL.revokeObjectURL(item.url));
+      selected.length = 0; renderPreviews();
+    }
+    function sendMessage() {
+      if (!form || uploadRequest || retryLocked) return;
+      const body = form.elements.namedItem("body").value;
+      if (!body.trim() && !selected.length) return;
+      const payload = new FormData(form);
+      const hasAttachments = selected.length > 0;
+      if (!hasAttachments) {
+        const button = $(".send", form); button.disabled = true;
+        api(form.action, { body: payload }).then((result) => {
+          const empty = $("p.muted", box); empty && empty.remove();
+          box.insertAdjacentHTML("beforeend", result.html); last = result.ts; bottom();
+          form.elements.namedItem("body").value = ""; form.elements.namedItem("body").focus();
+        }).catch((error) => toast(error.message, "error")).finally(() => { button.disabled = false; });
+        return;
+      }
+      messageRequestId ||= newMessageId();
+      payload.set("message_id", messageRequestId);
+      selected.forEach((item) => payload.append("attachments", item.file, item.file.name));
+      const xhr = new XMLHttpRequest();
+      uploadRequest = xhr; status.hidden = false; retryUpload.hidden = true; cancelUpload.hidden = false;
+      statusLabel.textContent = "Uploading…"; progress.value = 0;
+      lockComposer(true);
+      xhr.open("POST", form.dataset.attachmentAction);
+      xhr.setRequestHeader("X-CSRFToken", csrf() || (form.querySelector('input[name="csrf_token"]') || {}).value || "");
+      xhr.setRequestHeader("X-Requested-With", "fetch");
+      xhr.timeout = 170000;
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) { progress.value = Math.round(event.loaded / event.total * 100); statusLabel.textContent = `Uploading… ${progress.value}%`; }
+      };
+      xhr.onload = () => {
+        let result = xhr.response;
+        if (!result || typeof result !== "object") {
+          try { result = JSON.parse(xhr.responseText); } catch (_) { result = {}; }
+        }
+        if (xhr.status < 200 || xhr.status >= 300 || !result.html) {
+          const message = result.error || "Upload failed. Please try again.";
+          showFailure(message, xhr.status === 0 || xhr.status === 429 || xhr.status >= 500);
+          lockComposer(retryLocked); return;
+        }
+        uploadRequest = null; retryLocked = false; lockComposer(false);
+        const empty = $("p.muted", box); empty && empty.remove();
+        box.insertAdjacentHTML("beforeend", result.html); last = result.ts; messageRequestId = null;
+        form.elements.namedItem("body").value = ""; clearSelected(); status.hidden = true; bottom(); watchChatMedia(box);
+        form.elements.namedItem("body").focus();
+      };
+      xhr.onerror = () => showFailure("Connection lost. Your message wasn't confirmed; retry the upload.", true);
+      xhr.ontimeout = () => showFailure("The upload timed out. Your files are still selected; retry when ready.", true);
+      xhr.onabort = () => showFailure("Upload canceled. Your files are still selected; retry when ready.", true);
+      xhr.send(payload);
+    }
+    function watchChatMedia(root) {
+      $$("[data-lazy-src]", root).forEach((media) => {
+        if (media._chatObserved) return;
+        media._chatObserved = true;
+        if (chatMediaObserver) chatMediaObserver.observe(media);
+        else loadChatMedia(media);
+      });
+    }
+    function loadChatMedia(media) {
+      const src = media.dataset.lazySrc;
+      if (!src) return;
+      media.dataset.refreshSrc = src; media.src = src; delete media.dataset.lazySrc;
+      if (media.tagName === "VIDEO") media.load();
+    }
+    function refreshChatMedia(media) {
+      const src = media.dataset.refreshSrc;
+      if (!src || media.dataset.refreshing === "1") return;
+      media.dataset.refreshing = "1";
+      const currentTime = media.tagName === "VIDEO" ? media.currentTime : 0;
+      const retry = new URL(src, location.href); retry.searchParams.set("_refresh", Date.now());
+      media.addEventListener("loadedmetadata", () => {
+        if (currentTime > 0) media.currentTime = currentTime;
+      }, { once: true });
+      media.src = retry.href;
+      if (media.tagName === "VIDEO" || media.tagName === "AUDIO") media.load();
+    }
+    const chatMediaObserver = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        loadChatMedia(entry.target); chatMediaObserver.unobserve(entry.target);
+      });
+    }, { root: box, rootMargin: "160px" }) : null;
+    watchChatMedia(box);
+    box.addEventListener("error", (event) => {
+      if (event.target.matches("img, video, audio")) refreshChatMedia(event.target);
+    }, true);
+    box.addEventListener("load", (event) => {
+      if (event.target.tagName === "IMG") delete event.target.dataset.refreshing;
+    }, true);
+    box.addEventListener("loadeddata", (event) => {
+      if (event.target.matches("video, audio")) delete event.target.dataset.refreshing;
+    }, true);
+    if (form) {
+      form.addEventListener("submit", (event) => { event.preventDefault(); sendMessage(); });
+      formInput.addEventListener("change", () => { addFiles(formInput.files); formInput.value = ""; });
+      cancelUpload.addEventListener("click", () => { if (uploadRequest) uploadRequest.abort(); });
+      retryUpload.addEventListener("click", () => { retryLocked = false; lockComposer(false); sendMessage(); });
+      chat.addEventListener("dragover", (event) => {
+        if (![...event.dataTransfer.types].includes("Files")) return;
+        event.preventDefault(); chat.classList.add("dragging");
+      });
+      chat.addEventListener("dragleave", (event) => {
+        if (!chat.contains(event.relatedTarget)) chat.classList.remove("dragging");
+      });
+      chat.addEventListener("drop", (event) => {
+        if (!event.dataTransfer.files.length) return;
+        event.preventDefault(); chat.classList.remove("dragging"); addFiles(event.dataTransfer.files);
+      });
+      document.addEventListener("paste", (event) => {
+        if (!chat.contains(event.target) || retryLocked || uploadRequest) return;
+        const images = [...(event.clipboardData?.items || [])]
+          .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+          .map((item) => item.getAsFile()).filter(Boolean)
+          .map((file) => {
+            if (file.name) return file;
+            const subtype = file.type.split("/")[1] || "png";
+            const extension = subtype === "jpeg" ? "jpg" : subtype === "heif" ? "heic" : subtype.split("+")[0];
+            return new File([file], `clipboard-${Date.now()}.${extension}`, { type: file.type });
+          });
+        if (images.length) { event.preventDefault(); addFiles(images); }
+      });
+      box.addEventListener("click", async (event) => {
+        const image = event.target.closest("[data-lightbox-src]");
+        if (image) {
+          const dialog = $("#chat-lightbox"), preview = $("#chat-lightbox-image");
+          preview.src = image.dataset.lightboxSrc; preview.style.transform = "scale(1)";
+          $("[data-lightbox-download]", dialog).href = image.dataset.downloadSrc;
+          dialog.showModal(); return;
+        }
+        const pdf = event.target.closest("[data-pdf-preview-url]");
+        if (pdf) {
+          const dialog = $("#chat-pdf-modal");
+          try {
+            const result = await api(pdf.dataset.pdfPreviewUrl, { method: "GET" });
+            $("#chat-pdf-title", dialog).textContent = pdf.dataset.title;
+            $("#chat-pdf-frame", dialog).src = result.url;
+            $("#chat-pdf-download", dialog).href = pdf.dataset.downloadSrc;
+            dialog.showModal();
+          } catch (error) { toast(error.message, "error"); }
+        }
+      });
+      $("#chat-lightbox").addEventListener("click", (event) => {
+        const zoom = event.target.closest("[data-zoom]");
+        if (!zoom) return;
+        const image = $("#chat-lightbox-image"), current = Number(image.dataset.zoom || 1);
+        const next = Math.max(0.5, Math.min(4, current + (zoom.dataset.zoom === "in" ? 0.25 : -0.25)));
+        image.dataset.zoom = String(next); image.style.transform = `scale(${next})`;
+      });
+      $("#chat-lightbox").addEventListener("close", () => {
+        const image = $("#chat-lightbox-image"); image.removeAttribute("src"); image.dataset.zoom = "1";
+      });
+      $("#chat-pdf-modal").addEventListener("close", () => { $("#chat-pdf-frame").src = "about:blank"; });
+    }
     setInterval(async () => {   // polling fallback (no websockets needed)
       if (document.hidden) return;
       try {
         const r = await api(`${chat.dataset.poll}?after=${encodeURIComponent(last)}`, { method: "GET" });
-        if (r.html) { box.insertAdjacentHTML("beforeend", r.html); last = r.ts; bottom(); }
+        if (r.html) { box.insertAdjacentHTML("beforeend", r.html); last = r.ts; bottom(); watchChatMedia(box); }
       } catch (_) { /* transient */ }
     }, 4000);
     keepLast();
