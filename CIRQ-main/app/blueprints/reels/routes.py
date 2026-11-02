@@ -1,8 +1,11 @@
 import base64
 import binascii
+import math
 import uuid
 
+import httpx
 from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, current_app, abort
+from postgrest.exceptions import APIError
 from app.decorators import login_required
 from app.extensions import limiter, db
 from app.services import supabase_service as sb, cloudinary_service as cs, social, boost_ad_service
@@ -14,6 +17,7 @@ bp = Blueprint("reels", __name__)
 PER_PAGE = 5   # only a handful of videos are ever loaded at once
 SCAN_SIZE = 25
 MAX_REEL_SECONDS = 90
+VIEW_MIN_SECONDS = 3
 
 
 def _cursor_values(cursor):
@@ -108,7 +112,7 @@ def index():
         rendered_page = page if direction == "before" else sorted(
             page, key=lambda r: (parse_dt(r["created_at"]), r["id"]), reverse=True)
         resp = make_response(render_template("reels/_items.html", reels=rendered_page, cursor=cursor, following=following,
-                                             sponsored_ad=sponsored_ad))
+                                             sponsored_ad=sponsored_ad, view_min_seconds=VIEW_MIN_SECONDS))
         resp.headers["X-Next-Cursor"] = cursor or ""
         if direction == "after":
             resp.headers["X-After-Cursor"] = after_cursor or ""
@@ -117,7 +121,48 @@ def index():
             resp.headers["X-Newest-Cursor"] = _cursor_for(page[0])
         return resp
     return render_template("reels/index.html", reels=page, cursor=cursor, newest=(_cursor_for(page[0]) if page else ""),
-                           following=following, sponsored_ad=sponsored_ad)
+                           following=following, sponsored_ad=sponsored_ad, view_min_seconds=VIEW_MIN_SECONDS)
+
+
+@bp.post("/api/reels/<reel_id>/view")
+@login_required
+@limiter.limit("60 per minute", key_func=lambda: g.user["id"])
+def record_view(reel_id):
+    post = sb.get("posts", id=reel_id)
+    if not post or post.get("kind") != "reel" or post.get("moderation_status") != "ok" or post.get("community_id"):
+        abort(404)
+
+    author = sb.get("profiles", id=post["author_id"])
+    viewer_id = g.user["id"]
+    if not author or social.is_blocked(viewer_id, author["id"]) or not social.can_view_post(g.user, post, author):
+        abort(404)
+    if not sb.get("post_media", post_id=reel_id, media_type="video"):
+        abort(404)
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        watched_seconds = float(payload.get("watched_seconds", 0))
+    except (TypeError, ValueError):
+        return jsonify(error="Watch duration must be a number."), 400
+    if not math.isfinite(watched_seconds) or watched_seconds < VIEW_MIN_SECONDS:
+        return jsonify(error=f"Watch the reel for at least {VIEW_MIN_SECONDS} seconds to count a view."), 400
+
+    if author["id"] == viewer_id:
+        return jsonify(counted=False, views_count=post.get("views_count", 0))
+
+    try:
+        result = db().rpc("cirq_record_reel_view", {
+            "p_reel_id": reel_id,
+            "p_viewer_id": viewer_id,
+        }).execute().data or []
+    except (APIError, httpx.HTTPError):
+        current_app.logger.exception("recording reel view failed")
+        return jsonify(counted=False, views_count=post.get("views_count", 0)), 503
+
+    row = result[0] if isinstance(result, list) and result else result if isinstance(result, dict) else None
+    if not row:
+        return jsonify(counted=False, views_count=post.get("views_count", 0)), 503
+    return jsonify(counted=bool(row.get("counted")), views_count=row.get("views_count", post.get("views_count", 0)))
 
 
 @bp.get("/reels/new")
@@ -172,7 +217,7 @@ def create():
         rendered[0]["saved"] = False
         newest = _cursor_for(post)
         html = render_template("reels/_items.html", reels=rendered, cursor=None,
-                               following=set(social.following_ids(g.user["id"])))
+                               following=set(social.following_ids(g.user["id"])), view_min_seconds=VIEW_MIN_SECONDS)
         return jsonify(ok=True, redirect=url_for("reels.index"), html=html, newest=newest)
     flash("Reel posted!", "success")
     return redirect(url_for("reels.index"))

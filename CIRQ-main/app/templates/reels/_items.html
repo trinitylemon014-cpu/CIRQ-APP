@@ -1,6 +1,7 @@
 {% import 'partials/macros.html' as m with context %}
 {% for r in reels %}{% set md = r.media|selectattr('media_type', 'equalto', 'video')|first %}{% if md %}
-<section class="reel" data-reel data-id="{{ r.id }}">
+<section class="reel" data-reel data-id="{{ r.id }}" data-view-url="{{ url_for('reels.record_view', reel_id=r.id) }}"
+  data-view-min-seconds="{{ view_min_seconds }}" data-author-reel="{{ 'true' if r.author_id == cur.id else 'false' }}">
   <video data-src="{{ media_src(md, 540) }}" poster="{{ media_src(md, 540, thumb=True) }}" loop muted playsinline preload="none"></video>
   <button class="tap" type="button" data-reel-toggle aria-label="Play reel"><span class="reel-play-hint">{{ m.icon('play','i-lg') }}</span></button>
   <div class="reel-spin" aria-hidden="true"></div>
@@ -15,6 +16,9 @@
   <div class="side">
     <button class="act {{ 'liked' if r.liked }}" type="button" data-like="{{ r.id }}">{{ m.icon('heart') }}<span data-count>{{ r.like_count }}</span></button>
     <a class="act" href="{{ url_for('feed.detail', post_id=r.id) }}#comments">{{ m.icon('comment') }}<span>{{ r.comment_count }}</span></a>
+    <span class="act reel-view-count" aria-label="{{ '{:,}'.format(r.views_count or 0) }} views" title="{{ '{:,}'.format(r.views_count or 0) }} views">
+      {{ m.icon('eye') }}<span data-reel-view-count>{{ (r.views_count or 0)|short }}</span>
+    </span>
     <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=r.id, _external=True) }}">{{ m.icon('share') }}<span>Share</span></button>
     <button class="act {{ 'saved' if r.saved }}" type="button" data-save="{{ r.id }}" aria-pressed="{{ 'true' if r.saved else 'false' }}" aria-label="{{ 'Remove saved reel' if r.saved else 'Save reel' }}">{{ m.icon('bookmark') }}<span>{{ 'Saved' if r.saved else 'Save' }}</span></button>
     <div class="menu reel-options">

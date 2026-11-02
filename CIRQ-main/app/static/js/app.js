@@ -505,6 +505,16 @@
   const reels = $("#reels");
   if (reels) {
     let muted = true;
+    const reportedReelViews = new Set();
+    const VIEW_MIN_SECONDS = 3;
+    const formatReelCount = (value) => {
+      const count = Math.max(0, Number(value) || 0);
+      if (count < 1000) return Math.floor(count).toLocaleString();
+      if (count < 10000) return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+      if (count < 1000000) return `${Math.round(count / 1000)}K`;
+      if (count < 10000000) return `${(count / 1000000).toFixed(1).replace(/\.0$/, "")}M`;
+      return `${Math.round(count / 1000000)}M`;
+    };
     const composer = $("#reel-create-dialog");
     const loading = $("[data-reels-loading]", reels), loadError = $("[data-reels-error]", reels);
     const loadingBanner = $("[data-reels-loading-banner]");
@@ -563,6 +573,46 @@
       v.muted = muted; v.classList.remove("failed"); $(".reel-retry", r).hidden = true;
       const pr = v.play(); if (pr && pr.catch) pr.catch(() => { /* autoplay blocked until a tap */ });
     }
+    function stopReelViewWatch(r) {
+      if (r._viewWatchStarted) {
+        r._viewWatchMs = (r._viewWatchMs || 0) + performance.now() - r._viewWatchStarted;
+        r._viewWatchStarted = 0;
+      }
+    }
+    function startReelViewWatch(r) {
+      const v = vid(r);
+      if (!v || !r._viewVisible || document.hidden || v.paused || r.dataset.authorReel === "true"
+          || reportedReelViews.has(r.dataset.id) || r._viewWatchStarted) return;
+      r._viewWatchStarted = performance.now();
+    }
+    function reportReelView(r) {
+      const reelId = r.dataset.id, viewUrl = r.dataset.viewUrl;
+      if (!viewUrl || r.dataset.authorReel === "true" || reportedReelViews.has(reelId)) return;
+      const watchedMs = (r._viewWatchMs || 0) + (r._viewWatchStarted ? performance.now() - r._viewWatchStarted : 0);
+      if (watchedMs < VIEW_MIN_SECONDS * 1000) return;
+      reportedReelViews.add(reelId);
+      stopReelViewWatch(r);
+      fetch(viewUrl, {
+        method: "POST",
+        credentials: "same-origin",
+        keepalive: true,
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf(), "X-Requested-With": "fetch" },
+        body: JSON.stringify({ watched_seconds: watchedMs / 1000 })
+      }).then((response) => response.ok ? response.json() : null).then((result) => {
+        if (!result) return;
+        const counter = $("[data-reel-view-count]", r);
+        if (counter) counter.textContent = formatReelCount(result.views_count);
+        const label = `${Math.max(0, Number(result.views_count) || 0).toLocaleString()} views`;
+        const countLabel = $(".reel-view-count", r);
+        if (countLabel) { countLabel.setAttribute("aria-label", label); countLabel.title = label; }
+      }).catch(() => { /* view tracking must never interrupt playback */ });
+    }
+    function syncReelViewTimer(r) {
+      const v = vid(r);
+      if (!v) return;
+      if (r._viewVisible && !document.hidden && !v.paused) startReelViewWatch(r);
+      else stopReelViewWatch(r);
+    }
     // how much of a reel was actually watched (1 = whole reel, >1 = replayed); fast swipe-aways count as "not for me"
     function reportWatch(r) {
       const v = vid(r); const ms = (r._ms || 0) + (r._t0 ? performance.now() - r._t0 : 0); r._ms = 0; r._t0 = 0; r._active = false;
@@ -573,6 +623,8 @@
       entries.forEach((en) => {
         const r = en.target, v = vid(r); if (!v) return;
         if (en.intersectionRatio > 0.1) arm(r);
+        r._viewVisible = en.isIntersecting && en.intersectionRatio >= 0.6;
+        syncReelViewTimer(r);
         if (en.isIntersecting && en.intersectionRatio > 0.65) { $$("video", reels).forEach((o) => { if (o !== v) o.pause(); }); r._active = true; playReel(r); }
         else { if (r._active) reportWatch(r); v.pause(); if (en.intersectionRatio === 0) v.currentTime = 0; }
       });
@@ -585,11 +637,17 @@
       const v = vid(r); if (!v || v._wired) return; v._wired = 1;
       const bar = $(".reel-progress i", r);
       const toggle = $("[data-reel-toggle]", r);
-      v.addEventListener("playing", () => { r.classList.add("playing"); toggle.setAttribute("aria-label", "Pause reel"); if (!r._t0) r._t0 = performance.now(); });
-      v.addEventListener("pause", () => { r.classList.remove("playing"); toggle.setAttribute("aria-label", "Play reel"); if (r._t0) { r._ms = (r._ms || 0) + performance.now() - r._t0; r._t0 = 0; } });
-      v.addEventListener("timeupdate", () => { if (v.duration) bar.style.transform = `scaleX(${v.currentTime / v.duration})`; });
-      ["waiting", "loadstart", "seeking"].forEach((ev) => v.addEventListener(ev, () => r.classList.add("buffering")));
-      ["playing", "canplay", "loadeddata"].forEach((ev) => v.addEventListener(ev, () => r.classList.remove("buffering")));
+      v.addEventListener("playing", () => { r.classList.add("playing"); toggle.setAttribute("aria-label", "Pause reel"); if (!r._t0) r._t0 = performance.now(); syncReelViewTimer(r); });
+      v.addEventListener("pause", () => { r.classList.remove("playing"); toggle.setAttribute("aria-label", "Play reel"); if (r._t0) { r._ms = (r._ms || 0) + performance.now() - r._t0; r._t0 = 0; } stopReelViewWatch(r); });
+      v.addEventListener("timeupdate", () => {
+        if (v.duration) bar.style.transform = `scaleX(${v.currentTime / v.duration})`;
+        reportReelView(r);
+      });
+      ["waiting", "loadstart", "seeking"].forEach((ev) => v.addEventListener(ev, () => {
+        r.classList.add("buffering");
+        if (ev !== "loadstart") stopReelViewWatch(r);
+      }));
+      ["playing", "canplay", "loadeddata"].forEach((ev) => v.addEventListener(ev, () => { r.classList.remove("buffering"); if (ev === "canplay" || ev === "loadeddata") syncReelViewTimer(r); }));
       v.addEventListener("error", () => { r.classList.remove("buffering"); if (v.getAttribute("src")) { v.classList.add("failed"); $(".reel-retry", r).hidden = false; } });
     }
     const watch = () => {
@@ -598,6 +656,13 @@
       syncFeedStatus();
     };
     watch();
+    document.addEventListener("visibilitychange", () => {
+      $$("[data-reel]", reels).forEach((r) => {
+        const v = vid(r);
+        if (document.hidden) stopReelViewWatch(r);
+        else if (v && !v.paused) startReelViewWatch(r);
+      });
+    });
     document.addEventListener("cirq:reel-posted", (e) => {
       prependReels(e.detail.html, false);
       if (e.detail.newest) reels.dataset.newest = e.detail.newest;

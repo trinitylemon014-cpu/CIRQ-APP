@@ -355,6 +355,10 @@ select.input option { background: var(--navy-900); color: #fff; }
 .reel .side { position: absolute; right: 12px; bottom: 100px; z-index: 2; display: grid; gap: 14px; justify-items: center; }
 .reel .side .act { flex-direction: column; gap: 2px; padding: 8px; color: #fff; font-size: .76rem; text-shadow: 0 1px 6px #000; }
 .reel .side .act .i { width: 30px; height: 30px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)); }
+.reel .side .reel-view-count { min-width: 56px; justify-self: center; white-space: nowrap; cursor: default; }
+.reel .side .reel-view-count span { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
+.post-actions .reel-view-count { white-space: nowrap; cursor: default; }
+.post-actions .reel-view-count span { min-width: 3.2em; font-variant-numeric: tabular-nums; }
 .reel .side .act.saved { color: var(--cyan); }
 .reel-options { z-index: 4; }
 .reel-options .menu-list { top: auto; right: 0; bottom: 46px; }

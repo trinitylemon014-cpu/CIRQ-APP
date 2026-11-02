@@ -33,6 +33,7 @@
   <div class="post-actions">
     <button class="act {{ 'liked' if p.liked }}" type="button" data-like="{{ p.id }}" aria-pressed="{{ 'true' if p.liked else 'false' }}" aria-label="Like">{{ m.icon('heart') }}<span data-count>{{ p.like_count }}</span></button>
     <a class="act" href="{{ url_for('feed.detail', post_id=p.id) }}#comments" aria-label="Comments">{{ m.icon('comment') }}<span>{{ p.comment_count }}</span></a>
+    {% if p.kind == 'reel' %}<span class="act reel-view-count" aria-label="{{ '{:,}'.format(p.views_count or 0) }} views" title="{{ '{:,}'.format(p.views_count or 0) }} views">{{ m.icon('eye') }}<span>{{ (p.views_count or 0)|short }}</span></span>{% endif %}
     <span class="sp"></span>
     <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=p.id, _external=True) }}" aria-label="Copy link">{{ m.icon('share') }}</button>
   </div>
