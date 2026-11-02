@@ -4,13 +4,34 @@ All queries run server-side with the service-role key, so every route must do it
 authorization. Row Level Security in schema.sql is a second layer that protects data if the
 anon key is ever used directly.
 """
+import time
+
+import httpx
 from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 from app.extensions import db
 
 
+_RETRYABLE_ERRORS = (httpx.ReadError, httpx.RemoteProtocolError, httpx.ConnectError)
+
+
+class RetryingHttpxClient(httpx.Client):
+    """Use HTTP/1.1 and retry transient request failures for Supabase calls."""
+
+    def request(self, method, url, *args, **kwargs):
+        for attempt in range(3):
+            try:
+                return super().request(method, url, *args, **kwargs)
+            except _RETRYABLE_ERRORS:
+                if attempt == 2:
+                    raise
+                time.sleep(0.1 * (attempt + 1))
+
+
 def make_client(url, key):
-    return create_client(url, key, options=SyncClientOptions(storage_client_timeout=100))
+    http_client = RetryingHttpxClient(http2=False, timeout=100)
+    options = SyncClientOptions(storage_client_timeout=100, httpx_client=http_client)
+    return create_client(url, key, options=options)
 
 
 def _filter(q, eq):
