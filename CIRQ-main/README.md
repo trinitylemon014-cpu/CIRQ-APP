@@ -225,9 +225,10 @@ coordinator) and enter a replacement email; the link goes there and the account 
 **Guess the Developer.** On *Deal the cards* the server builds a deck of 6–12 face-down cards: real approved, **public**, non-blocked
 students plus the developer, shuffles it with `secrets`, and stores the deck and the developer's position **only in the database**.
 The browser gets just the number of cards. Flipping a card (5 guesses, no repeats, validated server-side) reveals that student's
-card (name, school, real follower count and CIRQ STATUS tier set the colour). Finding the developer awards **500 coins** once per round
-(ledger-protected), limited to `DEV_CARD_REWARDS_PER_DAY` (default **1**) so coins can't be farmed. If fewer than 5 other students
-exist the game says so. It never invents users.
+card (name, school, real follower count and CIRQ STATUS tier set the colour). Finding the developer offers a **500 coin** claim
+button; coins are added when claimed, once per round (ledger-protected), limited to `DEV_CARD_REWARDS_PER_DAY` (default **1**)
+so coins can't be farmed. Unclaimed wins survive a refresh and must be claimed before starting another round. If fewer than 5
+other students exist the game says so. It never invents users.
 
 **Coins & boosts.** Every coin change goes through the database function `cirq_apply_coins` (atomic, idempotent, never negative).
 50 welcome coins on approval. 1000 coins buy a 3-day boost (Boosted badge + listed first in Discover). Boosts never affect CIRQ STATUS.

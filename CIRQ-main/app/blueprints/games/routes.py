@@ -119,7 +119,7 @@ def flip():
 def state():
     rnd = _active_round(g.user["id"])
     if not rnd:
-        return jsonify(active=False)
+        return jsonify(active=False, pending_claim=_pending_claim(g.user["id"]))
     return jsonify(active=True, **_public_state(rnd, sb.select("game_guesses", order="created_at", desc=False, round_id=rnd["id"])))
 
 
@@ -130,6 +130,8 @@ def start():
     me = g.user["id"]
     rnd = _active_round(me)
     if not rnd:
+        if _pending_claim(me):
+            return jsonify(error="Claim your developer reward before starting another round."), 409
         built = _build_deck(me)
         if not built:
             return jsonify(error="CIRQ FLIP needs a few more students on CIRQ before it can deal a deck. Check back soon!"), 409
@@ -165,28 +167,76 @@ def guess():
         values["ended_at"] = iso()
     sb.update("game_rounds", values, id=rnd["id"])
     rnd = {**rnd, **values}
-    reward = {"coins": 0, "note": None}
+    reward = {"coins": 0, "claimable": False, "note": None}
     if status == "won":
-        reward = _reward_win(me, rnd)
+        reward = _prepare_win(me)
     elif status == "lost":
         _after_round(me)
     guesses = sb.select("game_guesses", order="created_at", desc=False, round_id=rnd["id"])
     return jsonify(**_public_state(rnd, guesses), reward=reward)
 
 
-def _reward_win(me, rnd):
+@bp.post("/api/games/flip/claim")
+@login_required
+def claim():
+    me = g.user["id"]
+    round_id = (request.get_json(silent=True) or {}).get("round_id")
+    rnd = sb.get("game_rounds", id=round_id, user_id=me) if isinstance(round_id, str) else None
+    if not rnd:
+        return jsonify(error="That game round could not be found."), 404
+    if rnd["status"] != "won":
+        return jsonify(error="Find the developer before claiming a reward."), 409
+
+    entry = sb.get("coin_ledger", user_id=me, reason="dev_card", ref=round_id)
+    if entry:
+        return jsonify(claimed=True, coins=entry["amount"], balance=coin_service.balance(me))
+
+    reward = _reward_preview(me)
+    if not reward["claimable"]:
+        return jsonify(claimed=False, coins=0, note=reward["note"])
+
     cfg = current_app.config
+    amount = cfg["DEV_CARD_COINS"]
+    bal = coin_service.award(me, amount, "dev_card", rnd["id"],
+                             message=f"+{amount} app coins for finding the developer!")
+    if bal == coin_service.DUPLICATE:
+        entry = sb.get("coin_ledger", user_id=me, reason="dev_card", ref=round_id)
+        if entry:
+            return jsonify(claimed=True, coins=entry["amount"], balance=coin_service.balance(me))
+    if bal < 0:
+        current_app.logger.error("Could not claim developer-card reward for round %s (result %s)", round_id, bal)
+        return jsonify(error="Your coins could not be claimed. Please try again."), 500
+    return jsonify(claimed=True, coins=amount, balance=bal)
+
+
+def _prepare_win(me):
     social.grant_achievement(me, "dev_finder")
     social.grant_achievement(me, "flip_first_win")
     _after_round(me)
+    return _reward_preview(me)
+
+
+def _reward_preview(me):
+    cfg = current_app.config
     today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     rewarded_today = len([c for c in sb.select("coin_ledger", user_id=me, reason="dev_card") if c["created_at"] >= iso(today)])
     if rewarded_today >= cfg["DEV_CARD_REWARDS_PER_DAY"]:
-        return {"coins": 0, "note": f"Great find! The daily coin reward ({cfg['DEV_CARD_REWARDS_PER_DAY']} per day) is used up. Come back tomorrow."}
-    bal = coin_service.award(me, cfg["DEV_CARD_COINS"], "dev_card", rnd["id"])
-    if bal >= 0:
-        return {"coins": cfg["DEV_CARD_COINS"], "note": f"+{cfg['DEV_CARD_COINS']} app coins!", "balance": bal}
-    return {"coins": 0, "note": None}
+        return {"coins": 0, "claimable": False,
+                "note": f"Great find! The daily coin reward ({cfg['DEV_CARD_REWARDS_PER_DAY']} per day) is used up. Come back tomorrow."}
+    return {"coins": cfg["DEV_CARD_COINS"], "claimable": True,
+            "note": f"Claim your {cfg['DEV_CARD_COINS']} app coins!"}
+
+
+def _pending_claim(me):
+    rounds = sb.select("game_rounds", order="ended_at", desc=True, limit=20, user_id=me, status="won")
+    for rnd in rounds:
+        if sb.get("coin_ledger", user_id=me, reason="dev_card", ref=rnd["id"]):
+            continue
+        reward = _reward_preview(me)
+        if reward["claimable"]:
+            guesses = sb.select("game_guesses", order="created_at", desc=False, round_id=rnd["id"])
+            return {**_public_state(rnd, guesses), "reward": reward}
+    return None
 
 
 def _after_round(me):

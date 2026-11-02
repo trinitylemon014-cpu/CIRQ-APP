@@ -852,9 +852,29 @@
       if (s.status === "lost") { const c = deck.children[s.answer_index]; fillBack(c, dev); c.classList.add("flipped", "reveal"); }
       msg.textContent = s.status === "won" ? "You found the developer! 🎉" : "Out of guesses";
       sub.textContent = s.status === "won" ? `That was ${dev.name}.` : `${dev.name} was hiding behind card ${s.answer_index + 1}.`;
-      startBtn.hidden = false; startBtn.textContent = "Play again";
+      startBtn.hidden = Boolean(s.reward && s.reward.claimable); startBtn.textContent = "Play again";
       const old = $("#mystery"); if (old) { const big = el("button", "pcard mystery flipped dev"); big.type = "button"; big.disabled = true; big.id = "mystery";
         const fr = el("span", "face front"); fr.append(el("span", "in")); const bk = el("span", "face back"); bk.append(el("span", "in")); const fl = el("span", "flipper"); fl.append(fr, bk); big.append(fl); fillBack(big, dev); old.replaceWith(big); }
+    }
+    function showWin(s) {
+      res.hidden = false; res.className = "reward-pop"; res.textContent = "";
+      res.append(el("p", "", `You spotted ${s.developer.name}!`));
+      if (s.reward && s.reward.claimable) {
+        const claimBtn = el("button", "btn block", `Claim ${s.reward.coins} app coins`);
+        claimBtn.type = "button";
+        claimBtn.addEventListener("click", async () => {
+          claimBtn.disabled = true;
+          try {
+            const r = await api(flip.dataset.claim, { json: { round_id: s.round_id } });
+            if (r.claimed) { location.reload(); return; }
+            claimBtn.remove();
+            res.append(el("p", "muted", r.note || "This reward is no longer available."));
+          } catch (err) { toast(err.message, "error"); claimBtn.disabled = false; }
+        });
+        res.append(claimBtn);
+      } else if (s.reward && s.reward.note) res.append(el("p", "muted", s.reward.note));
+      if (s.developer.username) { const a = el("a", "link", "Visit " + s.developer.name + "'s profile"); a.href = "/u/" + s.developer.username; res.append(a); }
+      res.scrollIntoView({ behavior: "smooth", block: "center" });
     }
     async function begin() {
       startBtn.classList.add("loading");
@@ -867,19 +887,15 @@
       try {
         const s = await api(flip.dataset.guess, { json: { card: +c.dataset.card } });
         c.classList.remove("selected"); paint(s);
-        if (s.status === "won") {
-          res.hidden = false; res.className = "reward-pop"; res.textContent = "";
-          const amt = s.reward && s.reward.coins ? "+" + s.reward.coins : "";
-          if (amt) res.append(el("div", "amount", amt), el("div", "muted", "app coins added to your wallet"));
-          res.append(el("p", "", s.reward && s.reward.note && !amt ? s.reward.note : `You spotted ${s.developer.name}!`));
-          if (s.developer.username) { const a = el("a", "link", "Visit " + s.developer.name + "'s profile"); a.href = "/u/" + s.developer.username; res.append(a); }
-          if (s.reward && s.reward.coins) toast(s.reward.note, "success");
-          res.scrollIntoView({ behavior: "smooth", block: "center" });
-        } else if (s.status === "lost") toast("No guesses left. Try another round!", "info");
+        if (s.status === "won") showWin(s);
+        else if (s.status === "lost") toast("No guesses left. Try another round!", "info");
       } catch (err) { c.classList.remove("selected"); toast(err.message, "error"); }
       busy = false;
     });
-    api(flip.dataset.state, { method: "GET" }).then((s) => { if (s.active) paint(s); }).catch(() => {});
+    api(flip.dataset.state, { method: "GET" }).then((s) => {
+      if (s.active) paint(s);
+      else if (s.pending_claim) { paint(s.pending_claim); showWin(s.pending_claim); }
+    }).catch(() => {});
   }
 
   /* ---------- trivia ---------- */

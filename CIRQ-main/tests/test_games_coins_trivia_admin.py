@@ -131,9 +131,17 @@ def test_answer_and_deck_fixed_for_the_whole_round(table, db):
 def test_winning_awards_500_coins_once_and_achievements(table, db):
     c, p = table; start(c); ai = answer_index(db)
     r = guess(c, ai).get_json()
-    assert r["status"] == "won" and r["reward"]["coins"] == 500 and r["developer"]["name"] == "VEX" and r["developer"]["developer"] is True
-    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 510
+    assert r["status"] == "won" and r["reward"]["coins"] == 500 and r["reward"]["claimable"] is True
+    assert r["developer"]["name"] == "VEX" and r["developer"]["developer"] is True
+    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 10
     assert {"dev_finder", "flip_first_win"} <= {a["code"] for a in db.data["user_achievements"]}
+    pending = c.get("/api/games/flip/state").get_json()["pending_claim"]
+    assert pending["round_id"] == r["round_id"] and pending["reward"]["claimable"] is True
+    assert c.post("/api/games/flip/start").status_code == 409
+    claimed = c.post("/api/games/flip/claim", json={"round_id": r["round_id"]}).get_json()
+    assert claimed["claimed"] is True and claimed["coins"] == 500 and claimed["balance"] == 510
+    assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 510
+    assert c.post("/api/games/flip/claim", json={"round_id": r["round_id"]}).get_json()["claimed"] is True
     assert guess(c, (ai + 1) % r["cards"]).status_code == 409           # no guesses after a win
     assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 510
 
@@ -142,7 +150,11 @@ def test_daily_reward_cap(table, db, app):
     c, p = table; app.config["DEV_CARD_REWARDS_PER_DAY"] = 2
     results = []
     for _ in range(3):
-        start(c); results.append(guess(c, answer_index(db)).get_json()["reward"]["coins"])
+        start(c)
+        win = guess(c, answer_index(db)).get_json()
+        results.append(win["reward"]["coins"])
+        if win["reward"]["claimable"]:
+            c.post("/api/games/flip/claim", json={"round_id": win["round_id"]})
     assert results == [500, 500, 0]
     assert next(x for x in db.data["profiles"] if x["id"] == p["id"])["coin_balance"] == 1015
 
@@ -151,7 +163,11 @@ def test_default_daily_cap_is_one(table, db):
     c, _ = table
     got = []
     for _ in range(2):
-        start(c); got.append(guess(c, answer_index(db)).get_json()["reward"]["coins"])
+        start(c)
+        win = guess(c, answer_index(db)).get_json()
+        got.append(win["reward"]["coins"])
+        if win["reward"]["claimable"]:
+            c.post("/api/games/flip/claim", json={"round_id": win["round_id"]})
     assert got == [500, 0]
 
 
@@ -170,7 +186,8 @@ def test_game_works_with_virtual_developer_when_account_missing(as_user, mk, db)
 def test_flip_page_renders_without_revealing_cards(table):
     c, _ = table
     html = c.get("/games/flip").get_data(as_text=True)
-    assert "Guess the" in html and "500" in html and "student" not in html.split('id="flip-deck"')[1].split("</div>")[0]
+    assert "Guess the" in html and "500" in html and "data-claim=" in html
+    assert "student" not in html.split('id="flip-deck"')[1].split("</div>")[0]
 
 
 def test_games_free_and_paid_flag_enforced_on_server(as_user, app):

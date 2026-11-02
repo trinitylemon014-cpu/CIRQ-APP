@@ -12,7 +12,7 @@
   <div class="clue">{{ m.icon('users') }}<div><b>CLUE 4</b>A student with big dreams and a passion for innovation.</div></div>
 </div>
 
-<div id="flip" data-start="{{ url_for('games.start') }}" data-state="{{ url_for('games.state') }}" data-guess="{{ url_for('games.guess') }}" data-mark="{{ url_for('static', filename='images/mark.png') }}" data-max="{{ max_guesses }}">
+<div id="flip" data-start="{{ url_for('games.start') }}" data-state="{{ url_for('games.state') }}" data-guess="{{ url_for('games.guess') }}" data-claim="{{ url_for('games.claim') }}" data-mark="{{ url_for('static', filename='images/mark.png') }}" data-max="{{ max_guesses }}">
   <div class="stage" id="stage">
     <span class="stage-label">{{ m.icon('star','i-sm') }} THE DEVELOPER {{ m.icon('star','i-sm') }}</span>
     <div class="pcard mystery" id="mystery" aria-label="Mystery developer card"><span class="face"><span class="in">
