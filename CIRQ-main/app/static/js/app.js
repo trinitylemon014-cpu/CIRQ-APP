@@ -827,7 +827,11 @@
       if (p.developer) { const c = el("div", "crown"); c.innerHTML = '<svg class="i fill"><use href="#i-award"/></svg>'; inner.append(c); }
       const pt = el("div", "portrait");
       if (p.avatar) { const im = document.createElement("img"); im.src = p.avatar; im.alt = ""; pt.append(im); } else pt.textContent = (p.name || "?")[0];
-      const np = el("div", "nameplate"); np.append(el("b", "", p.name), el("small", "", p.school || (p.username ? "@" + p.username : "")), el("span", "tierbar", p.developer ? "The Developer" : p.tier));
+      const np = el("div", "nameplate");
+      np.append(el("b", "", p.name));
+      if (p.username) np.append(el("small", "handle", "@" + p.username));
+      if (p.school) np.append(el("small", "school", p.school));
+      np.append(el("span", "tierbar", p.developer ? "The Developer" : p.tier));
       inner.append(pt, np, el("i", "shine")); if (extra) card.classList.add(extra);
     }
     function build(n) {

@@ -1,6 +1,6 @@
 {% set ep = request.endpoint %}
 <div class="admin-nav">
 {% if cur.role == 'admin' %}
-{% for e, label in [('admin.dashboard','Overview'),('admin.users','Users'),('admin.schools','Schools'),('admin.password_resets','Password resets'),('admin.reports','Reports'),('admin.media','Media'),('admin.payments','Payments'),('admin.trivia','Trivia'),('admin.flags','Flags'),('admin.audit_log','Audit')] %}<a href="{{ url_for(e) }}" class="{{ 'active' if ep == e or (e == 'admin.trivia' and ep == 'admin.trivia_edit') }}">{{ label }}</a>{% endfor %}
+{% for e, label in [('admin.dashboard','Overview'),('admin.users','Users'),('admin.developer_card','Developer card'),('admin.schools','Schools'),('admin.password_resets','Password resets'),('admin.reports','Reports'),('admin.media','Media'),('admin.payments','Payments'),('admin.trivia','Trivia'),('admin.flags','Flags'),('admin.audit_log','Audit')] %}<a href="{{ url_for(e) }}" class="{{ 'active' if ep == e or (e == 'admin.trivia' and ep == 'admin.trivia_edit') }}">{{ label }}</a>{% endfor %}
 {% else %}<a href="{{ url_for('admin.reports') }}" class="active">Reports</a><a href="{{ url_for('admin.media') }}">Media</a>{% endif %}
 </div>

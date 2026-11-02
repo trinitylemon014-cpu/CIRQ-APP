@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Developer card{% endblock %}
+{% block content %}<h1 class="page-title">Developer card</h1>{% include 'admin/_nav.html' %}
+<div class="card stack">
+  <h2>Developer profile photo</h2>
+  <p class="muted">This image is used on the developer card and as the avatar for <b>@{{ config.DEVELOPER_USERNAME }}</b>.</p>
+  {% if profile %}
+    <div class="row wrap" style="align-items:center;gap:16px">
+      <span class="dev-avatar-preview">{% if avatar %}<img src="{{ avatar }}" alt="Current developer profile photo">{% else %}<span>{{ profile.display_name[:1]|upper }}</span>{% endif %}</span>
+      <div><b>{{ profile.display_name }}</b><br><small class="muted">@{{ profile.username }}</small></div>
+    </div>
+    <form class="stack" method="post" enctype="multipart/form-data">
+      {{ m.csrf() }}
+      <label class="file-drop" style="width:fit-content">{{ m.icon('image') }} <span data-file-label>{{ 'Replace developer photo' if avatar else 'Choose developer photo' }}</span><input type="file" name="avatar" accept="image/png,image/jpeg,image/webp,image/gif" required></label>
+      <small class="muted">Use a clear square portrait. PNG, JPG, WebP or GIF, up to {{ config.MAX_IMAGE_MB }} MB.</small>
+      <div class="row wrap"><button class="btn">Save photo</button>
+        {% if avatar %}<button class="btn danger" name="remove" value="1" formnovalidate data-confirm-click="Remove the developer card photo?">Remove photo</button>{% endif %}
+      </div>
+    </form>
+  {% else %}
+    <p class="muted">Create the configured developer account before setting its card photo.</p>
+  {% endif %}
+</div>{% endblock %}

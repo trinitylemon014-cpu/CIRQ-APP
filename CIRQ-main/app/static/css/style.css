@@ -351,9 +351,7 @@ select.input option { background: var(--navy-900); color: #fff; }
 .hearts { display: flex; gap: 6px; } .hearts i { width: 14px; height: 20px; border-radius: 4px; background: var(--grad-primary); box-shadow: var(--glow-purple); transform: skewX(-8deg); } .hearts i.off { background: rgba(255, 255, 255, .12); box-shadow: none; }
 
 /* the collectible player card. Shape + glow come from the rarity colours --c1/--c2 */
-.deck { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; perspective: 1100px; }
-@media (min-width: 560px) { .deck { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (min-width: 900px) { .deck { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.deck { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr)); gap: 14px 12px; max-width: 1080px; margin-inline: auto; perspective: 1100px; }
 .pcard { --c1: #00d9ff; --c2: #2a5bff; --ink: #fff; position: relative; display: block; width: 100%; aspect-ratio: 5/7.2; padding: 0; border: 0; background: none; cursor: pointer; perspective: 1100px; transition: transform .25s var(--ease), filter .2s; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .5)); font-family: var(--font); color: #fff; text-align: left; }
 /* the flip happens on an inner layer: a CSS filter on the same element would flatten the 3D transform */
 .pcard .flipper { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .7s var(--ease); }
@@ -363,8 +361,8 @@ select.input option { background: var(--navy-900); color: #fff; }
 .pcard[disabled]:not(.flipped) { cursor: default; opacity: .8; }
 .pcard:focus-visible { outline: none; filter: drop-shadow(0 0 14px var(--cyan)); }
 .pcard .face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: hidden;
-  clip-path: polygon(0 7%, 12% 0, 88% 0, 100% 7%, 100% 93%, 88% 100%, 12% 100%, 0 93%); background: linear-gradient(150deg, var(--c1), var(--c2)); padding: 2.5px; }
-.pcard .face > .in { position: absolute; inset: 2.5px; clip-path: polygon(0 7%, 12% 0, 88% 0, 100% 7%, 100% 93%, 88% 100%, 12% 100%, 0 93%); background: linear-gradient(170deg, rgba(14, 26, 62, .96), rgba(4, 10, 28, .98)); display: grid; }
+  clip-path: polygon(0 5%, 10% 0, 90% 0, 100% 5%, 100% 95%, 90% 100%, 10% 100%, 0 95%); background: linear-gradient(150deg, var(--c1), var(--c2)); padding: 2px; }
+.pcard .face > .in { position: absolute; inset: 2px; clip-path: polygon(0 5%, 10% 0, 90% 0, 100% 5%, 100% 95%, 90% 100%, 10% 100%, 0 95%); background: linear-gradient(170deg, rgba(14, 26, 62, .96), rgba(4, 10, 28, .98)); display: grid; }
 /* card back (face down) */
 .pcard .front .in { place-items: center; background: radial-gradient(circle at 50% 38%, rgba(139, 44, 255, .45), rgba(4, 10, 28, .98) 70%), linear-gradient(170deg, #101d49, #050c24); }
 .pcard .front img { width: 50%; mix-blend-mode: screen; border-radius: 18px; filter: drop-shadow(0 0 12px rgba(0, 217, 255, .7)); }
@@ -373,16 +371,17 @@ select.input option { background: var(--navy-900); color: #fff; }
 @keyframes sheen { 0% { background-position: 150% 0; } 55%, 100% { background-position: -80% 0; } }
 /* card front (the student) */
 .pcard .back { transform: rotateY(180deg); }
-.pcard .back .in { grid-template-rows: auto 1fr auto; padding: 8% 9% 9%; }
-.pcard .rating { position: absolute; top: 9%; left: 11%; z-index: 3; line-height: .95; text-shadow: 0 2px 8px rgba(0, 0, 0, .8); }
-.pcard .rating b { display: block; font-size: clamp(1.3rem, 6.2vw, 2rem); font-weight: 800; color: var(--c1); } .pcard .rating small { display: block; font-size: .6rem; font-weight: 800; letter-spacing: .08em; color: #fff; opacity: .9; }
-.pcard .crown { position: absolute; top: 8%; right: 10%; z-index: 3; color: var(--gold); filter: drop-shadow(0 0 8px rgba(255, 197, 66, .8)); } .pcard .crown .i { width: 22px; height: 22px; }
-.pcard .portrait { grid-row: 1 / 3; align-self: center; justify-self: center; width: 70%; aspect-ratio: 1; margin-top: 18%; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-size: 2.4rem; font-weight: 800; color: var(--c1); background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, .14), rgba(255, 255, 255, .02)); border: 2px solid var(--c1); box-shadow: 0 0 18px var(--c1), inset 0 0 14px rgba(0, 0, 0, .5); text-transform: uppercase; }
-.pcard .portrait img { width: 100%; height: 100%; object-fit: cover; }
-.pcard .nameplate { grid-row: 3; text-align: center; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .18); margin-top: 6px; }
-.pcard .nameplate b { display: block; font-size: clamp(.68rem, 2.9vw, .92rem); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pcard .nameplate small { display: block; font-size: .6rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pcard .tierbar { display: block; margin: 4px auto 0; width: fit-content; padding: 1px 9px; border-radius: var(--r-pill); font-size: .54rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; background: linear-gradient(90deg, var(--c1), var(--c2)); color: #02101f; }
+.pcard .back .in { display: block; padding: 0; background: #080f24; }
+.pcard .rating { position: absolute; top: 8%; left: 9%; z-index: 3; min-width: 2.35em; line-height: .92; text-shadow: 0 2px 10px #000; }
+.pcard .rating b { display: block; font-size: clamp(1.15rem, 5vw, 1.8rem); font-weight: 900; color: var(--c1); } .pcard .rating small { display: block; font-size: .55rem; font-weight: 800; letter-spacing: .08em; color: #fff; opacity: .92; }
+.pcard .crown { position: absolute; top: 8%; right: 9%; z-index: 3; color: var(--gold); filter: drop-shadow(0 0 8px rgba(255, 197, 66, .8)); } .pcard .crown .i { width: 20px; height: 20px; }
+.pcard .portrait { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; font-size: 3rem; font-weight: 900; color: var(--c1); background: radial-gradient(circle at 50% 28%, rgba(255, 255, 255, .14), #080f24 75%); text-transform: uppercase; }
+.pcard .portrait::after { content: ""; position: absolute; inset: 30% 0 0; background: linear-gradient(180deg, transparent, rgba(4, 8, 20, .22) 35%, rgba(4, 8, 20, .98)); pointer-events: none; }
+.pcard .portrait img { width: 100%; height: 100%; object-fit: cover; object-position: center 28%; }
+.pcard .nameplate { position: absolute; z-index: 2; inset: auto 0 0; display: grid; justify-items: center; gap: 2px; padding: 24% 8% 10%; text-align: center; background: linear-gradient(180deg, transparent, rgba(4, 8, 20, .92) 28%, #080f24 100%); }
+.pcard .nameplate b { display: block; width: 100%; font-size: clamp(.7rem, 2.8vw, .94rem); font-weight: 900; letter-spacing: .025em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .nameplate small { display: block; max-width: 100%; font-size: clamp(.52rem, 1.8vw, .65rem); line-height: 1.2; color: rgba(255, 255, 255, .76); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .tierbar { display: block; max-width: 100%; margin-top: 3px; padding: 3px 9px; border: 1px solid rgba(255, 255, 255, .28); border-radius: var(--r-pill); font-size: clamp(.48rem, 1.65vw, .58rem); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; background: linear-gradient(90deg, var(--c1), var(--c2)); color: #07101f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* rarity by CIRQ STATUS tier (real follower data) */
 .pcard.r0 { --c1: #00d9ff; --c2: #2a5bff; } .pcard.r1 { --c1: #2ee59d; --c2: #00a58e; } .pcard.r2 { --c1: #a66bff; --c2: #6d28d9; }
 .pcard.r3 { --c1: #ff4fd8; --c2: #8b2cff; } .pcard.r4, .pcard.r5, .pcard.r6 { --c1: #ffc542; --c2: #e0820a; }
@@ -390,12 +389,14 @@ select.input option { background: var(--navy-900); color: #fff; }
 .pcard.dev { --c1: #ffc542; --c2: #8b2cff; filter: drop-shadow(0 0 20px rgba(139, 44, 255, .8)); }
 .pcard.dev .face { background: conic-gradient(from var(--spin, 0deg), #ffc542, #8b2cff, #00d9ff, #d62bff, #ffc542); animation: spinborder 4s linear infinite; }
 @property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; } @keyframes spinborder { to { --spin: 360deg; } }
-.pcard.dev .back .in { background: radial-gradient(circle at 50% 30%, rgba(139, 44, 255, .55), rgba(4, 10, 28, .98) 72%); }
+.pcard.dev .back .in { background: #100d25; }
 .pcard.dev .rating b { color: var(--gold); font-size: clamp(1.1rem, 5vw, 1.6rem); }
 .pcard.win { animation: winpop .9s var(--ease); } @keyframes winpop { 0% { transform: scale(.92); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 .pcard.reveal { animation: none; filter: drop-shadow(0 0 16px var(--gold)); }
 .pcard.miss .back .in { filter: saturate(.7) brightness(.85); }
 .pcard.selected { filter: drop-shadow(0 0 16px var(--cyan)); transform: translateY(-4px); }
+.dev-avatar-preview { width: 84px; height: 84px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: var(--card-flat); border: 2px solid var(--gold); color: var(--gold); font-size: 2rem; font-weight: 800; }
+.dev-avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
 /* the large mystery card in the middle of the stage */
 .mystery { width: min(62vw, 230px); }
 .mystery .in { place-items: center; background: radial-gradient(circle at 50% 35%, rgba(139, 44, 255, .6), rgba(4, 10, 28, .98) 72%); }

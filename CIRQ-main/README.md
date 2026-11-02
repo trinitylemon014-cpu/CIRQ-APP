@@ -229,6 +229,7 @@ card (name, school, real follower count and CIRQ STATUS tier set the colour). Fi
 button; coins are added when claimed, once per round (ledger-protected), limited to `DEV_CARD_REWARDS_PER_DAY` (default **1**)
 so coins can't be farmed. Unclaimed wins survive a refresh and must be claimed before starting another round. If fewer than 5
 other students exist the game says so. It never invents users.
+Admins can update the developer's card photo under **Admin → Developer card**; it uses the configured developer account's avatar.
 
 **Coins & boosts.** Every coin change goes through the database function `cirq_apply_coins` (atomic, idempotent, never negative).
 50 welcome coins on approval. 1000 coins buy a 3-day boost (Boosted badge + listed first in Discover). Boosts never affect CIRQ STATUS.
