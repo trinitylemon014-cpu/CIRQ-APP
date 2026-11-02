@@ -1,10 +1,26 @@
 import pytest
 import cloudinary
+import httpx
 from config import validate_config, Config, REQUIRED_IN_PRODUCTION
 from app.services import cloudinary_service as cs
+from app.services.supabase_service import RetryingHttpxClient
 
 
 def test_production_requires_all_credentials():
+    def test_supabase_http_client_retries_transient_failures(monkeypatch):
+        attempts = []
+
+        def handler(request):
+            attempts.append(request)
+            if len(attempts) < 3:
+                raise httpx.ConnectError("temporary failure")
+            return httpx.Response(200, json={"ok": True})
+
+        monkeypatch.setattr("app.services.supabase_service.time.sleep", lambda _: None)
+        with RetryingHttpxClient(http2=False, transport=httpx.MockTransport(handler)) as client:
+            response = client.get("https://supabase.example/rest/v1/profiles")
+
+        assert response.status_code == 200 and len(attempts) == 3
     with pytest.raises(RuntimeError) as e:
         validate_config({k: "" for k in REQUIRED_IN_PRODUCTION})
     assert "SUPABASE_SERVICE_ROLE_KEY" in str(e.value) and "CLOUDINARY_API_SECRET" in str(e.value)

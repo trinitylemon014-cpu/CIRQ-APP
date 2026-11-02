@@ -1,9 +1,12 @@
 """Personalised suggestions: learning from behaviour, ranking, safety rules and student controls."""
 import io
 import re
+import uuid
+import httpx
 from datetime import datetime, timedelta, timezone
 from tests.conftest import MP4
 from app.services import recommender as rec
+from app.services import supabase_service as sb
 
 
 def post(db, author, caption, kind="post", **kw):
@@ -64,6 +67,19 @@ def test_viewing_signals_endpoint_validates_and_learns(as_user, db, mk):
 
 
 def test_not_interested_hides_forever_and_lowers_the_topic(as_user, db, mk, app):
+    def test_signals_returns_json_503_when_database_transport_fails(as_user, monkeypatch):
+        client, _ = as_user("signalerror")
+
+        def fail(*args, **kwargs):
+            raise httpx.ReadError("temporary failure")
+
+        monkeypatch.setattr(sb, "by_id", fail)
+        response = client.post("/api/signals", json={"events": [
+            {"post_id": str(uuid.uuid4()), "event": "view", "value": 1500},
+        ]})
+
+        assert response.status_code == 503
+        assert response.is_json and "temporarily unavailable" in response.get_json()["error"]
     a, alice = as_user("alice")
     bob = mk("bob")
     liked = post(db, mk("dan"), "Chess club #chess")

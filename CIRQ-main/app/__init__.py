@@ -1,6 +1,7 @@
 import logging
 import os
 import click
+import httpx
 from urllib.parse import urlparse
 from flask import Flask, g, session, render_template, request, jsonify, url_for
 from config import Config, DevConfig, TestConfig, validate_config
@@ -134,6 +135,11 @@ def create_app(config_object=None, clients=None):
 
     @app.errorhandler(429)
     def e429(e): return _err(429, "Slow down", "Too many attempts. Please wait a moment and try again.")
+
+    @app.errorhandler(httpx.TransportError)
+    def e_database_unavailable(e):
+        app.logger.warning("database transport failed after retries: %s", type(e).__name__)
+        return _err(503, "Temporarily unavailable", "The service is temporarily unavailable. Please try again.")
 
     @app.errorhandler(500)
     def e500(e):
