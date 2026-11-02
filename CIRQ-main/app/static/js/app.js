@@ -5,6 +5,70 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = () => ($('meta[name="csrf-token"]') || {}).content || "";
 
+  /* ---------- active status ---------- */
+  if (document.body.dataset.presenceEnabled === "1") {
+    let heartbeatTimer;
+    const pingPresence = (finalPing = false) => {
+      if (!finalPing && document.visibilityState !== "visible") return;
+      fetch("/api/presence/ping", {
+        method: "POST", keepalive: true, credentials: "same-origin",
+        headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" },
+      }).catch(() => {});
+    };
+    const scheduleHeartbeat = () => {
+      clearTimeout(heartbeatTimer);
+      if (document.visibilityState === "visible") heartbeatTimer = setTimeout(() => {
+        pingPresence();
+        scheduleHeartbeat();
+      }, 60000);
+    };
+    const refreshPresence = async () => {
+      if (document.visibilityState !== "visible") return;
+      const markers = $$("[data-presence-dot], [data-presence-label]");
+      const ids = [...new Set(markers.map((el) => el.dataset.userId).filter(Boolean))];
+      for (let start = 0; start < ids.length; start += 80) {
+        const params = new URLSearchParams();
+        ids.slice(start, start + 80).forEach((id) => params.append("user_id", id));
+        try {
+          const response = await fetch(`/api/presence/status?${params}`, {
+            credentials: "same-origin", headers: { "X-Requested-With": "fetch" },
+          });
+          if (!response.ok) continue;
+          const { statuses = {} } = await response.json();
+          markers.filter((el) => ids.slice(start, start + 80).includes(el.dataset.userId)).forEach((el) => {
+            const state = statuses[el.dataset.userId];
+            if (el.matches("[data-presence-dot]")) {
+              el.hidden = !state || state === "hidden";
+              el.classList.toggle("is-active", state === "active");
+              el.setAttribute("aria-label", state === "active" ? "Active now" : "Offline");
+              el.title = state === "active" ? "Active now" : "Offline";
+            } else {
+              el.hidden = state !== "active";
+              el.textContent = state === "active" ? "· Active now" : "";
+            }
+          });
+        } catch (_) {
+          // Presence is decorative; a failed refresh must not affect the page.
+        }
+      }
+    };
+    const resumePresence = () => {
+      if (document.visibilityState === "visible") {
+        pingPresence();
+        scheduleHeartbeat();
+        refreshPresence();
+      } else {
+        clearTimeout(heartbeatTimer);
+      }
+    };
+    pingPresence();
+    scheduleHeartbeat();
+    refreshPresence();
+    document.addEventListener("visibilitychange", resumePresence);
+    window.addEventListener("pagehide", () => pingPresence(true));
+    setInterval(refreshPresence, 60000);
+  }
+
   /* ---------- responsive all-pages menu ---------- */
   const pageMenu = $("#mobile-page-menu"), menuBackdrop = $(".mobile-menu-backdrop");
   const menuTriggers = $$("[data-mobile-menu-trigger]");

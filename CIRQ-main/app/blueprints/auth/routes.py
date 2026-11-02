@@ -13,8 +13,13 @@ from app.utils import (normalize_username, valid_username, valid_email, password
 
 bp = Blueprint("auth", __name__)
 
-GENERIC_LOGIN_ERROR = "That username or password isn't right."
+GENERIC_LOGIN_ERROR = "Invalid username/email or password"
 SCHOOL_NOT_LISTED = "My school isn't listed"
+
+
+def _login_identifier_key():
+    identifier = (request.form.get("identifier") or request.form.get("username") or "").strip().lower()
+    return identifier or (request.remote_addr or "unknown")
 
 
 def _claim_school_submission_slot():
@@ -100,15 +105,16 @@ def register():
     if request.method == "POST":
         f = request.form
         form = {k: f.get(k, "") for k in ("username", "display_name", "email", "school_choice", "submitted_school_name")}
-        username = normalize_username(f.get("username"))
+        raw_username = (f.get("username") or "").strip()
+        username = normalize_username(raw_username)
         email = (f.get("email") or "").strip().lower()
         display = clean_text(f.get("display_name"), 40)
         school, submitted_school, normalized_school, school_submission, school_error = _registration_school(
             f.get("school_choice", ""), f.get("submitted_school_name", ""), schools)
         pw, pw2 = f.get("password", ""), f.get("password2", "")
         errors = []
-        if not valid_username(username):
-            errors.append("Username: 3-24 characters, letters, numbers, dots or underscores.")
+        if "@" in raw_username or not valid_username(username):
+            errors.append("Username: 3-24 characters; letters, numbers, dots or underscores only (no @).")
         elif sb.get("profiles", "id", username=username):
             errors.append("That username is taken.")
         if len(display) < 2:
@@ -177,27 +183,30 @@ def register():
 
 
 @bp.route("/login", methods=["GET", "POST"])
-@limiter.limit("10 per minute; 40 per hour", methods=["POST"])
+@limiter.limit("5 per minute; 20 per hour", methods=["POST"])
+@limiter.limit("5 per minute; 20 per hour", key_func=_login_identifier_key, methods=["POST"])
 def login():
     if g.user:
         return redirect(url_for("feed.home"))
     if request.method == "POST":
-        username = normalize_username(request.form.get("username"))
+        identifier = (request.form.get("identifier") or request.form.get("username") or "").strip()
         password = request.form.get("password", "")
-        profile = sb.get("profiles", username=username) if username else None
-        if not profile or not auth_service.verify_password(profile["id"], password):
+        profile = auth_service.profile_by_identifier(identifier)
+        email = identifier.lower() if "@" in identifier else (auth_service.email_for(profile["id"]) if profile else None)
+        authenticated_id = auth_service.authenticate_email(email, password)
+        if not profile or authenticated_id != profile["id"]:
             flash(GENERIC_LOGIN_ERROR, "error")
-            return render_template("auth/login.html", username=username), 401
+            return render_template("auth/login.html", identifier=identifier), 401
         if profile["account_status"] == "suspended":
             flash("This account is suspended. Contact your school coordinator or CIRQ support.", "error")
-            return render_template("auth/login.html", username=username), 403
+            return render_template("auth/login.html", identifier=identifier), 403
         if profile["account_status"] == "rejected":
             flash("This account wasn't approved. Contact your school coordinator or CIRQ support.", "error")
-            return render_template("auth/login.html", username=username), 403
+            return render_template("auth/login.html", identifier=identifier), 403
         _start_session(profile, request.form.get("remember"))
         dest = _safe_next(request.args.get("next"))
         return redirect(dest or (url_for("feed.home") if profile["account_status"] == "approved" else url_for("auth.pending")))
-    return render_template("auth/login.html", username="")
+    return render_template("auth/login.html", identifier="")
 
 
 @bp.post("/logout")
@@ -274,17 +283,18 @@ def verify_email(token):
 # ---------------------------------------------------------------- password recovery (admin-approved)
 @bp.route("/forgot-password", methods=["GET", "POST"])
 @limiter.limit("5 per hour", methods=["POST"])
+@limiter.limit("5 per hour", key_func=_login_identifier_key, methods=["POST"])
 def forgot_password():
     schools = sb.select("schools", order="name", desc=False)
     if request.method == "POST":
         f = request.form
-        username = normalize_username(f.get("username"))
+        identifier = f.get("identifier") or f.get("username")
         school_id = f.get("school_id")
         email = (f.get("email") or "").strip().lower()
         display = clean_text(f.get("display_name"), 40).lower()
         no_access = bool(f.get("no_email_access"))
         note = clean_text(f.get("note"), 300)
-        profile = sb.get("profiles", username=username) if username else None
+        profile = auth_service.profile_by_identifier(identifier)
         if profile and profile["account_status"] == "approved" and profile.get("school_id") == school_id:
             matches = (display and display == (profile["display_name"] or "").lower()) if no_access else \
                       (email and email == (auth_service.email_for(profile["id"]) or "").lower())

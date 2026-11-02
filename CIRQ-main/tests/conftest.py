@@ -74,7 +74,7 @@ def mk(db, school):
 
 
 def login(client, username, password=PASSWORD):
-    return client.post("/login", data={"username": username, "password": password})
+    return client.post("/login", data={"identifier": username, "password": password})
 
 
 @pytest.fixture

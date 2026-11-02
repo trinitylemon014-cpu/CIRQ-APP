@@ -18,7 +18,7 @@ def test_landing_and_pages_render(client):
 
 
 def test_register_creates_pending_account_and_normalizes_username(client, db, school):
-    r = reg(client, school, username="  @NewKid  ")
+    r = reg(client, school, username="  NewKid  ")
     assert r.status_code == 302 and r.headers["Location"].endswith("/pending")
     p = db.data["profiles"][0]
     assert p["username"] == "newkid" and p["account_status"] == "pending"
@@ -57,7 +57,27 @@ def test_username_login_and_generic_errors(client, mk):
     wrong_pw = login(c2, "alice", "wrong-password-1")
     unknown = login(c2, "nobody-here")
     assert wrong_pw.status_code == unknown.status_code == 401
-    assert b"username or password isn" in wrong_pw.data and b"username or password isn" in unknown.data
+    assert b"Invalid username/email or password" in wrong_pw.data
+    assert b"Invalid username/email or password" in unknown.data
+
+
+def test_email_login_is_case_insensitive_and_uses_same_generic_error(client, mk):
+    mk("alice", email="Alice@Example.com")
+    assert login(client, "  ALICE@EXAMPLE.COM  ").status_code == 302
+    invalid = client.application.test_client()
+    wrong_password = login(invalid, "ALICE@example.com", "wrong-password-1")
+    unknown_email = login(invalid, "missing@example.com")
+    assert wrong_password.status_code == unknown_email.status_code == 401
+    assert b"Invalid username/email or password" in wrong_password.data
+    assert b"Invalid username/email or password" in unknown_email.data
+
+
+def test_registration_rejects_at_sign_in_username(client, db, school):
+    response = reg(client, school, username="name@example")
+    leading = reg(client, school, username="@leading")
+    assert response.status_code == 400
+    assert leading.status_code == 400
+    assert not db.data.get("profiles")
 
 
 def test_change_password_accepts_short_password_containing_username(client, db, mk):

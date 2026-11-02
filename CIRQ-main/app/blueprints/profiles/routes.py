@@ -4,7 +4,7 @@ from app.extensions import limiter, db
 from app.services import supabase_service as sb, cloudinary_service as cs, social, auth_service
 from app.services.cloudinary_service import UploadError
 from app.services.notification_service import notify
-from app.utils import normalize_username, clean_text, iso, password_problems, TIERS, tier_for
+from app.utils import normalize_username, clean_text, iso, parse_dt, utcnow, password_problems, TIERS, tier_for
 
 bp = Blueprint("profiles", __name__)
 
@@ -173,6 +173,7 @@ def settings():
         elif action == "privacy":
             private = bool(request.form.get("is_private"))
             _set_privacy(me, private)
+            sb.update("profiles", {"show_active_status": bool(request.form.get("show_active_status"))}, id=me["id"])
             flash("Your account is now private. New followers need your approval." if private
                   else "Your account is now public. Pending requests were approved.", "success")
         elif action == "school":
@@ -223,6 +224,45 @@ def settings():
     return render_template("profiles/settings.html", blocked=list(blocked.values()),
                            schools=sb.select("schools", order="name", desc=False),
                            pending_requests=social.pending_request_count(me["id"]))
+
+
+@bp.post("/api/presence/ping")
+@login_required
+@limiter.limit("30 per minute", key_func=lambda: g.user["id"])
+def presence_ping():
+    if not g.user.get("show_active_status", True):
+        return jsonify(ok=True, updated=False)
+    try:
+        updated = db().rpc("cirq_ping_presence", {"p_user_id": g.user["id"]}).execute().data
+    except Exception:
+        current_app.logger.exception("presence heartbeat failed for user %s", g.user["id"])
+        return jsonify(error="Presence is temporarily unavailable."), 503
+    return jsonify(ok=True, updated=updated is True or updated == [True])
+
+
+@bp.get("/api/presence/status")
+@login_required
+@limiter.limit("10 per minute", key_func=lambda: g.user["id"])
+def presence_status():
+    ids = list(dict.fromkeys(request.args.getlist("user_id")))[:100]
+    if not ids:
+        return jsonify(statuses={})
+    if not g.user.get("show_active_status", True):
+        return jsonify(statuses={user_id: "hidden" for user_id in ids})
+
+    people = sb.by_id("profiles", ids, cols="id,last_seen_at,show_active_status")
+    blocked = {row["blocked_id"] for row in sb.select("blocks", blocker_id=g.user["id"])}
+    blocked.update(row["blocker_id"] for row in sb.select("blocks", blocked_id=g.user["id"]))
+    cutoff = utcnow().timestamp() - current_app.config["ACTIVE_WINDOW_SECONDS"]
+    statuses = {}
+    for user_id in ids:
+        person = people.get(user_id)
+        if not person or not person.get("show_active_status", True) or user_id in blocked:
+            statuses[user_id] = "hidden"
+            continue
+        seen = parse_dt(person.get("last_seen_at"))
+        statuses[user_id] = "active" if seen and seen.timestamp() >= cutoff else "offline"
+    return jsonify(statuses=statuses)
 
 
 def _set_privacy(me, private):

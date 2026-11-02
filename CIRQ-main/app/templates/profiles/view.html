@@ -4,7 +4,7 @@
 <section class="card hero">
   {{ m.avatar(prof, 104) }}
   <h1 style="font-size:1.7rem;margin-bottom:2px">{{ prof.display_name }}{{ m.verified(prof) }}</h1>
-  <div class="muted">@{{ prof.username }}</div>
+  <div class="muted">@{{ prof.username }} <span class="presence-label" data-presence-label data-user-id="{{ prof.id }}" hidden></span></div>
   <div class="row wrap" style="justify-content:center;margin-top:10px">
     <span class="chip green">{{ m.icon('trophy','i-sm') }} {{ stats.tier.name }}</span>
     {% if school %}<a class="chip" href="{{ url_for('schools.view', slug=school.slug) }}">{{ m.icon('school','i-sm') }} {{ school.name }}{% if school.verified %} ✓{% endif %}</a>{% endif %}

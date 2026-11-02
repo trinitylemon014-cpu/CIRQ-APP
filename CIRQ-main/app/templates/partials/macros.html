@@ -2,8 +2,8 @@
 
 {% macro avatar(p, size=44, ring=False) %}
 {% set src = avatar_src(p, size * 2) if p else '' %}
-{% if ring %}<span class="av ring" style="--s:{{ size }}px"><span>{% if src %}<img src="{{ src }}" alt="" loading="lazy" style="border:0;border-radius:50%">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}</span></span>
-{% else %}<span class="av" style="--s:{{ size }}px">{% if src %}<img src="{{ src }}" alt="" loading="lazy">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}</span>{% endif %}
+{% if ring %}<span class="av ring" style="--s:{{ size }}px"><span>{% if src %}<img src="{{ src }}" alt="" loading="lazy" style="border:0;border-radius:50%">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}</span>{% if p and p.id %}<span class="presence-dot" data-presence-dot data-user-id="{{ p.id }}" hidden></span>{% endif %}</span>
+{% else %}<span class="av" style="--s:{{ size }}px">{% if src %}<img src="{{ src }}" alt="" loading="lazy">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}{% if p and p.id %}<span class="presence-dot" data-presence-dot data-user-id="{{ p.id }}" hidden></span>{% endif %}</span>{% endif %}
 {% endmacro %}
 
 {% macro verified(p) %}{% if p and p.verified %}<span class="verified" title="Verified by CIRQ"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Verified</span></span>{% endif %}{% endmacro %}

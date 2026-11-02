@@ -7,6 +7,7 @@ are never sent to the browser.
 import logging
 from app.extensions import db, new_anon_client
 from app.services import supabase_service as sb
+from app.utils import normalize_username
 
 log = logging.getLogger(__name__)
 
@@ -24,15 +25,41 @@ def email_for(user_id):
         return None
 
 
-def verify_password(user_id, password):
-    email = email_for(user_id)
+def profile_by_email(email):
+    """Resolve an email through a server-only RPC; profile rows never store or expose emails."""
+    try:
+        rows = db().rpc("cirq_profile_id_for_email", {"p_email": (email or "").strip().lower()}).execute().data or []
+        if not rows:
+            return None
+        user_id = rows[0].get("user_id") if isinstance(rows[0], dict) else rows[0]
+        return sb.get("profiles", id=user_id) if user_id else None
+    except Exception:
+        log.warning("could not resolve account by email", exc_info=True)
+        return None
+
+
+def profile_by_identifier(identifier):
+    identifier = (identifier or "").strip()
+    if not identifier:
+        return None
+    if "@" in identifier:
+        return profile_by_email(identifier.lower())
+    return sb.get("profiles", username=normalize_username(identifier))
+
+
+def authenticate_email(email, password):
     if not email:
-        return False
+        email = "unknown@invalid.cirq"
     try:
         res = new_anon_client().auth.sign_in_with_password({"email": email, "password": password})
-        return bool(res and res.user and res.user.id == user_id)
+        return res.user.id if res and res.user else None
     except Exception:
-        return False
+        return None
+
+
+def verify_password(user_id, password):
+    email = email_for(user_id)
+    return bool(email and authenticate_email(email, password) == user_id)
 
 
 def set_password(user_id, new_password):
@@ -40,7 +67,7 @@ def set_password(user_id, new_password):
 
 
 def set_email(user_id, new_email):
-    db().auth.admin.update_user_by_id(user_id, {"email": new_email, "email_confirm": True})
+    db().auth.admin.update_user_by_id(user_id, {"email": new_email.strip().lower(), "email_confirm": True})
 
 
 def delete_auth_user(user_id):

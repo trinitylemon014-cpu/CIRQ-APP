@@ -47,6 +47,7 @@ create table if not exists profiles (
   account_status text not null default 'pending' check (account_status in ('pending','approved','rejected','suspended')),
   verified boolean not null default false,       -- identity/school verification; never popularity
   is_private boolean not null default false,
+  show_active_status boolean not null default true,
   email_verified_at timestamptz,
   session_epoch integer not null default 0,      -- bump to sign out every existing session
   coin_balance integer not null default 0 check (coin_balance >= 0),   -- cached from coin_ledger; server only
@@ -58,6 +59,60 @@ create table if not exists profiles (
 );
 create index if not exists profiles_school_idx on profiles(school_id);
 create index if not exists profiles_status_idx on profiles(account_status);
+create unique index if not exists profiles_username_lower_uidx on profiles(lower(username));
+create index if not exists profiles_active_status_idx on profiles(last_seen_at desc) where show_active_status;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_index i
+    where i.indrelid = 'auth.users'::regclass
+      and i.indisunique
+      and lower(pg_get_indexdef(i.indexrelid)) like '%lower(%email%'
+  ) then
+    create unique index auth_users_email_lower_uidx
+      on auth.users(lower(email)) where email is not null;
+  end if;
+end
+$$;
+
+create or replace function public.cirq_profile_id_for_email(p_email text)
+returns table(user_id uuid)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select u.id
+  from auth.users u
+  join public.profiles p on p.id = u.id
+  where lower(u.email) = lower(trim(p_email))
+  limit 1
+$$;
+revoke all on function public.cirq_profile_id_for_email(text) from public, anon, authenticated;
+grant execute on function public.cirq_profile_id_for_email(text) to service_role;
+
+create or replace function public.cirq_ping_presence(p_user_id uuid)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  changed integer;
+begin
+  update public.profiles
+  set last_seen_at = now()
+  where id = p_user_id
+    and show_active_status
+    and (last_seen_at is null or last_seen_at <= now() - interval '30 seconds');
+  get diagnostics changed = row_count;
+  return changed = 1;
+end
+$$;
+revoke all on function public.cirq_ping_presence(uuid) from public, anon, authenticated;
+grant execute on function public.cirq_ping_presence(uuid) to service_role;
 
 create table if not exists email_verifications (
   id uuid primary key default gen_random_uuid(),

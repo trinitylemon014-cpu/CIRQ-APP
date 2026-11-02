@@ -2,7 +2,7 @@
 {% block content %}
 <div class="chat-wrap" data-cid="{{ conv.id }}" data-poll="{{ url_for('messages.poll', cid=conv.id) }}" data-last="{{ last_ts }}">
   <div class="chat-head"><a class="icon-btn" href="{{ url_for('messages.inbox') }}" aria-label="Back">{{ m.icon('arrow-left') }}</a>
-    {% if other %}<a class="row" href="{{ url_for('profiles.view', username=other.username) }}">{{ m.avatar(other, 44) }}<div><b>{{ other.display_name }}</b>{{ m.verified(other) }}<br><small class="muted">@{{ other.username }}</small></div></a>
+    {% if other %}<a class="row" href="{{ url_for('profiles.view', username=other.username) }}">{{ m.avatar(other, 44) }}<div><b>{{ other.display_name }}</b>{{ m.verified(other) }}<br><small class="muted">@{{ other.username }} <span class="presence-label" data-presence-label data-user-id="{{ other.id }}" hidden></span></small></div></a>
     {% else %}<span class="av" style="--s:44px">{{ m.icon('users') }}</span><div><b>{{ conv.title or 'Group chat' }}</b><br><small class="muted">{{ members|length }} members</small></div>{% endif %}</div>
   <div class="bubbles" id="bubbles" aria-live="polite">
     {% if more %}<a class="btn sm ghost" style="align-self:center" href="?before={{ more }}">Older messages</a>{% endif %}

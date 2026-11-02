@@ -12,7 +12,8 @@ from types import SimpleNamespace
 NOW = lambda: datetime.now(timezone.utc).isoformat()
 
 DEFAULTS = {
-    "profiles": dict(role="student", account_status="pending", verified=False, is_private=False, session_epoch=0, coin_balance=0,
+    "profiles": dict(role="student", account_status="pending", verified=False, is_private=False, show_active_status=True,
+                     last_seen_at=None, session_epoch=0, coin_balance=0,
                      boosted_until=None, personalized_recs=True, email_verified_at=None, bio=None, avatar_url=None, avatar_public_id=None, school_id=None, status_note=None,
                      school_verified=False, submitted_school_name=None, school_submission_id=None, auto_approval_blocked=False,
                      approval_source=None, approved_by=None, approved_at=None),
@@ -174,14 +175,18 @@ class FakeAuth:
 class FakeAdmin:
     def __init__(self, db): self.db = db
     def create_user(self, attrs):
-        if any(u["email"] == attrs["email"] for u in self.db.users.values()):
+        email = attrs["email"].strip().lower()
+        if any(u["email"].lower() == email for u in self.db.users.values()):
             raise Exception("User already registered")
-        uid = str(uuid.uuid4()); self.db.users[uid] = {"email": attrs["email"], "password": attrs["password"]}
-        return SimpleNamespace(user=SimpleNamespace(id=uid, email=attrs["email"]))
+        uid = str(uuid.uuid4()); self.db.users[uid] = {"email": email, "password": attrs["password"]}
+        return SimpleNamespace(user=SimpleNamespace(id=uid, email=email))
     def get_user_by_id(self, uid):
         u = self.db.users[uid]; return SimpleNamespace(user=SimpleNamespace(id=uid, email=u["email"]))
     def update_user_by_id(self, uid, attrs):
-        self.db.users[uid].update({k: v for k, v in attrs.items() if k in ("email", "password")})
+        update = {k: v for k, v in attrs.items() if k in ("email", "password")}
+        if "email" in update:
+            update["email"] = update["email"].strip().lower()
+        self.db.users[uid].update(update)
     def delete_user(self, uid):
         self.db.users.pop(uid, None)
         self.db.data["profiles"] = [p for p in self.db.data.get("profiles", []) if p["id"] != uid]
@@ -231,6 +236,23 @@ class FakeDB:
                 self.data[t] = [r for r in self.data.get(t, []) if r.get("post_id") != row["id"]]
 
     def rpc(self, name, params):
+        if name == "cirq_profile_id_for_email":
+            email = params["p_email"].strip().lower()
+            row = next((p for uid, user in self.users.items()
+                        if user["email"].lower() == email
+                        for p in self.data.get("profiles", []) if p["id"] == uid), None)
+            data = [{"user_id": row["id"]}] if row else []
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data=data))
+        if name == "cirq_ping_presence":
+            from datetime import datetime, timedelta, timezone
+            row = next((p for p in self.data.get("profiles", []) if p["id"] == params["p_user_id"]), None)
+            updated = False
+            if row and row.get("show_active_status", True):
+                last_seen = datetime.fromisoformat(row["last_seen_at"].replace("Z", "+00:00")) if row.get("last_seen_at") else None
+                if last_seen is None or last_seen <= datetime.now(timezone.utc) - timedelta(seconds=30):
+                    row["last_seen_at"] = NOW()
+                    updated = True
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data=updated))
         if name == "cirq_claim_school_submission_slot":
             from datetime import datetime, timezone
             day = datetime.now(timezone.utc).date().isoformat()
@@ -289,7 +311,7 @@ class FakeAnon:
     def __init__(self, db):
         def sign_in(creds):
             for uid, u in db.users.items():
-                if u["email"] == creds["email"] and u["password"] == creds["password"]:
+                if u["email"].lower() == creds["email"].lower() and u["password"] == creds["password"]:
                     return SimpleNamespace(user=SimpleNamespace(id=uid))
             raise Exception("Invalid login credentials")
         self.auth = SimpleNamespace(sign_in_with_password=sign_in)
