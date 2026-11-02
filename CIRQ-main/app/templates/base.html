@@ -1,6 +1,6 @@
 {% import 'partials/macros.html' as m with context %}
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mobile-menu-direction="up">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -24,22 +24,18 @@
 
 {% if cur and cur.account_status == 'approved' and not bare %}
 {% set ep = request.blueprint or '' %}
+{% set navigation = nav_items() %}
+{% set admin_navigation = admin_nav_items() %}
+{% set um = unread_msgs() %}
+{% set un = unread_notifs() %}
 <div class="shell">
   <aside class="sidebar" aria-label="Main">
     <a class="brand" href="{{ url_for('feed.home') }}"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="">CIRQ</a>
-    <a class="nav {{ 'active' if ep == 'feed' }}" href="{{ url_for('feed.home') }}">{{ m.icon('home') }} Home</a>
-    <a class="nav {{ 'active' if ep == 'discover' }}" href="{{ url_for('discover.index') }}">{{ m.icon('compass') }} Discover</a>
-    <a class="nav {{ 'active' if ep == 'reels' }}" href="{{ url_for('reels.index') }}">{{ m.icon('film') }} Reels</a>
-    <a class="nav {{ 'active' if ep == 'linkup' }}" href="{{ url_for('linkup.index') }}">{{ m.icon('calendar') }} LINKUP</a>
-    <a class="nav {{ 'active' if ep == 'messages' }}" href="{{ url_for('messages.inbox') }}">{{ m.icon('message') }} Messages {% set um = unread_msgs() %}{% if um %}<span class="n-badge">{{ um }}</span>{% endif %}</a>
-    <a class="nav {{ 'active' if ep == 'notifications' }}" href="{{ url_for('notifications.index') }}">{{ m.icon('bell') }} Notifications {% set un = unread_notifs() %}{% if un %}<span class="n-badge">{{ un }}</span>{% endif %}</a>
-    <a class="nav {{ 'active' if ep in ('games','trivia') }}" href="{{ url_for('games.hub') }}">{{ m.icon('layers') }} Games &amp; Trivia</a>
-    <a class="nav {{ 'active' if ep == 'schools' }}" href="{{ url_for('schools.index') }}">{{ m.icon('school') }} Schools</a>
-    <a class="nav {{ 'active' if ep == 'wallet' }}" href="{{ url_for('wallet.coins') }}">{{ m.icon('coin') }} Coins</a>
-    <a class="nav" href="{{ url_for('profiles.view', username=cur.username) }}">{{ m.icon('user') }} Profile</a>
-    {% if cur.role in ('admin','moderator') %}<a class="nav {{ 'active' if ep == 'admin' }}" href="{{ url_for('admin.dashboard' if cur.role == 'admin' else 'admin.reports') }}">{{ m.icon('shield') }} Admin</a>{% endif %}
+    {% for item in navigation if item.section == 'main' %}
+    <a class="nav {{ 'active' if item.active }}" href="{{ item.href }}" {% if item.active %}aria-current="page"{% endif %}>{{ m.icon(item.icon) }} {{ item.label }}{% if item.badge %}<span class="n-badge">{{ item.badge }}</span>{% endif %}</a>
+    {% endfor %}
     <div class="grow"></div>
-    <a class="nav" href="{{ url_for('profiles.settings') }}">{{ m.icon('sliders') }} Settings</a>
+    {% for item in navigation if item.section == 'account' %}<a class="nav {{ 'active' if item.active }}" href="{{ item.href }}" {% if item.active %}aria-current="page"{% endif %}>{{ m.icon(item.icon) }} {{ item.label }}</a>{% endfor %}
     <form method="post" action="{{ url_for('auth.logout') }}">{{ m.csrf() }}<button class="nav" style="width:100%;border:0;background:none;font:inherit;cursor:pointer;display:flex;align-items:center;gap:14px;padding:13px 16px;color:var(--muted);font-weight:700">{{ m.icon('logout') }} Log out</button></form>
   </aside>
 
@@ -47,6 +43,7 @@
     <header class="topbar">
       <a class="logo" href="{{ url_for('feed.home') }}"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="">CIRQ</a>
       <div class="actions">
+        <button class="round-btn mobile-menu-trigger" type="button" data-mobile-menu-trigger aria-expanded="false" aria-controls="mobile-page-menu" aria-label="Open all pages menu">{{ m.icon('more') }}</button>
         <a class="coin" href="{{ url_for('wallet.coins') }}" style="padding:0 6px" aria-label="App coins">{{ cur.coin_balance }}</a>
         <a class="round-btn" href="{{ url_for('discover.index') }}" aria-label="Search">{{ m.icon('search') }}</a>
         <a class="round-btn" href="{{ url_for('notifications.index') }}" aria-label="Notifications">{{ m.icon('bell') }}{% if un %}<span class="dot">{{ un if un < 100 else '99+' }}</span>{% endif %}</a>
@@ -71,9 +68,35 @@
     <a href="{{ url_for('reels.index') }}" class="{{ 'active' if ep in ('reels','discover') }}" aria-label="Reels">{{ m.icon('film') }}<span class="lbl">Reels</span></a>
     <button class="fab" type="button" data-open="create-sheet" aria-label="Create">{{ m.icon('plus','i-lg') }}</button>
     <a href="{{ url_for('messages.inbox') }}" class="{{ 'active' if ep == 'messages' }}" aria-label="Messages">{{ m.icon('message') }}<span class="lbl">Chats</span>{% if um %}<span class="badge-n">{{ um }}</span>{% endif %}</a>
-    <a href="{{ url_for('games.hub') }}" class="{{ 'active' if ep in ('games','trivia','wallet') }}" aria-label="Games">{{ m.icon('layers') }}<span class="lbl">Play</span></a>
+    <button class="mobile-menu-trigger" type="button" data-mobile-menu-trigger aria-expanded="false" aria-controls="mobile-page-menu" aria-label="Open all pages menu">{{ m.icon('more') }}<span class="lbl">More</span></button>
   </div>
 </nav>
+
+<button class="mobile-menu-backdrop" type="button" data-mobile-menu-close aria-label="Close all pages menu" hidden></button>
+<section class="mobile-page-menu" id="mobile-page-menu" role="dialog" aria-modal="true" aria-labelledby="mobile-page-menu-title" hidden>
+  <div class="row between mobile-page-menu-head">
+    <h2 id="mobile-page-menu-title">All pages</h2>
+    <button class="icon-btn" type="button" data-mobile-menu-close aria-label="Close menu">{{ m.icon('x') }}</button>
+  </div>
+  <nav aria-label="All pages">
+    <div class="mobile-page-links">
+      {% for item in navigation %}
+      <a class="mobile-page-link {{ 'active' if item.active }}" href="{{ item.href }}" {% if item.active %}aria-current="page"{% endif %}>
+        {{ m.icon(item.icon) }}<span>{{ item.label }}</span>{% if item.badge %}<span class="mobile-page-badge" aria-label="{{ item.badge }} unread">{{ item.badge if item.badge < 100 else '99+' }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% if admin_navigation %}
+    <h3 class="mobile-page-section">Admin tools</h3>
+    <div class="mobile-page-links">
+      {% for item in admin_navigation %}
+      <a class="mobile-page-link {{ 'active' if item.active }}" href="{{ item.href }}" {% if item.active %}aria-current="page"{% endif %}><span>{{ item.label }}</span></a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <form class="mobile-page-logout" method="post" action="{{ url_for('auth.logout') }}">{{ m.csrf() }}<button class="mobile-page-link" type="submit">{{ m.icon('logout') }}<span>Log out</span></button></form>
+  </nav>
+</section>
 
 <dialog id="create-sheet" aria-label="Create">
   <div class="row between"><h2 style="margin:0">Create</h2><button class="icon-btn" data-close aria-label="Close">{{ m.icon('x') }}</button></div>

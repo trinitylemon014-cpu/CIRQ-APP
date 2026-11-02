@@ -13,7 +13,9 @@ NOW = lambda: datetime.now(timezone.utc).isoformat()
 
 DEFAULTS = {
     "profiles": dict(role="student", account_status="pending", verified=False, is_private=False, session_epoch=0, coin_balance=0,
-                     boosted_until=None, personalized_recs=True, email_verified_at=None, bio=None, avatar_url=None, avatar_public_id=None, school_id=None, status_note=None),
+                     boosted_until=None, personalized_recs=True, email_verified_at=None, bio=None, avatar_url=None, avatar_public_id=None, school_id=None, status_note=None,
+                     school_verified=False, submitted_school_name=None, school_submission_id=None, auto_approval_blocked=False,
+                     approval_source=None, approved_by=None, approved_at=None),
     "posts": dict(kind="post", visibility="public", moderation_status="ok", like_count=0, comment_count=0, views_count=0, is_announcement=False,
                   community_id=None, edited_at=None, caption=None,
                   audio_url=None, audio_public_id=None, audio_title=None, audio_duration=None),
@@ -36,6 +38,7 @@ DEFAULTS = {
     "conversation_members": dict(last_read_at=None),
     "notifications": dict(read_at=None, actor_id=None, ref_type=None, ref_id=None),
     "schools": dict(verified=False, country="Uganda", city=None, about=None, logo_url=None, logo_public_id=None),
+    "school_submissions": dict(status="pending", submitted_by=None, resolved_school_id=None, reviewed_by=None, reviewed_at=None, decision_note=None),
     "school_verification_requests": dict(status="pending", reviewed_by=None, reviewed_at=None, decision_note=None),
     "community_members": dict(role="member"),
     "feature_flags": dict(enabled=False),
@@ -47,7 +50,8 @@ DEFAULTS = {
 PKS = {"likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "follows": ("follower_id", "followee_id"), "blocks": ("blocker_id", "blocked_id"),
        "community_members": ("community_id", "user_id"), "conversation_members": ("conversation_id", "user_id"),
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
-       "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",)}
+       "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",),
+       "school_submission_rate_limits": ("ip_hash",)}
 UNIQUES = {"profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
            "reel_views": [("reel_id", "viewer_id")],
            "boost_ads": [("user_id",)],
@@ -202,6 +206,11 @@ class FakeDB:
             if any(all(r.get(k) == row.get(k) for k in PKS[table]) for r in rows): raise Exception(f"duplicate key on {table}")
         for cols in UNIQUES.get(table, []):
             if any(all(r.get(c) == row.get(c) for c in cols) for r in rows): raise Exception(f"unique violation on {table}{cols}")
+        if table == "school_submissions" and row["status"] == "pending" and any(
+                r["status"] == "pending" and r["normalized_name"] == row["normalized_name"] for r in rows):
+            error = Exception("duplicate pending school submission")
+            error.code = "23505"
+            raise error
         if table == "game_rounds" and row["status"] == "active" and any(r["user_id"] == row["user_id"] and r["status"] == "active" for r in rows):
             raise Exception("one active round per user")
         if table == "payer_numbers" and any(r["phone"] == row["phone"] and r["status"] in ("pending", "approved") for r in rows):
@@ -222,6 +231,24 @@ class FakeDB:
                 self.data[t] = [r for r in self.data.get(t, []) if r.get("post_id") != row["id"]]
 
     def rpc(self, name, params):
+        if name == "cirq_claim_school_submission_slot":
+            from datetime import datetime, timezone
+            day = datetime.now(timezone.utc).date().isoformat()
+            ip_hash, limit = params["p_ip_hash"], params["p_limit"]
+            rows = self.data.setdefault("school_submission_rate_limits", [])
+            bucket = next((r for r in rows if r["ip_hash"] == ip_hash), None)
+            if not bucket:
+                rows.append({"ip_hash": ip_hash, "submission_date": day, "attempts": 1})
+                allowed = True
+            elif bucket["submission_date"] != day:
+                bucket.update(submission_date=day, attempts=1)
+                allowed = True
+            elif bucket["attempts"] < limit:
+                bucket["attempts"] += 1
+                allowed = True
+            else:
+                allowed = False
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data=allowed))
         if name == "cirq_record_reel_view":
             reel_id, viewer_id = params["p_reel_id"], params["p_viewer_id"]
             post = next((p for p in self.data.get("posts", []) if p["id"] == reel_id and p["kind"] == "reel"), None)

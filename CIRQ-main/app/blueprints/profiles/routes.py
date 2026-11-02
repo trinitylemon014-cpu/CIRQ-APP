@@ -175,6 +175,16 @@ def settings():
             _set_privacy(me, private)
             flash("Your account is now private. New followers need your approval." if private
                   else "Your account is now public. Pending requests were approved.", "success")
+        elif action == "school":
+            school = sb.get("schools", id=request.form.get("school_id"))
+            if not school:
+                flash("Choose a school from the list.", "error")
+            else:
+                sb.update("profiles", {
+                    "school_id": school["id"], "school_verified": bool(school.get("verified")),
+                    "school_submission_id": None, "submitted_school_name": None,
+                }, id=me["id"])
+                flash("Your school was updated.", "success")
         elif action == "password":
             cur, new, new2 = request.form.get("current", ""), request.form.get("new", ""), request.form.get("new2", "")
             errs = password_problems(new) + (["Passwords don't match."] if new != new2 else [])
@@ -211,6 +221,7 @@ def settings():
         return redirect(url_for("profiles.settings"))
     blocked = sb.by_id("profiles", [b["blocked_id"] for b in sb.select("blocks", blocker_id=me["id"])])
     return render_template("profiles/settings.html", blocked=list(blocked.values()),
+                           schools=sb.select("schools", order="name", desc=False),
                            pending_requests=social.pending_request_count(me["id"]))
 
 

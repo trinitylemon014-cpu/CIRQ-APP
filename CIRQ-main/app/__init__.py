@@ -9,6 +9,7 @@ from app.extensions import csrf, limiter
 from app.services import supabase_service as sb, cloudinary_service as cs
 from app.services.coin_service import is_boosted
 from app.services.notification_service import unread_count
+from app.navigation import admin_navigation, main_navigation
 from app.utils import time_ago, fmt_event_dt, short_count, utcnow, iso, tier_for
 
 
@@ -68,7 +69,7 @@ def create_app(config_object=None, clients=None):
         if not uid or "cirq_db" not in app.extensions:
             return
         p = sb.get("profiles", id=uid)
-        if not p or p.get("session_epoch", 0) != session.get("epoch") or p["account_status"] in ("rejected", "suspended"):
+        if not p or p.get("session_epoch", 0) != session.get("epoch") or p["account_status"] == "suspended":
             session.clear()
             return
         g.user = p
@@ -104,10 +105,19 @@ def create_app(config_object=None, clients=None):
                 return 0
             from app.blueprints.messages.routes import unread_total
             return unread_total(g.user["id"])
+        def nav_items():
+            if not g.get("user"):
+                return []
+            return main_navigation(g.user, request.endpoint, unread_msgs(), unread_notifs())
+        def admin_nav_items():
+            if not g.get("user"):
+                return []
+            return admin_navigation(g.user, request.endpoint)
         return {"cur": g.get("user"), "unread_notifs": unread_notifs, "unread_msgs": unread_msgs,
                 "avatar_src": cs.avatar_src, "media_src": cs.media_src, "audio_src": cs.audio_src,
                 "school_logo_src": cs.school_logo_src, "is_boosted": is_boosted,
-                "paid_enabled": app.config["PAID_COMPETITIONS_ENABLED"], "tier_for": tier_for}
+                "paid_enabled": app.config["PAID_COMPETITIONS_ENABLED"], "tier_for": tier_for,
+                "nav_items": nav_items, "admin_nav_items": admin_nav_items}
 
     app.jinja_env.globals.update(avatar_src=cs.avatar_src, media_src=cs.media_src, audio_src=cs.audio_src,
                                  school_logo_src=cs.school_logo_src, is_boosted=is_boosted, tier_for=tier_for)

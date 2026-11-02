@@ -2,9 +2,25 @@
 {% block public %}
 <div class="auth-shell"><div class="card auth-card" style="text-align:center">
   <img src="{{ url_for('static', filename='images/mark.png') }}" alt="" width="84" style="margin:0 auto 14px;border-radius:24px">
-  <h2>You're almost in</h2>
-  <p class="muted">An administrator may approve your account sooner. If it is still pending after five minutes, it will be approved automatically. Once approved you'll get <b class="coin" style="display:inline-flex">{{ config.WELCOME_COINS }} welcome coins</b>.</p>
-  {% if cur and cur.account_status == 'rejected' %}<div class="chip red">Not approved</div>{% else %}<div class="chip warn">{{ m.icon('clock','i-sm') }} Waiting for approval</div>{% endif %}
+  {% if cur and cur.account_status == 'rejected' %}
+  <h2>Account not approved</h2>
+  <p class="muted">{{ cur.status_note or 'An administrator was unable to approve this account. Contact CIRQ support for help.' }}</p>
+  <div class="chip red">Not approved</div>
+  {% else %}
+  <section data-approval-status data-status-url="{{ url_for('auth.approval_status') }}" data-seconds-remaining="{{ seconds_remaining }}">
+    <h2>You're almost in</h2>
+    <p class="muted">An administrator may approve your account sooner. Once approved you'll get <b class="coin" style="display:inline-flex">{{ config.WELCOME_COINS }} welcome coins</b>.</p>
+    {% if not email_verified %}
+      <div class="card flat" style="text-align:left;margin:12px 0">
+        {% if verification_sent %}<b>Check your email</b><p class="muted small" style="margin:4px 0 0">Verify your email to enable automatic approval after {{ auto_approve_minutes }} minutes. Admin approval is still available sooner.</p>
+        {% else %}<b>Email verification is needed for automatic approval.</b><p class="muted small" style="margin:4px 0 0">We couldn't send a verification link. Contact an administrator for manual approval.</p>{% endif %}
+      </div>
+    {% endif %}
+    {% if cur.auto_approval_blocked %}<p class="muted small">Your account is awaiting an administrator's review.</p>{% endif %}
+    <div class="chip warn">{{ m.icon('clock','i-sm') }} <span data-approval-label>Waiting for approval</span> · <time data-approval-countdown>{{ '%d:%02d'|format(seconds_remaining // 60, seconds_remaining % 60) }}</time></div>
+    <p class="muted small" data-approval-waiting hidden>Still waiting. Keep this page open; it will update automatically when your account is approved.</p>
+  </section>
+  {% endif %}
   <form method="post" action="{{ url_for('auth.logout') }}" style="margin-top:20px">{{ m.csrf() }}<button class="btn ghost block">Log out</button></form>
 </div></div>
 {% endblock %}

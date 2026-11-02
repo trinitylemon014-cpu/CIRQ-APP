@@ -1,5 +1,14 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Schools{% endblock %}
 {% block content %}<h1 class="page-title">Schools &amp; verification</h1>{% include 'admin/_nav.html' %}
+<h2>Pending schools</h2>
+{% for submission in submissions %}<div class="card" style="margin-top:10px">
+  <div class="row wrap between"><div><b>{{ submission.name }}</b><br><small class="muted">{{ submission.student_count }} student{{ '' if submission.student_count == 1 else 's' }} · submitted {{ submission.created_at|ago }} ago{% if submission.submitter %} · first suggested by @{{ submission.submitter.username }}{% endif %}</small></div><span class="chip warn">Pending</span></div>
+  <div class="row wrap" style="margin-top:12px;gap:8px">
+    <form method="post" action="{{ url_for('admin.school_submission_action', sid=submission.id, decision='approve') }}">{{ m.csrf() }}<button class="btn sm">Approve as new school</button></form>
+    <form class="row wrap" method="post" action="{{ url_for('admin.school_submission_action', sid=submission.id, decision='merge') }}">{{ m.csrf() }}<select class="input" name="school_id" aria-label="Existing school" required><option value="">Merge into existing school</option>{% for s in schools %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select><button class="btn sm ghost">Merge</button></form>
+    <form method="post" action="{{ url_for('admin.school_submission_action', sid=submission.id, decision='reject') }}" data-confirm="Reject this school suggestion and ask students to choose again?">{{ m.csrf() }}<button class="btn sm danger">Reject</button></form>
+  </div>
+</div>{% else %}<p class="muted">No pending school suggestions.</p>{% endfor %}
 <h2>Verification requests</h2>
 {% for r in reqs %}<div class="card" style="margin-bottom:10px"><b>{{ r.school.name }}</b> · requested by <a class="link" href="{{ url_for('profiles.view', username=r.user.username) }}">@{{ r.user.username }}</a><p class="muted">{{ r.evidence_note }}</p>
   <form class="inline" method="post">{{ m.csrf() }}<input class="input" name="note" placeholder="Note (what you checked)">

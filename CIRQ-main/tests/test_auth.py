@@ -2,7 +2,7 @@ from tests.conftest import PASSWORD, login, make_user
 
 
 def reg(client, school, **over):
-    data = {"username": "newkid", "display_name": "New Kid", "email": "new@example.com", "school_id": school["id"],
+    data = {"username": "newkid", "display_name": "New Kid", "email": "new@example.com", "school_choice": school["name"],
             "password": PASSWORD, "password2": PASSWORD, "terms": "on", "age_ok": "on"}
     data.update(over)
     return client.post("/register", data=data)
@@ -31,7 +31,7 @@ def test_register_validation(client, db, school):
     for bad, key in [({"username": "a"}, "username"), ({"email": "nope"}, "email"),
                      ({"password": "", "password2": ""}, "password"),
                      ({"password2": "different-pw-1"}, "match"), ({"terms": ""}, "terms"),
-                     ({"age_ok": ""}, "age"), ({"school_id": "x"}, "school")]:
+                     ({"age_ok": ""}, "age"), ({"school_choice": "x"}, "school")]:
         r = reg(client, school, **bad)
         assert r.status_code == 400, key
     assert not db.data.get("profiles")
@@ -128,9 +128,12 @@ def test_auto_approval_after_five_minutes_notifies_admin_and_grants_welcome_coin
     from app.utils import iso, utcnow
 
     admin = mk("boss", role="admin")
-    pending = mk("unverified", status="pending", verified_email=False)
+    pending = mk("verified", status="pending", verified_email=True)
     pending_row = next(p for p in db.data["profiles"] if p["id"] == pending["id"])
     pending_row["created_at"] = iso(utcnow() - timedelta(minutes=6))
+    unverified = mk("unverified", status="pending", verified_email=False)
+    unverified_row = next(p for p in db.data["profiles"] if p["id"] == unverified["id"])
+    unverified_row["created_at"] = iso(utcnow() - timedelta(minutes=6))
     recent = mk("recent", status="pending")
     rejected = mk("rejected", status="rejected")
     rejected_row = next(p for p in db.data["profiles"] if p["id"] == rejected["id"])
@@ -140,14 +143,17 @@ def test_auto_approval_after_five_minutes_notifies_admin_and_grants_welcome_coin
         assert auto_approve_stale_accounts() == 1
         assert auto_approve_stale_accounts() == 0
 
-    assert next(p for p in db.data["profiles"] if p["id"] == pending["id"])["account_status"] == "approved"
+    approved_row = next(p for p in db.data["profiles"] if p["id"] == pending["id"])
+    assert approved_row["account_status"] == "approved"
+    assert approved_row["approval_source"] == "system" and approved_row["approved_at"]
+    assert next(p for p in db.data["profiles"] if p["id"] == unverified["id"])["account_status"] == "pending"
     assert next(p for p in db.data["profiles"] if p["id"] == recent["id"])["account_status"] == "pending"
     assert next(p for p in db.data["profiles"] if p["id"] == rejected["id"])["account_status"] == "rejected"
     assert next(p for p in db.data["profiles"] if p["id"] == pending["id"])["coin_balance"] == app.config["WELCOME_COINS"]
     admin_notices = [n for n in db.data["notifications"] if n["user_id"] == admin["id"]]
     assert len(admin_notices) == 1
     assert admin_notices[0]["ref_type"] == "auto_approved_account"
-    assert "unverified" in admin_notices[0]["body"]
+    assert "verified" in admin_notices[0]["body"]
     from app.blueprints.notifications.routes import target_url
     with app.test_request_context():
         assert target_url(admin_notices[0]).endswith("/u/unverified")

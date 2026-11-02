@@ -1,0 +1,13 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Auto-approved accounts{% endblock %}
+{% block content %}<h1 class="page-title">Auto-approved (needs review)</h1>{% include 'admin/_nav.html' %}
+<p class="muted">These accounts were approved automatically after the waiting period. Suspend or remove any account that needs further review.</p>
+<div class="table-wrap"><table><thead><tr><th>User</th><th>Approved</th><th>Email</th><th>Actions</th></tr></thead><tbody>
+{% for u in users %}<tr>
+  <td><a class="link" href="{{ url_for('profiles.view', username=u.username) }}">@{{ u.username }}</a><br><small class="muted">{{ u.display_name }}</small></td>
+  <td>{{ u.approved_at|ago }} ago</td><td>{{ 'Verified' if u.email_verified_at else 'Not verified' }}</td>
+  <td>
+    <form class="inline" method="post" action="{{ url_for('admin.user_action', uid=u.id, action='suspend') }}" data-confirm="Suspend @{{ u.username }}?">{{ m.csrf() }}<input class="input" name="note" placeholder="Reason" required><button class="btn sm danger">Suspend</button></form>
+    <form class="inline" method="post" action="{{ url_for('admin.user_action', uid=u.id, action='remove') }}" data-confirm="Permanently remove @{{ u.username }} and their account data?">{{ m.csrf() }}<button class="btn sm danger">Remove</button></form>
+  </td>
+</tr>{% else %}<tr><td colspan="4" class="muted">No auto-approved accounts need review.</td></tr>{% endfor %}
+</tbody></table></div>{% endblock %}

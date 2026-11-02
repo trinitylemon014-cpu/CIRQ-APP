@@ -1,17 +1,51 @@
 import hashlib
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, g, current_app, abort
-from app.extensions import limiter, csrf
+import hmac
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, g, current_app, abort, jsonify
+from app.extensions import db, limiter, csrf
 from app.services import supabase_service as sb, auth_service
-from app.services.account_service import approve_account, send_verification_email
+from app.services.account_service import auto_approve_if_due, approve_account, send_verification_email
 from app.services.audit_service import audit
 from app.services.mail_service import send_mail
 from app.services.notification_service import notify
 from app.utils import (normalize_username, valid_username, valid_email, password_problems, new_token, hash_token,
-                       iso, utcnow, parse_dt, hours_from_now, clean_text)
+                       iso, utcnow, parse_dt, hours_from_now, clean_text, clean_school_name, normalize_school_name)
 
 bp = Blueprint("auth", __name__)
 
 GENERIC_LOGIN_ERROR = "That username or password isn't right."
+SCHOOL_NOT_LISTED = "My school isn't listed"
+
+
+def _claim_school_submission_slot():
+    address = request.remote_addr or "unknown"
+    secret = current_app.config["SECRET_KEY"].encode()
+    ip_hash = hmac.new(secret, address.encode(), hashlib.sha256).hexdigest()
+    result = db().rpc("cirq_claim_school_submission_slot", {
+        "p_ip_hash": ip_hash,
+        "p_limit": current_app.config["NEW_SCHOOL_SUBMISSIONS_PER_IP_PER_DAY"],
+    }).execute().data
+    return result is True or result == [True]
+
+
+def _registration_school(choice, submitted_name, schools):
+    if choice == SCHOOL_NOT_LISTED:
+        name = clean_school_name(submitted_name)
+        if not name:
+            return None, None, None, None, "Enter a school name using 3–100 letters, numbers, spaces or basic punctuation."
+        normalized = normalize_school_name(name)
+        existing = next((school for school in schools
+                         if normalize_school_name(school["name"]) == normalized), None)
+        if existing:
+            return existing, None, None, None, None
+        pending = sb.get("school_submissions", normalized_name=normalized, status="pending")
+        return None, name, normalized, pending, None
+
+    normalized = normalize_school_name(choice)
+    existing = next((school for school in schools
+                     if normalize_school_name(school["name"]) == normalized), None)
+    if existing:
+        return existing, None, None, None, None
+    return None, None, None, None, "Choose a listed school or select “My school isn't listed”."
 
 
 def _safe_next(target):
@@ -45,11 +79,12 @@ def register():
     form = {}
     if request.method == "POST":
         f = request.form
-        form = {k: f.get(k, "") for k in ("username", "display_name", "email", "school_id")}
+        form = {k: f.get(k, "") for k in ("username", "display_name", "email", "school_choice", "submitted_school_name")}
         username = normalize_username(f.get("username"))
         email = (f.get("email") or "").strip().lower()
         display = clean_text(f.get("display_name"), 40)
-        school_id = f.get("school_id")
+        school, submitted_school, normalized_school, school_submission, school_error = _registration_school(
+            f.get("school_choice", ""), f.get("submitted_school_name", ""), schools)
         pw, pw2 = f.get("password", ""), f.get("password2", "")
         errors = []
         if not valid_username(username):
@@ -60,8 +95,8 @@ def register():
             errors.append("Enter your name (at least 2 characters).")
         if not valid_email(email):
             errors.append("Enter a valid email address.")
-        if not any(s["id"] == school_id for s in schools):
-            errors.append("Choose your school.")
+        if school_error:
+            errors.append(school_error)
         errors += password_problems(pw)
         if pw != pw2:
             errors.append("Passwords don't match.")
@@ -69,6 +104,10 @@ def register():
             errors.append("Please accept the Community Guidelines and Privacy Notice.")
         if not f.get("age_ok"):
             errors.append("CIRQ is for students aged 13 and over.")
+        is_new_school_submission = bool(submitted_school and not school_submission)
+        if not errors and is_new_school_submission and not _claim_school_submission_slot():
+            flash("Too many new school suggestions from this connection today. Try again tomorrow.", "error")
+            return render_template("auth/register.html", schools=schools, form=form), 429
         if not errors:
             try:
                 uid = auth_service.create_auth_user(email, pw)
@@ -78,16 +117,41 @@ def register():
             for e in errors:
                 flash(e, "error")
             return render_template("auth/register.html", schools=schools, form=form), 400
-        sb.insert("profiles", {"id": uid, "username": username, "display_name": display, "school_id": school_id,
-                               "account_status": "pending", "terms_accepted_at": iso()})
-        school_comm = sb.get("communities", school_id=school_id)
-        if current_app.config["AUTO_APPROVE_NEW_ACCOUNTS"]:
-            approve_account(uid)
-        send_verification_email(uid, email)
+        profile_values = {
+            "id": uid, "username": username, "display_name": display,
+            "school_id": school["id"] if school else None,
+            "school_verified": bool(school and school.get("verified")),
+            "submitted_school_name": submitted_school,
+            "account_status": "pending", "terms_accepted_at": iso(),
+        }
+        try:
+            sb.insert("profiles", profile_values)
+            if submitted_school:
+                if not school_submission:
+                    try:
+                        school_submission = sb.insert("school_submissions", {
+                            "name": submitted_school,
+                            "normalized_name": normalized_school,
+                            "submitted_by": uid,
+                            "status": "pending",
+                        })
+                    except Exception as exc:
+                        if getattr(exc, "code", None) != "23505":
+                            raise
+                        school_submission = sb.get("school_submissions", normalized_name=normalized_school, status="pending")
+                        if not school_submission:
+                            raise
+                sb.update("profiles", {"school_submission_id": school_submission["id"]}, id=uid)
+        except Exception:
+            sb.delete("profiles", id=uid)
+            auth_service.delete_auth_user(uid)
+            raise
+        verification_sent = send_verification_email(uid, email)
         profile = sb.get("profiles", id=uid)
         _start_session(profile, False)
-        flash("Account created! " + ("Welcome to CIRQ." if profile["account_status"] == "approved" else "An administrator will review it shortly."), "success")
-        return redirect(url_for("auth.pending") if profile["account_status"] != "approved" else url_for("feed.home"))
+        session["email_verification_sent"] = bool(verification_sent)
+        flash("Account created! Verify your email to enable automatic approval after five minutes. An administrator may approve it sooner.", "success")
+        return redirect(url_for("auth.pending"))
     return render_template("auth/register.html", schools=schools, form=form)
 
 
@@ -128,7 +192,43 @@ def pending():
         return redirect(url_for("auth.login"))
     if g.user["account_status"] == "approved":
         return redirect(url_for("feed.home"))
-    return render_template("auth/pending.html")
+    created = parse_dt(g.user.get("created_at"))
+    deadline = created.timestamp() + current_app.config["AUTO_APPROVE_AFTER_MINUTES"] * 60 if created else utcnow().timestamp()
+    remaining = max(0, int(deadline - utcnow().timestamp()))
+    return render_template("auth/pending.html",
+                           email_verified=bool(g.user.get("email_verified_at")),
+                           verification_sent=session.pop("email_verification_sent", None),
+                           auto_approve_minutes=current_app.config["AUTO_APPROVE_AFTER_MINUTES"],
+                           seconds_remaining=remaining)
+
+
+@bp.get("/api/auth/approval-status")
+@limiter.limit("15 per minute", key_func=lambda: g.user["id"] if g.get("user") else (request.remote_addr or "unknown"))
+def approval_status():
+    if not g.user:
+        return jsonify(error="Please log in to continue."), 401
+    profile = sb.get("profiles", id=g.user["id"])
+    if not profile:
+        session.clear()
+        return jsonify(error="Please log in to continue."), 401
+    if profile["account_status"] == "pending":
+        auto_approve_if_due(profile)
+        profile = sb.get("profiles", id=profile["id"])
+
+    status = profile["account_status"]
+    created = parse_dt(profile.get("created_at"))
+    deadline = created.timestamp() + current_app.config["AUTO_APPROVE_AFTER_MINUTES"] * 60 if created else None
+    remaining = max(0, int(deadline - utcnow().timestamp())) if deadline else 0
+    if status == "approved" and not session.get("approval_welcome_shown"):
+        flash("Welcome to CIRQ! Your account is ready.", "success")
+        session["approval_welcome_shown"] = True
+    return jsonify(
+        status=status,
+        status_note=profile.get("status_note"),
+        email_verified=bool(profile.get("email_verified_at")),
+        auto_approval_blocked=bool(profile.get("auto_approval_blocked")),
+        seconds_remaining=remaining,
+    )
 
 
 @bp.get("/verify-email/<token>")
@@ -141,6 +241,12 @@ def verify_email(token):
     sb.update("email_verifications", {"used_at": iso()}, id=row["id"])
     sb.update("profiles", {"email_verified_at": iso()}, id=row["user_id"])
     flash("Email verified. Thank you!", "success")
+    if session.get("uid") == row["user_id"]:
+        profile = sb.get("profiles", id=row["user_id"])
+        if profile and profile["account_status"] == "pending":
+            return redirect(url_for("auth.pending"))
+        if profile and profile["account_status"] == "approved":
+            return redirect(url_for("feed.home"))
     return redirect(url_for("auth.login"))
 
 

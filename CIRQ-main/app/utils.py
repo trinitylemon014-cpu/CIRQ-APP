@@ -1,10 +1,13 @@
 import re
 import hashlib
 import secrets
+import re
+import unicodedata
 from datetime import datetime, timezone, timedelta
 
 USERNAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9_.]{1,22})[a-z0-9]$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+SCHOOL_NAME_RE = re.compile(r"^[\w\s.'’&,()/\-]+$", re.UNICODE)
 
 # CIRQ STATUS tiers. Ranges are contiguous and non-overlapping.
 TIERS = [
@@ -49,6 +52,28 @@ def valid_username(name):
 
 def valid_email(email):
     return bool(EMAIL_RE.match(email or "")) and len(email) <= 254
+
+
+def clean_school_name(value):
+    name = " ".join(unicodedata.normalize("NFKC", value or "").split())
+    if not 3 <= len(name) <= 100 or not SCHOOL_NAME_RE.fullmatch(name):
+        return None
+    if not any(char.isalnum() for char in name):
+        return None
+    return name
+
+
+def normalize_school_name(value):
+    """Case-fold names and ignore punctuation so common spelling variants can match."""
+    chars = []
+    for char in unicodedata.normalize("NFKC", value or "").casefold():
+        if char.isalnum():
+            chars.append(char)
+        elif char in ("'", "’"):
+            continue
+        else:
+            chars.append(" ")
+    return " ".join("".join(chars).split())
 
 
 def password_problems(pw):

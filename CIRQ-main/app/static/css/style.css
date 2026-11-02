@@ -85,6 +85,31 @@ p { margin: 0 0 .8em; } small, .small { font-size: .85rem; } .muted { color: var
 .fab { width: 58px; height: 58px; margin-top: -26px; border-radius: 50%; border: 3px solid var(--navy-950); display: grid; place-items: center; background: var(--grad-primary); color: #fff; cursor: pointer; box-shadow: var(--shadow-btn), var(--glow-purple); transition: transform .25s var(--ease); flex: none; }
 .fab:hover { transform: scale(1.07) rotate(90deg); }
 .pill .badge-n { position: absolute; top: 2px; right: 8px; min-width: 18px; height: 18px; border-radius: var(--r-pill); padding: 0 4px; background: var(--magenta); color: #fff; font-size: .66rem; display: grid; place-items: center; }
+.mobile-menu-trigger { display: none; }
+.pill button.mobile-menu-trigger { position: relative; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 52px; height: 50px; padding: 0 8px; border: 0; border-radius: 18px; background: transparent; color: var(--muted); font: 700 .66rem var(--font); cursor: pointer; }
+.pill button.mobile-menu-trigger:hover, .pill button.mobile-menu-trigger[aria-expanded="true"] { color: #fff; background: rgba(139, 44, 255, .16); }
+.mobile-menu-backdrop { position: fixed; inset: 0; z-index: 79; border: 0; background: rgba(0, 5, 16, .68); backdrop-filter: blur(3px); }
+.mobile-page-menu { position: fixed; z-index: 80; left: 50%; width: min(94vw, 520px); max-height: min(76dvh, 640px); overflow-y: auto; overscroll-behavior: contain; padding: 14px; border: 1px solid var(--border); border-radius: 24px; background: rgba(7, 19, 41, .98); box-shadow: var(--shadow-card), var(--glow-purple); opacity: 0; transform: translate(-50%, 14px); transition: opacity .2s ease, transform .2s var(--ease); }
+.mobile-page-menu.is-open { opacity: 1; transform: translate(-50%, 0); }
+.mobile-page-menu-head { position: sticky; z-index: 1; top: -14px; padding: 12px 4px 10px; background: rgba(7, 19, 41, .98); }
+.mobile-page-menu-head h2 { margin: 0; }
+.mobile-page-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mobile-page-link { position: relative; display: flex; align-items: center; gap: 10px; min-height: 48px; min-width: 0; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 14px; background: rgba(255, 255, 255, .035); color: var(--text-2); font: 600 .88rem var(--font); text-align: left; }
+.mobile-page-link > span:not(.mobile-page-badge) { overflow-wrap: anywhere; }
+.mobile-page-link:hover, .mobile-page-link.active { border-color: var(--border-cyan); background: rgba(0, 217, 255, .08); color: #fff; }
+.mobile-page-link.active .i { color: var(--cyan); }
+.mobile-page-badge { margin-left: auto; flex: none; min-width: 20px; padding: 1px 6px; border-radius: var(--r-pill); background: var(--grad-primary); color: #fff; font-size: .7rem; font-weight: 800; text-align: center; }
+.mobile-page-section { margin: 18px 2px 8px; color: var(--muted); font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+.mobile-page-logout { margin-top: 8px; }
+.mobile-page-logout button { width: 100%; background: rgba(255, 77, 122, .06); color: #ff9ab3; cursor: pointer; }
+body.mobile-menu-open { overflow: hidden; overscroll-behavior: none; }
+html[data-mobile-menu-direction="up"] .mobile-page-menu { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 76px); transform: translate(-50%, 14px); }
+html[data-mobile-menu-direction="up"] .mobile-page-menu.is-open { transform: translate(-50%, 0); }
+html[data-mobile-menu-direction="up"] .pill .mobile-menu-trigger { display: flex; }
+html[data-mobile-menu-direction="down"] .mobile-page-menu { top: max(10px, env(safe-area-inset-top)); transform: translate(-50%, -14px); }
+html[data-mobile-menu-direction="down"] .mobile-page-menu.is-open { transform: translate(-50%, 0); }
+html[data-mobile-menu-direction="down"] .topbar .mobile-menu-trigger { display: grid; }
+html[data-mobile-menu-direction="down"] .pill .mobile-menu-trigger { display: none; }
 
 @media (min-width: 1024px) {
   .shell { grid-template-columns: 270px minmax(0, 1fr) 320px; max-width: 1380px; margin: 0 auto; }
@@ -101,7 +126,13 @@ p { margin: 0 0 .8em; } small, .small { font-size: .85rem; } .muted { color: var
   .rail { display: block; padding: 26px 18px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
   .main { padding-bottom: 60px; }
   .bottom-nav, .topbar .logo { display: none; }
+  .mobile-menu-trigger, .mobile-page-menu, .mobile-menu-backdrop { display: none !important; }
   .topbar { justify-content: flex-end; }
+}
+@media (max-width: 360px) {
+  .mobile-page-menu { padding: 10px; border-radius: 18px; }
+  .mobile-page-links { gap: 6px; }
+  .mobile-page-link { gap: 7px; padding: 9px; font-size: .8rem; }
 }
 
 /* ---------- 4. Surfaces ---------- */

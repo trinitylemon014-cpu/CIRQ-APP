@@ -13,7 +13,7 @@ from app.services.account_service import approve_account, auto_approve_stale_acc
 from app.services.audit_service import audit
 from app.services.mail_service import send_mail, mail_configured
 from app.services.notification_service import notify
-from app.utils import iso, clean_text, new_token, hours_from_now, utcnow, valid_email
+from app.utils import iso, clean_text, new_token, hours_from_now, utcnow, valid_email, normalize_school_name
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -29,6 +29,7 @@ def dashboard():
     stats = {
         "users_total": c("profiles"), "users_pending": c("profiles", account_status="pending"),
         "users_suspended": c("profiles", account_status="suspended"),
+        "users_auto_approved": c("profiles", account_status="approved", approval_source="system"),
         "posts": c("posts", kind="post"), "reels": c("posts", kind="reel"),
         "stories_active": len(db().table("stories").select("id").gt("expires_at", iso()).execute().data or []),
         "events": c("events"), "reports_open": c("reports", status="open"),
@@ -102,19 +103,43 @@ def user_action(uid, action):
     if not target:
         abort(404)
     note = clean_text(request.form.get("note"), 300)
-    if target["id"] == g.user["id"] and action in ("suspend", "reject", "set_role"):
+    if target["id"] == g.user["id"] and action in ("suspend", "reject", "set_role", "remove"):
         flash("You can't do that to your own account.", "error")
         return _back("admin.users")
     if action == "approve":
-        approve_account(uid, g.user["id"])
+        if not approve_account(uid, g.user["id"], expected_status=target["account_status"]):
+            flash("This account changed while you were reviewing it. Refresh and try again.", "error")
+            return _back("admin.users")
+        return _back("admin.users")
     elif action == "reject":
-        sb.update("profiles", {"account_status": "rejected", "status_note": note or None}, id=uid)
+        changed = sb.update("profiles", {
+            "account_status": "rejected", "status_note": note or None,
+            "approval_source": None, "approved_by": None, "approved_at": None,
+        }, id=uid, account_status=target["account_status"])
+        if not changed:
+            flash("This account changed while you were reviewing it. Refresh and try again.", "error")
+            return _back("admin.users")
     elif action == "suspend":
         sb.update("profiles", {"account_status": "suspended", "status_note": note or None,
                                "session_epoch": target.get("session_epoch", 0) + 1}, id=uid)   # kicks them out immediately
         notify(uid, "moderation", body="Your account was suspended.", dedupe=False)
     elif action == "unsuspend":
         sb.update("profiles", {"account_status": "approved", "status_note": None}, id=uid)
+    elif action == "hold_auto_approval":
+        if target["account_status"] != "pending":
+            abort(400)
+        blocked = not target.get("auto_approval_blocked", False)
+        sb.update("profiles", {"auto_approval_blocked": blocked}, id=uid, account_status="pending")
+        audit(g.user["id"], "user_auto_approval_hold_set", "profile", uid, blocked=blocked)
+        flash("Automatic approval is on hold." if blocked else "Automatic approval is allowed.", "success")
+        return _back("admin.users")
+    elif action == "remove":
+        if target.get("approval_source") != "system" or target["account_status"] != "approved":
+            abort(400)
+        audit(g.user["id"], "user_auto_approved_removed", "profile", uid, username=target["username"])
+        auth_service.delete_auth_user(uid)
+        flash("Auto-approved account removed.", "success")
+        return _back("admin.auto_approved")
     elif action == "verify":
         sb.update("profiles", {"verified": not target["verified"]}, id=uid)
     elif action == "set_role":
@@ -172,7 +197,85 @@ def schools():
     sch = sb.by_id("schools", [r["school_id"] for r in reqs])
     for r in reqs:
         r["user"], r["school"] = users.get(r["requested_by"]), sch.get(r["school_id"])
-    return render_template("admin/schools.html", schools=sb.select("schools", order="name", desc=False), reqs=reqs)
+    submissions = sb.select("school_submissions", order="created_at", status="pending")
+    submission_ids = [r["id"] for r in submissions]
+    profile_rows = (db().table("profiles").select("school_submission_id")
+                    .in_("school_submission_id", submission_ids).execute().data or []) if submission_ids else []
+    counts = {}
+    for row in profile_rows:
+        counts[row["school_submission_id"]] = counts.get(row["school_submission_id"], 0) + 1
+    submitters = sb.by_id("profiles", [r["submitted_by"] for r in submissions])
+    for submission in submissions:
+        submission["student_count"] = counts.get(submission["id"], 0)
+        submission["submitter"] = submitters.get(submission.get("submitted_by"))
+    all_schools = sb.select("schools", order="name", desc=False)
+    return render_template("admin/schools.html", schools=all_schools, reqs=reqs, submissions=submissions)
+
+
+@bp.post("/school-submissions/<sid>/<decision>")
+@admin_required
+def school_submission_action(sid, decision):
+    submission = sb.get("school_submissions", id=sid, status="pending")
+    if not submission or decision not in ("approve", "merge", "reject"):
+        abort(404)
+
+    note = clean_text(request.form.get("note"), 300)
+    school = None
+    if decision == "reject":
+        status = "rejected"
+    elif decision == "merge":
+        school = sb.get("schools", id=request.form.get("school_id"))
+        if not school:
+            flash("Choose an existing school to merge into.", "error")
+            return _back("admin.schools")
+        status = "approved"
+    else:
+        normalized = normalize_school_name(submission["name"])
+        school = next((row for row in sb.select("schools", order="name", desc=False)
+                       if normalize_school_name(row["name"]) == normalized), None)
+        if not school:
+            slug = "-".join("".join(ch if ch.isalnum() else " " for ch in submission["name"].lower()).split())
+            school = sb.insert("schools", {"name": submission["name"], "slug": slug, "verified": True})
+            sb.insert("communities", {"school_id": school["id"], "name": f"{school['name']} Community"})
+        status = "approved"
+
+    changed = sb.update("school_submissions", {
+        "status": status, "resolved_school_id": school["id"] if school else None,
+        "reviewed_by": g.user["id"], "reviewed_at": iso(), "decision_note": note or None,
+    }, id=sid, status="pending")
+    if not changed:
+        flash("This school suggestion was already reviewed. Refresh the page.", "error")
+        return _back("admin.schools")
+
+    affected = sb.select("profiles", school_submission_id=sid)
+    if decision == "reject":
+        for profile in affected:
+            sb.update("profiles", {
+                "school_id": None, "school_verified": False,
+                "school_submission_id": None, "submitted_school_name": None,
+            }, id=profile["id"], school_submission_id=sid)
+            notify(profile["id"], "moderation",
+                   body="Your school suggestion was declined. Choose a listed school in Settings after your account is approved.",
+                   dedupe=False)
+    else:
+        if decision == "approve":
+            sb.update("schools", {"verified": True}, id=school["id"])
+        for profile in affected:
+            sb.update("profiles", {"school_id": school["id"], "school_verified": True},
+                      id=profile["id"], school_submission_id=sid)
+            notify(profile["id"], "moderation", body=f"Your school has been matched to {school['name']}.", dedupe=False)
+
+    audit(g.user["id"], f"school_submission_{decision}", "school_submission", sid,
+          school_id=school["id"] if school else None, student_count=len(affected), note=note)
+    flash("School suggestion reviewed.", "success")
+    return redirect(url_for("admin.schools"))
+
+
+@bp.get("/auto-approved")
+@admin_required
+def auto_approved():
+    rows = sb.select("profiles", order="approved_at", account_status="approved", approval_source="system", limit=200)
+    return render_template("admin/auto_approved.html", users=rows)
 
 
 @bp.post("/schools/requests/<rid>/<decision>")

@@ -6,6 +6,10 @@
   {{ m.field('display_name', 'Display name', value=cur.display_name) }}
   <label for="f-bio">Bio</label><textarea class="input" id="f-bio" name="bio" maxlength="200" placeholder="Tell people about you (optional)">{{ cur.bio or '' }}</textarea>
   <button class="btn block">Save profile</button></form>
+{% if not cur.school_id %}<form class="card" method="post" style="margin-top:14px">{{ m.csrf() }}<input type="hidden" name="action" value="school"><h2>Choose your school</h2>
+  <p class="muted small">Your previous school suggestion wasn't approved. Choose a school from the list to update your profile.</p>
+  <label for="f-school">School</label><select class="input" id="f-school" name="school_id" required><option value="">Choose your school</option>{% for s in schools %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
+  <button class="btn block" style="margin-top:12px">Save school</button></form>{% endif %}
 <form class="card" method="post" style="margin-top:14px">{{ m.csrf() }}<input type="hidden" name="action" value="privacy"><h2>Account privacy</h2>
   <label class="check switch"><input type="checkbox" name="is_private" {{ 'checked' if cur.is_private }}><span><b>Private account</b><small class="muted" style="display:block;font-weight:500">When your account is private, only people you approve can follow you, see your posts and stories, or chat with you. Your current followers stay. People who aren't following you can still find your profile, name and photo.</small></span></label>
   {% if cur.is_private %}<a class="row between person-link" href="{{ url_for('profiles.follow_requests') }}"><span>{{ m.icon('users','i-sm') }} Follow requests</span><span>{% if pending_requests %}<span class="chip lime">{{ pending_requests }}</span>{% endif %} {{ m.icon('arrow-left','i-sm') }}</span></a>{% endif %}

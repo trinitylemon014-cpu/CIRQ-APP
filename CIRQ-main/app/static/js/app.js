@@ -5,6 +5,128 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const csrf = () => ($('meta[name="csrf-token"]') || {}).content || "";
 
+  /* ---------- responsive all-pages menu ---------- */
+  const pageMenu = $("#mobile-page-menu"), menuBackdrop = $(".mobile-menu-backdrop");
+  const menuTriggers = $$("[data-mobile-menu-trigger]");
+  let lastMenuTrigger = null, menuCloseTimer;
+  const menuFocusables = () => $$('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])', pageMenu)
+    .filter((el) => !el.hidden && el.getClientRects().length);
+  function closePageMenu(restoreFocus = true) {
+    if (!pageMenu || pageMenu.hidden) return;
+    pageMenu.classList.remove("is-open");
+    document.body.classList.remove("mobile-menu-open");
+    menuTriggers.forEach((button) => button.setAttribute("aria-expanded", "false"));
+    clearTimeout(menuCloseTimer);
+    menuCloseTimer = setTimeout(() => {
+      if (!pageMenu.classList.contains("is-open")) {
+        pageMenu.hidden = true;
+        menuBackdrop.hidden = true;
+      }
+    }, 210);
+    if (restoreFocus && lastMenuTrigger) lastMenuTrigger.focus({ preventScroll: true });
+  }
+  function openPageMenu(trigger) {
+    if (!pageMenu || !menuBackdrop) return;
+    lastMenuTrigger = trigger;
+    clearTimeout(menuCloseTimer);
+    pageMenu.hidden = false;
+    menuBackdrop.hidden = false;
+    document.body.classList.add("mobile-menu-open");
+    menuTriggers.forEach((button) => button.setAttribute("aria-expanded", "true"));
+    requestAnimationFrame(() => pageMenu.classList.add("is-open"));
+    const first = menuFocusables()[0];
+    if (first) first.focus({ preventScroll: true });
+  }
+  menuTriggers.forEach((button) => button.addEventListener("click", () => {
+    if (pageMenu && !pageMenu.hidden) closePageMenu();
+    else openPageMenu(button);
+  }));
+  $$("[data-mobile-menu-close]").forEach((button) => button.addEventListener("click", () => closePageMenu()));
+  pageMenu && pageMenu.addEventListener("click", (event) => {
+    if (event.target.closest("a")) closePageMenu(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!pageMenu || pageMenu.hidden) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closePageMenu();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusables = menuFocusables();
+    if (!focusables.length) { event.preventDefault(); return; }
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !pageMenu.contains(document.activeElement))) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !pageMenu.contains(document.activeElement))) {
+      event.preventDefault(); first.focus();
+    }
+  });
+  window.addEventListener("popstate", () => closePageMenu(false));
+  window.addEventListener("pagehide", () => closePageMenu(false));
+
+  const schoolChoice = $("#f-school-choice"), customSchool = $("[data-new-school]");
+  if (schoolChoice && customSchool) {
+    const schoolName = $("#f-new-school");
+    const updateSchoolChoice = () => {
+      const custom = schoolChoice.value === "My school isn't listed";
+      customSchool.hidden = !custom;
+      schoolName.disabled = !custom;
+      schoolName.required = custom;
+    };
+    schoolChoice.addEventListener("input", updateSchoolChoice);
+    schoolChoice.addEventListener("change", updateSchoolChoice);
+    updateSchoolChoice();
+  }
+
+  const approvalPanel = $("[data-approval-status]");
+  if (approvalPanel) {
+    const countdown = $("[data-approval-countdown]", approvalPanel);
+    const label = $("[data-approval-label]", approvalPanel);
+    const waiting = $("[data-approval-waiting]", approvalPanel);
+    const chip = $(".chip", approvalPanel);
+    let remaining = Math.max(0, Number(approvalPanel.dataset.secondsRemaining) || 0);
+    const renderCountdown = () => {
+      const minutes = Math.floor(remaining / 60), seconds = remaining % 60;
+      countdown.textContent = `${minutes}:${String(seconds).padStart(2, "0")}`;
+      if (remaining === 0) waiting.hidden = false;
+    };
+    renderCountdown();
+    setInterval(() => {
+      if (remaining > 0) remaining -= 1;
+      renderCountdown();
+    }, 1000);
+    const pollApproval = async () => {
+      try {
+        const response = await fetch(approvalPanel.dataset.statusUrl, {
+          credentials: "same-origin",
+          headers: { "X-Requested-With": "fetch" },
+        });
+        if (!response.ok) return;
+        const state = await response.json();
+        if (state.status === "approved") {
+          window.location.replace("/feed");
+          return;
+        }
+        if (state.status === "rejected") {
+          label.textContent = "Not approved";
+          waiting.textContent = state.status_note || "An administrator was unable to approve this account. Contact CIRQ support for help.";
+          waiting.hidden = false;
+          countdown.hidden = true;
+          if (chip) { chip.classList.remove("warn"); chip.classList.add("red"); }
+          return;
+        }
+        remaining = Math.max(0, Number(state.seconds_remaining) || 0);
+        renderCountdown();
+        if (!state.email_verified || state.auto_approval_blocked) waiting.hidden = false;
+      } catch (_) {
+        // Poll failures should never prevent the user from staying on the waiting page.
+      }
+    };
+    pollApproval();
+    setInterval(pollApproval, 5000);
+  }
+
   async function api(url, { method = "POST", body, json } = {}) {
     const headers = { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" };
     let payload = body;
