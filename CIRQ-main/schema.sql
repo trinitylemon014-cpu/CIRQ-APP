@@ -57,6 +57,8 @@ create table if not exists profiles (
   last_seen_at timestamptz,
   created_at timestamptz not null default now()
 );
+alter table profiles add column if not exists last_seen_at timestamptz;
+alter table profiles add column if not exists show_active_status boolean not null default true;
 create index if not exists profiles_school_idx on profiles(school_id);
 create index if not exists profiles_status_idx on profiles(account_status);
 create unique index if not exists profiles_username_lower_uidx on profiles(lower(username));
