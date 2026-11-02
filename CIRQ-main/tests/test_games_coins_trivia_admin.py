@@ -66,10 +66,9 @@ def test_deck_is_real_students_with_one_developer(table, db):
     c, me = table
     s = start(c)
     deck = rnd(db)["deck"]
-    assert s["cards"] == len(deck) == 8 and sum(e["developer"] for e in deck) == 1
+    assert s["cards"] == len(deck) == 9 and sum(e["developer"] for e in deck) == 1
     ids = {p["id"]: p for p in db.data["profiles"]}
-    vex = next(p for p in db.data["profiles"] if p["username"] == "vex")
-    assert deck[answer_index(db)]["user_id"] == vex["id"] and deck[answer_index(db)]["developer"]
+    assert deck[answer_index(db)]["user_id"] is None and deck[answer_index(db)]["developer"]
     others = [e["user_id"] for e in deck if not e["developer"]]
     assert len(set(others)) == len(others) and me["id"] not in others and all(ids[o]["account_status"] == "approved" for o in others)
 
@@ -171,9 +170,10 @@ def test_default_daily_cap_is_one(table, db):
     assert got == [500, 0]
 
 
-def test_developer_card_links_to_developer_profile(table, db):
+def test_developer_card_is_independent_of_developer_profile(table, db):
     c, _ = table; start(c)
-    assert guess(c, answer_index(db)).get_json()["developer"]["username"] == "vex"
+    card = guess(c, answer_index(db)).get_json()["developer"]
+    assert card["username"] is None and card["name"] == "VEX"
 
 
 def test_game_works_with_virtual_developer_when_account_missing(as_user, mk, db):

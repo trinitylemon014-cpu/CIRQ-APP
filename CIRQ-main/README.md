@@ -98,6 +98,7 @@ cirq/
    story comments, comment likes and the `story_comment` report type. A brand-new project already gets all of this from `schema.sql`.
    **Then run `migrations/2026_11_01_reel_archive.sql`** (safe to re-run) to add the index used by the unlimited reels archive.
    **Then run `migrations/2026_11_01_reel_saves.sql`** (safe to re-run) to add private reel bookmarks and the shared stream index.
+   **Then run `migrations/2026_11_02_developer_card_settings.sql`** (safe to re-run) to add the independent editable CIRQ FLIP developer card.
    Reels are retained unless their creator deletes them; the archive loads five at a time, newest first, and refreshes new posts without resetting the current scroll position.
 3. **Project Settings → API**: copy the Project URL into `SUPABASE_URL`, the anon/publishable key into
    `SUPABASE_ANON_KEY`, and the service-role/secret key into `SUPABASE_SERVICE_ROLE_KEY`.
@@ -136,7 +137,7 @@ Set `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USE_TLS`, `MAIL_USERNAME`, `MAIL_PASSWORD`
 (Brevo, Mailgun, Gmail app password, …). **Until email is configured, admins cannot approve password resets** (the approval
 is refused rather than silently succeeding) and verification emails are not sent. The reset email is never logged.
 
-## 8. Create the first administrator (and the VEX developer account)
+## 8. Create the first administrator
 
 ```bash
 flask --app wsgi create-admin
@@ -144,9 +145,8 @@ flask --app wsgi create-admin
 It prompts for username, email, display name and a password typed at the prompt (not stored in any file). Admin rights can't
 be granted through any registration field.
 
-**VEX:** create the developer's account the same way with username `vex` and display name `VEX` (this matches
-`DEVELOPER_USERNAME=vex`). It becomes the hidden card in *Guess the Developer*. If no such account exists the game still
-works with a profile-less "VEX" card, but a real account is nicer: the winner sees a link to the profile.
+The hidden developer card in *Guess the Developer* is a game-only card, not a user account. Admins can set its name and image
+under **Admin → Developer card**; no special developer account is required.
 
 ## 9. Run locally, test, schedule background jobs
 
@@ -229,7 +229,7 @@ card (name, school, real follower count and CIRQ STATUS tier set the colour). Fi
 button; coins are added when claimed, once per round (ledger-protected), limited to `DEV_CARD_REWARDS_PER_DAY` (default **1**)
 so coins can't be farmed. Unclaimed wins survive a refresh and must be claimed before starting another round. If fewer than 5
 other students exist the game says so. It never invents users.
-Admins can update the developer's card photo under **Admin → Developer card**; it uses the configured developer account's avatar.
+Admins can update the developer card's name and image under **Admin → Developer card**; these are stored independently from user profiles.
 
 **Coins & boosts.** Every coin change goes through the database function `cirq_apply_coins` (atomic, idempotent, never negative).
 50 welcome coins on approval. 1000 coins buy a 3-day boost (Boosted badge + listed first in Discover). Boosts never affect CIRQ STATUS.

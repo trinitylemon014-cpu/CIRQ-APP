@@ -43,40 +43,39 @@ def dashboard():
 @bp.route("/developer-card", methods=["GET", "POST"])
 @admin_required
 def developer_card():
-    profile = sb.get("profiles", username=current_app.config["DEVELOPER_USERNAME"])
-    if not profile:
-        flash(f"Developer account @{current_app.config['DEVELOPER_USERNAME']} was not found.", "error")
-        if request.method == "POST":
-            return redirect(url_for("admin.developer_card"))
-        return render_template("admin/developer_card.html", profile=None, avatar="")
+    settings = sb.get("developer_card_settings", id="developer")
+    if not settings:
+        settings = sb.insert("developer_card_settings", {"id": "developer"})
 
     if request.method == "POST":
-        if request.form.get("remove"):
-            cs.destroy(profile.get("avatar_public_id"))
-            sb.update("profiles", {"avatar_url": None, "avatar_public_id": None}, id=profile["id"])
-            audit(g.user["id"], "developer_card_avatar_removed", "profile", profile["id"])
-            flash("Developer card photo removed.", "info")
+        name = clean_text(request.form.get("display_name"), 40)
+        if len(name) < 2:
+            flash("Developer card name must be at least 2 characters.", "error")
             return redirect(url_for("admin.developer_card"))
 
-        image = request.files.get("avatar")
-        if not image or not image.filename:
-            flash("Choose an image first.", "error")
-            return redirect(url_for("admin.developer_card"))
-        try:
-            info = cs.upload(image, "avatars", profile["id"], allow_video=False)
-        except cs.UploadError as e:
-            flash(str(e), "error")
-            return redirect(url_for("admin.developer_card"))
+        values = {"display_name": name, "updated_by": g.user["id"], "updated_at": iso()}
+        image = request.files.get("image")
+        if image and image.filename:
+            try:
+                info = cs.upload(image, "game-cards", g.user["id"], allow_video=False)
+            except cs.UploadError as e:
+                flash(str(e), "error")
+                return redirect(url_for("admin.developer_card"))
+            values.update(image_url=info["url"], image_public_id=info["public_id"])
+        elif request.form.get("remove"):
+            values.update(image_url=None, image_public_id=None)
 
-        old = profile.get("avatar_public_id")
-        sb.update("profiles", {"avatar_url": info["url"], "avatar_public_id": info["public_id"]}, id=profile["id"])
-        if old:
-            cs.destroy(old)
-        audit(g.user["id"], "developer_card_avatar_set", "profile", profile["id"])
-        flash("Developer card photo saved.", "success")
+        sb.update("developer_card_settings", values, id="developer")
+        if settings.get("image_public_id") and settings["image_public_id"] != values.get("image_public_id", settings["image_public_id"]):
+            cs.destroy(settings["image_public_id"])
+        audit(g.user["id"], "developer_card_updated", "developer_card", "developer")
+        flash("Developer card saved.", "success")
         return redirect(url_for("admin.developer_card"))
 
-    return render_template("admin/developer_card.html", profile=profile, avatar=cs.avatar_src(profile, 320))
+    name = settings.get("display_name") or current_app.config["DEVELOPER_DISPLAY_NAME"]
+    image = {"url": settings.get("image_url"), "public_id": settings.get("image_public_id"), "media_type": "image"}
+    return render_template("admin/developer_card.html", name=name,
+                           image=cs.media_src(image, 320) if image["url"] else "")
 
 
 # ------------------------------------------------------------------ users

@@ -43,8 +43,6 @@ services:
         sync: false
       - key: CRON_SECRET
         generateValue: true
-      - key: DEVELOPER_USERNAME
-        value: vex
       - key: PAID_COMPETITIONS_ENABLED
         value: false          # keep false until legal / payment / child-safety review is complete
   # Hourly cleanup of expired stories (rows + Cloudinary files) and stale reset links.

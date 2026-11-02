@@ -18,22 +18,14 @@ MAX_CARDS, MIN_CARDS, MAX_GUESSES = 12, 6, 5
 _rng = secrets.SystemRandom()
 
 
-def _developer_profile():
-    return sb.get("profiles", username=current_app.config["DEVELOPER_USERNAME"])
-
-
-def _developer_card(profile=None):
-    """The developer's collectible card. Works even if the VEX account hasn't been created yet."""
+def _developer_card():
+    """The game-only developer card, edited by admins and independent of any user account."""
     cfg = current_app.config
-    profile = profile if profile is not None else _developer_profile()
-    card = {"developer": True, "name": cfg["DEVELOPER_DISPLAY_NAME"], "username": profile["username"] if profile else None,
-            "school": None, "avatar": "", "followers": 0, "tier": "Developer", "tier_index": 99}
-    if profile:
-        card.update(avatar=cs.avatar_src(profile, 400), followers=social.follower_count(profile["id"]))
-        if profile.get("school_id"):
-            sch = sb.get("schools", id=profile["school_id"])
-            card["school"] = sch["name"] if sch else None
-    return card
+    settings = sb.get("developer_card_settings", id="developer") or {}
+    image = {"url": settings.get("image_url"), "public_id": settings.get("image_public_id"), "media_type": "image"}
+    return {"developer": True, "name": settings.get("display_name") or cfg["DEVELOPER_DISPLAY_NAME"],
+            "username": None, "school": None, "avatar": cs.media_src(image, 400) if image["url"] else "",
+            "followers": 0, "tier": "Developer", "tier_index": 99}
 
 
 def _student_card(uid):
@@ -50,14 +42,13 @@ def _student_card(uid):
 
 def _build_deck(me_id):
     """Return (deck, answer_index) or None when there aren't enough real students yet. Never invents users."""
-    dev = _developer_profile()
     hidden = social.blocked_between(me_id)
     rows = db().table("profiles").select("id,is_private,account_status").eq("account_status", "approved").limit(400).execute().data or []
-    pool = [r["id"] for r in rows if r["id"] != me_id and r["id"] not in hidden and not r["is_private"] and not (dev and r["id"] == dev["id"])]
+    pool = [r["id"] for r in rows if r["id"] != me_id and r["id"] not in hidden and not r["is_private"]]
     if len(pool) + 1 < MIN_CARDS:
         return None
     entries = [{"user_id": uid, "developer": False} for uid in _rng.sample(pool, min(MAX_CARDS - 1, len(pool)))]
-    entries.append({"user_id": dev["id"] if dev else None, "developer": True})
+    entries.append({"user_id": None, "developer": True})
     _rng.shuffle(entries)
     return entries, next(i for i, e in enumerate(entries) if e["developer"])
 
@@ -69,7 +60,7 @@ def _active_round(uid):
 
 def _card_for(rnd, idx):
     entry = rnd["deck"][idx]
-    return _developer_card(sb.get("profiles", id=entry["user_id"]) if entry.get("user_id") else None) if entry["developer"] else _student_card(entry["user_id"])
+    return _developer_card() if entry["developer"] else _student_card(entry["user_id"])
 
 
 def _public_state(rnd, guesses):

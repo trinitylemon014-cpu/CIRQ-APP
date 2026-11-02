@@ -39,13 +39,14 @@ DEFAULTS = {
     "school_verification_requests": dict(status="pending", reviewed_by=None, reviewed_at=None, decision_note=None),
     "community_members": dict(role="member"),
     "feature_flags": dict(enabled=False),
+    "developer_card_settings": dict(display_name=None, image_url=None, image_public_id=None, updated_by=None),
     "email_verifications": dict(used_at=None),
     "post_media": dict(delivery_type="upload"),
 }
 PKS = {"likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "follows": ("follower_id", "followee_id"), "blocks": ("blocker_id", "blocked_id"),
        "community_members": ("community_id", "user_id"), "conversation_members": ("conversation_id", "user_id"),
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
-       "feature_flags": ("key",), "achievements": ("code",)}
+       "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",)}
 UNIQUES = {"profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
            "trivia_answers": [("attempt_id", "question_id")], "trivia_attempts": [("set_id", "user_id")],
            "payments": [("provider_reference",)], "conversations": [("dm_key",)], "reports": [("reporter_id", "target_type", "target_id")],
@@ -238,6 +239,7 @@ def seed_from_schema(db, path="schema.sql"):
         db.table("achievements").insert({"code": code, "name": name, "description": desc, "icon": icon}).execute()
     for key, en in re.findall(r"\('(\w+)',\s*(true|false),", text.split("insert into feature_flags")[1].split("on conflict")[0]):
         db.table("feature_flags").insert({"key": key, "enabled": en == "true"}).execute()
+    db.table("developer_card_settings").insert({"id": "developer"}).execute()
 
 
 class FakeAnon:

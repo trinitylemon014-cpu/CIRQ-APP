@@ -47,7 +47,6 @@ class Config:
     CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
     # App coins, boosts and trivia (UGX amounts are manual mobile-money payments; no in-app processor)
-    DEVELOPER_USERNAME = os.environ.get("DEVELOPER_USERNAME", "vex")
     DEVELOPER_DISPLAY_NAME = os.environ.get("DEVELOPER_DISPLAY_NAME", "VEX")
     WELCOME_COINS = _int("WELCOME_COINS", 50)
     DEV_CARD_COINS = _int("DEV_CARD_COINS", 500)

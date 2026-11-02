@@ -27,38 +27,38 @@ def test_admin_uploads_replaces_and_removes_a_school_logo(app, mk, db, school, p
     assert db.data["schools"][0]["logo_url"] is None and db.data["schools"][0]["logo_public_id"] is None
 
 
-def test_admin_sets_developer_card_photo_and_photo_is_used_on_card(app, as_user, mk, db, png, uploads):
+def test_admin_edits_game_only_developer_card_name_and_image(app, as_user, mk, db, png, uploads):
     boss = adm(app, mk)
-    dev = mk("vex")
     assert boss.get("/admin/developer-card").status_code == 200
-    boss.post("/admin/developer-card", data={"avatar": (io.BytesIO(png), "developer.png")}, content_type="multipart/form-data")
-    saved = next(p for p in db.data["profiles"] if p["id"] == dev["id"])
-    first = saved["avatar_public_id"]
-    assert saved["avatar_url"] and first.startswith("cirq/avatars/")
+    boss.post("/admin/developer-card", data={"display_name": "CIRQ Dev", "image": (io.BytesIO(png), "developer.png")}, content_type="multipart/form-data")
+    saved = db.data["developer_card_settings"][0]
+    first = saved["image_public_id"]
+    assert saved["display_name"] == "CIRQ Dev" and saved["image_url"] and first.startswith("cirq/game-cards/")
+    assert not any(p["username"] == "vex" for p in db.data["profiles"])
 
     for i in range(6):
         mk(f"devcardstudent{i}")
     player, _ = as_user("devcardplayer")
-    game = player.post("/api/games/flip/start").get_json()
+    player.post("/api/games/flip/start")
     answer = db.data["game_rounds"][-1]["answer_index"]
     reveal = player.post("/api/games/flip/guess", json={"card": answer}).get_json()
-    assert first in reveal["developer"]["avatar"]
+    assert reveal["developer"]["name"] == "CIRQ Dev" and first in reveal["developer"]["avatar"]
+    assert reveal["developer"]["username"] is None
 
-    boss.post("/admin/developer-card", data={"avatar": (io.BytesIO(png), "developer-new.png")}, content_type="multipart/form-data")
-    saved = next(p for p in db.data["profiles"] if p["id"] == dev["id"])
-    assert saved["avatar_public_id"] != first and first in uploads["destroyed"]
-    boss.post("/admin/developer-card", data={"remove": "1"})
-    assert saved["avatar_url"] is None and saved["avatar_public_id"] is None
+    boss.post("/admin/developer-card", data={"display_name": "CIRQ Dev 2", "image": (io.BytesIO(png), "developer-new.png")}, content_type="multipart/form-data")
+    saved = db.data["developer_card_settings"][0]
+    assert saved["image_public_id"] != first and first in uploads["destroyed"]
+    boss.post("/admin/developer-card", data={"display_name": "CIRQ Dev 2", "remove": "1"})
+    assert saved["display_name"] == "CIRQ Dev 2" and saved["image_url"] is None and saved["image_public_id"] is None
 
 
-def test_only_admins_can_set_developer_card_photo_and_bad_images_are_rejected(app, as_user, mk, db, png):
-    dev = mk("vex")
+def test_only_admins_can_edit_game_developer_card_and_bad_images_are_rejected(app, as_user, mk, db, png):
     student, _ = as_user("devphotostudent")
-    assert student.post("/admin/developer-card", data={"avatar": (io.BytesIO(png), "x.png")},
+    assert student.post("/admin/developer-card", data={"display_name": "Hacker", "image": (io.BytesIO(png), "x.png")},
                         content_type="multipart/form-data").status_code == 403
     boss = adm(app, mk)
-    boss.post("/admin/developer-card", data={"avatar": (io.BytesIO(b"not an image"), "x.png")}, content_type="multipart/form-data")
-    assert dev["avatar_url"] is None
+    boss.post("/admin/developer-card", data={"display_name": "Should not save", "image": (io.BytesIO(b"not an image"), "x.png")}, content_type="multipart/form-data")
+    assert db.data["developer_card_settings"][0]["display_name"] is None
 
 
 def test_logo_shows_on_school_page_instead_of_cap_icon(app, as_user, mk, db, school):
