@@ -14,7 +14,7 @@ NOW = lambda: datetime.now(timezone.utc).isoformat()
 DEFAULTS = {
     "profiles": dict(role="student", account_status="pending", verified=False, is_private=False, session_epoch=0, coin_balance=0,
                      boosted_until=None, personalized_recs=True, email_verified_at=None, bio=None, avatar_url=None, avatar_public_id=None, school_id=None, status_note=None),
-    "posts": dict(kind="post", visibility="public", moderation_status="ok", like_count=0, comment_count=0, is_announcement=False,
+    "posts": dict(kind="post", visibility="public", moderation_status="ok", like_count=0, comment_count=0, views_count=0, is_announcement=False,
                   community_id=None, edited_at=None, caption=None,
                   audio_url=None, audio_public_id=None, audio_title=None, audio_duration=None),
     "comments": dict(moderation_status="ok"),
@@ -49,6 +49,7 @@ PKS = {"likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
        "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",)}
 UNIQUES = {"profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
+           "reel_views": [("reel_id", "viewer_id")],
            "boost_ads": [("user_id",)],
            "trivia_answers": [("attempt_id", "question_id")], "trivia_attempts": [("set_id", "user_id")],
            "payments": [("provider_reference",)], "conversations": [("dm_key",)], "reports": [("reporter_id", "target_type", "target_id")],
@@ -220,7 +221,20 @@ class FakeDB:
             for t in ("post_media", "likes", "comments", "saved_posts"):
                 self.data[t] = [r for r in self.data.get(t, []) if r.get("post_id") != row["id"]]
 
-    def rpc(self, name, params):                        # mirrors cirq_apply_coins()
+    def rpc(self, name, params):
+        if name == "cirq_record_reel_view":
+            reel_id, viewer_id = params["p_reel_id"], params["p_viewer_id"]
+            post = next((p for p in self.data.get("posts", []) if p["id"] == reel_id and p["kind"] == "reel"), None)
+            if not post:
+                return SimpleNamespace(execute=lambda: SimpleNamespace(data=[]))
+            exists = any(v["reel_id"] == reel_id and v["viewer_id"] == viewer_id for v in self.data.get("reel_views", []))
+            counted = not exists and post["author_id"] != viewer_id
+            if counted:
+                self._insert("reel_views", {"reel_id": reel_id, "viewer_id": viewer_id})
+                post["views_count"] = post.get("views_count", 0) + 1
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data=[{
+                "counted": counted, "views_count": post.get("views_count", 0),
+            }]))
         assert name == "cirq_apply_coins"
         u, amt, reason, ref = params["p_user"], params["p_amount"], params["p_reason"], params["p_ref"] or ""
         prof = next(p for p in self.data["profiles"] if p["id"] == u)

@@ -506,7 +506,7 @@
   if (reels) {
     let muted = true;
     const reportedReelViews = new Set();
-    const VIEW_MIN_SECONDS = 3;
+    const VIEW_MIN_SECONDS = Number($("[data-reel]", reels)?.dataset.viewMinSeconds || 3);
     const formatReelCount = (value) => {
       const count = Math.max(0, Number(value) || 0);
       if (count < 1000) return Math.floor(count).toLocaleString();
