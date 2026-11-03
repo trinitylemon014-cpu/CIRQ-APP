@@ -9,7 +9,7 @@
   <button class="reel-retry" type="button" data-reel-retry hidden>Couldn't play this reel · Tap to retry</button>
   <button class="icon-btn mute" type="button" data-reel-mute aria-label="Unmute">{{ m.icon('mute') }}</button>
   <div class="shade"></div>
-  <div class="info"><a class="row" href="{{ url_for('profiles.view', username=r.author.username) }}">{{ m.avatar(r.author, 38) }}<b>@{{ r.author.username }}</b>{{ m.verified(r.author) }}</a>
+  <div class="info"><a class="row" href="{{ url_for('profiles.view', username=r.author.username) }}">{{ m.avatar(r.author, 'sm') }}<b>@{{ r.author.username }}</b>{{ m.verified(r.author) }}</a>
     {% if r.author_id != cur.id %}<span style="display:inline-block;margin:8px 0">{{ m.follow_btn(r.author.username, 'following' if r.author_id in following else 'none') }}</span>{% endif %}
     <p style="margin:6px 0 0">{{ r.caption or '' }}</p></div>
   <div class="reel-progress" aria-hidden="true"><i></i></div>

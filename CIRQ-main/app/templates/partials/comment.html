@@ -1,6 +1,6 @@
 {% import 'partials/macros.html' as m with context %}
 <div class="comment" id="c-{{ c.id }}">
-  <a href="{{ url_for('profiles.view', username=c.author.username) }}">{{ m.avatar(c.author, 36) }}</a>
+  <a href="{{ url_for('profiles.view', username=c.author.username) }}">{{ m.avatar(c.author, 'xs') }}</a>
   <div class="bubble"><b>{{ c.author.username }}</b>{{ m.verified(c.author) }} <small class="dim">{{ c.created_at|ago }}</small><br>{{ c.body }}</div>
   <button class="act clike {{ 'liked' if c.liked }}" type="button" data-clike="{{ c.id }}" aria-pressed="{{ 'true' if c.liked else 'false' }}" aria-label="Like comment">{{ m.icon('heart','i-sm') }}<span data-count>{{ c.like_count or 0 }}</span></button>
   <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="Comment options">{{ m.icon('more','i-sm') }}</button>

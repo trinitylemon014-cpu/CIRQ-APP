@@ -63,21 +63,8 @@ create index if not exists profiles_school_idx on profiles(school_id);
 create index if not exists profiles_status_idx on profiles(account_status);
 create unique index if not exists profiles_username_lower_uidx on profiles(lower(username));
 create index if not exists profiles_active_status_idx on profiles(last_seen_at desc) where show_active_status;
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_index i
-    where i.indrelid = 'auth.users'::regclass
-      and i.indisunique
-      and lower(pg_get_indexdef(i.indexrelid)) like '%lower(%email%'
-  ) then
-    create unique index auth_users_email_lower_uidx
-      on auth.users(lower(email)) where email is not null;
-  end if;
-end
-$$;
 
+-- Supabase owns auth.users and its indexes; only query it through the service-side function below.
 create or replace function public.cirq_profile_id_for_email(p_email text)
 returns table(user_id uuid)
 language sql

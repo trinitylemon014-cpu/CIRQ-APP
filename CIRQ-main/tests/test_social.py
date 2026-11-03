@@ -140,6 +140,24 @@ def test_private_profile_hides_content(as_user, db):
     assert b"private" in b.get("/u/alice").data.lower() and b"visible?" not in b.get("/u/alice").data
 
 
+def test_profile_followers_and_following_pages_obey_visibility(as_user, db):
+    a, alice = as_user("alice")
+    b, bob = as_user("bob")
+    c, carol = as_user("carol")
+    b.post("/u/alice/follow")
+    a.post("/u/carol/follow")
+
+    followers = a.get("/u/alice/followers").get_data(as_text=True)
+    following = a.get("/u/alice/following").get_data(as_text=True)
+    assert "@bob" in followers and "@carol" not in followers
+    assert "@carol" in following and "@bob" not in following
+    assert "avatar-wrap--sm" in followers
+
+    next(profile for profile in db.data["profiles"] if profile["id"] == alice["id"])["is_private"] = True
+    assert c.get("/u/alice/followers").status_code == 404
+    assert b.get("/u/alice/followers").status_code == 200
+
+
 def test_block_prevents_visibility_and_messaging(as_user, db):
     a, pa = as_user("alice"); b, pb = as_user("bob")
     post(a, "from alice"); b.post("/u/alice/follow")

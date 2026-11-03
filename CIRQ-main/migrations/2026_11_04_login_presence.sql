@@ -41,22 +41,6 @@ CREATE INDEX IF NOT EXISTS profiles_active_status_idx
   WHERE show_active_status;
 
 -- Supabase Auth stores emails in auth.users. Do not copy private email addresses to profiles.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_index i
-    WHERE i.indrelid = 'auth.users'::regclass
-      AND i.indisunique
-      AND lower(pg_get_indexdef(i.indexrelid)) LIKE '%lower(%email%'
-  ) THEN
-    CREATE UNIQUE INDEX auth_users_email_lower_uidx
-      ON auth.users (lower(email))
-      WHERE email IS NOT NULL;
-  END IF;
-END
-$$;
-
 CREATE OR REPLACE FUNCTION public.cirq_profile_id_for_email(p_email text)
 RETURNS TABLE(user_id uuid)
 LANGUAGE sql
@@ -100,6 +84,5 @@ GRANT EXECUTE ON FUNCTION public.cirq_ping_presence(uuid) TO service_role;
 -- DROP FUNCTION IF EXISTS public.cirq_profile_id_for_email(text);
 -- DROP INDEX IF EXISTS public.profiles_active_status_idx;
 -- DROP INDEX IF EXISTS public.profiles_username_lower_uidx;
--- Drop auth_users_email_lower_uidx only if this migration created it and no other feature uses it.
 -- ALTER TABLE public.profiles DROP COLUMN IF EXISTS show_active_status;
 -- last_seen_at pre-existed in this project's schema and is intentionally not dropped.

@@ -2,9 +2,9 @@
 {% block content %}
 {% set mine = prof.id == cur.id %}
 <section class="card hero">
-  {{ m.avatar(prof, 104) }}
+  {{ m.avatar(prof, 'xl') }}
   <h1 style="font-size:1.7rem;margin-bottom:2px">{{ prof.display_name }}{{ m.verified(prof) }}</h1>
-  <div class="muted">@{{ prof.username }} <span class="presence-label" data-presence-label data-user-id="{{ prof.id }}" hidden></span></div>
+  <div class="muted">@{{ prof.username }} · <span class="presence-text" data-presence-label data-user-id="{{ prof.id }}" hidden></span></div>
   <div class="row wrap" style="justify-content:center;margin-top:10px">
     <span class="chip green">{{ m.icon('trophy','i-sm') }} {{ stats.tier.name }}</span>
     {% if school %}<a class="chip" href="{{ url_for('schools.view', slug=school.slug) }}">{{ m.icon('school','i-sm') }} {{ school.name }}{% if school.verified %} ✓{% endif %}</a>{% endif %}
@@ -12,7 +12,7 @@
     {% if prof.role == 'admin' %}<span class="chip violet">{{ m.icon('code','i-sm') }} Team</span>{% endif %}
   </div>
   {% if prof.bio %}<p style="margin-top:14px">{{ prof.bio }}</p>{% endif %}
-  <div class="stats"><div class="stat"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></div><div class="stat"><b>{{ stats.following|short }}</b><small>Following</small></div><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Reels' if tab == 'reels' else 'Posts' }}</small></div></div>
+  <div class="stats"><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='followers') }}"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></a><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='following') }}"><b>{{ stats.following|short }}</b><small>Following</small></a><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Reels' if tab == 'reels' else 'Posts' }}</small></div></div>
   {% if mine %}<div class="row wrap" style="justify-content:center"><a class="btn ghost" href="{{ url_for('profiles.settings') }}">Edit profile</a><a class="btn ghost" href="{{ url_for('profiles.status') }}">CIRQ STATUS</a>{% if prof.is_private %}<a class="btn ghost" href="{{ url_for('profiles.follow_requests') }}">Follow requests{% if pending_requests %} <span class="chip lime">{{ pending_requests }}</span>{% endif %}</a>{% endif %}</div>
   {% else %}
   <div class="row" style="justify-content:center">{{ m.follow_btn(prof.username, follow_state, small=False, private=prof.is_private) }}

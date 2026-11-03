@@ -5,7 +5,7 @@
 <div class="tabs">{% for key, label in [('people','People'),('schools','Schools'),('posts','Popular'),('events','Events')] %}<a href="?tab={{ key }}{{ '&q=' ~ q if q }}" class="{{ 'active' if tab == key }}">{{ label }}</a>{% endfor %}</div>
 {% if tab == 'people' %}
   <form method="get" class="row" style="margin-bottom:10px"><input type="hidden" name="tab" value="people"><input type="hidden" name="q" value="{{ q }}"><select class="input" name="school" onchange="this.form.submit()" aria-label="Filter by school"><option value="">All schools</option>{% for s in all_schools %}<option value="{{ s.id }}" {{ 'selected' if sel_school == s.id }}>{{ s.name }}</option>{% endfor %}</select></form>
-  <div class="card">{% for p in people %}<div class="person"><a href="{{ url_for('profiles.view', username=p.username) }}">{{ m.avatar(p, 48) }}</a>
+  <div class="card">{% for p in people %}<div class="person"><a href="{{ url_for('profiles.view', username=p.username) }}">{{ m.avatar(p, 'sm') }}</a>
     <div class="grow"><a href="{{ url_for('profiles.view', username=p.username) }}"><b>{{ p.display_name }}</b>{{ m.verified(p) }}</a> {{ m.boosted(p) }}<br><small class="muted">@{{ p.username }}{% if p._school %} · {{ p._school.name }}{% endif %}</small></div>
     {{ m.follow_btn(p.username, p._state, private=p.is_private) }}</div>
   {% else %}<div class="empty">{{ m.icon('users') }}<p>No students found. Try a different search.</p></div>{% endfor %}</div>

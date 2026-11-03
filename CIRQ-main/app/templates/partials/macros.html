@@ -1,9 +1,21 @@
 {% macro icon(name, cls='') %}<svg class="i {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{% endmacro %}
 
 {% macro avatar(p, size=44, ring=False) %}
-{% set src = avatar_src(p, size * 2) if p else '' %}
-{% if ring %}<span class="av ring" style="--s:{{ size }}px"><span>{% if src %}<img src="{{ src }}" alt="" loading="lazy" style="border:0;border-radius:50%">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}</span>{% if p and p.id %}<span class="presence-dot" data-presence-dot data-user-id="{{ p.id }}" hidden></span>{% endif %}</span>
-{% else %}<span class="av" style="--s:{{ size }}px">{% if src %}<img src="{{ src }}" alt="" loading="lazy">{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}{% if p and p.id %}<span class="presence-dot" data-presence-dot data-user-id="{{ p.id }}" hidden></span>{% endif %}</span>{% endif %}
+{% set named_sizes = {'xs': 28, 'sm': 36, 'md': 44, 'lg': 56, 'xl': 96} %}
+{% set variant = size if size is string and size in named_sizes else '' %}
+{% set px = named_sizes[variant] if variant else size %}
+{% if not variant %}
+{% set dot_px = (px * 0.27)|round|int %}
+{% set dot_px = 8 if dot_px < 8 else (14 if dot_px > 14 else dot_px) %}
+{% endif %}
+{% set src = avatar_src(p, px * 2) if p else '' %}
+<span class="avatar-wrap {{ 'avatar-wrap--' ~ variant if variant }}" style="--avatar-size:{{ px }}px{% if not variant %}; --dot-size:{{ dot_px }}px; --dot-ring:2px{% endif %}">
+  <span class="av {{ 'ring' if ring }}" style="--s:{{ px }}px">{% if ring %}<span>{% endif %}
+    {% if src %}<img src="{{ src }}" alt="" loading="lazy" {% if ring %}style="border:0;border-radius:50%"{% endif %}>{% else %}{{ (p.username if p else '?')[:1] }}{% endif %}
+    {% if ring %}</span>{% endif %}
+  </span>
+  {% if p and p.id and p.get('show_active_status', true) %}<span class="presence-dot" data-presence-dot data-user-id="{{ p.id }}" role="img" aria-label="Offline" hidden></span>{% endif %}
+</span>
 {% endmacro %}
 
 {% macro verified(p) %}{% if p and p.verified %}<span class="verified" title="Verified by CIRQ"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">Verified</span></span>{% endif %}{% endmacro %}

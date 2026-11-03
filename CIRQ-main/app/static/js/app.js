@@ -6,6 +6,20 @@
   const csrf = () => ($('meta[name="csrf-token"]') || {}).content || "";
 
   /* ---------- active status ---------- */
+  function setPresence(el, isActive) {
+    el.classList.toggle("is-active", isActive);
+    el.setAttribute("aria-label", isActive ? "Active now" : "Offline");
+  }
+  function formatLastSeen(lastSeenAt) {
+    const timestamp = Date.parse(lastSeenAt || "");
+    if (!Number.isFinite(timestamp)) return "Offline";
+    const minutes = Math.floor(Math.max(0, Date.now() - timestamp) / 60000);
+    if (minutes < 60) return `Active ${Math.max(1, minutes)}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Active ${hours}h ago`;
+    if (hours < 48) return "Active yesterday";
+    return `Active ${Math.floor(hours / 24)}d ago`;
+  }
   if (document.body.dataset.presenceEnabled === "1") {
     let heartbeatTimer;
     const pingPresence = (finalPing = false) => {
@@ -34,17 +48,17 @@
             credentials: "same-origin", headers: { "X-Requested-With": "fetch" },
           });
           if (!response.ok) continue;
-          const { statuses = {} } = await response.json();
+          const { statuses = {}, last_seen_at: lastSeenAt = {} } = await response.json();
           markers.filter((el) => ids.slice(start, start + 80).includes(el.dataset.userId)).forEach((el) => {
             const state = statuses[el.dataset.userId];
             if (el.matches("[data-presence-dot]")) {
               el.hidden = !state || state === "hidden";
-              el.classList.toggle("is-active", state === "active");
-              el.setAttribute("aria-label", state === "active" ? "Active now" : "Offline");
+              setPresence(el, state === "active");
               el.title = state === "active" ? "Active now" : "Offline";
             } else {
-              el.hidden = state !== "active";
-              el.textContent = state === "active" ? "· Active now" : "";
+              el.hidden = !state || state === "hidden";
+              el.classList.toggle("is-active", state === "active");
+              el.textContent = state === "active" ? "Active now" : formatLastSeen(lastSeenAt[el.dataset.userId]);
             }
           });
         } catch (_) {

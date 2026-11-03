@@ -49,6 +49,26 @@ def view(username):
                            achievements=[a for a in social.user_achievements(prof["id"]) if a["earned"]])
 
 
+@bp.get("/u/<username>/<kind>")
+@login_required
+def connections(username, kind):
+    if kind not in ("followers", "following"):
+        abort(404)
+    prof = _profile_or_404(username)
+    if not social.can_see_profile_content(g.user, prof):
+        abort(404)
+
+    column = "follower_id" if kind == "followers" else "followee_id"
+    filter_column = "followee_id" if kind == "followers" else "follower_id"
+    rows = sb.select("follows", f"{column},created_at", order="created_at", desc=True, **{filter_column: prof["id"]})
+    ids = [row[column] for row in rows]
+    people = sb.by_id("profiles", ids)
+    blocked = social.blocked_between(g.user["id"])
+    items = [people[user_id] for user_id in ids if user_id in people and user_id not in blocked
+             and people[user_id]["account_status"] == "approved"]
+    return render_template("profiles/connections.html", prof=prof, kind=kind, items=items)
+
+
 @bp.post("/u/<username>/follow")
 @login_required
 @limiter.limit("120 per hour")
@@ -246,15 +266,15 @@ def presence_ping():
 def presence_status():
     ids = list(dict.fromkeys(request.args.getlist("user_id")))[:100]
     if not ids:
-        return jsonify(statuses={})
+        return jsonify(statuses={}, last_seen_at={})
     if not g.user.get("show_active_status", True):
-        return jsonify(statuses={user_id: "hidden" for user_id in ids})
+        return jsonify(statuses={user_id: "hidden" for user_id in ids}, last_seen_at={})
 
     people = sb.by_id("profiles", ids, cols="id,last_seen_at,show_active_status")
     blocked = {row["blocked_id"] for row in sb.select("blocks", blocker_id=g.user["id"])}
     blocked.update(row["blocker_id"] for row in sb.select("blocks", blocked_id=g.user["id"]))
     cutoff = utcnow().timestamp() - current_app.config["ACTIVE_WINDOW_SECONDS"]
-    statuses = {}
+    statuses, last_seen_at = {}, {}
     for user_id in ids:
         person = people.get(user_id)
         if not person or not person.get("show_active_status", True) or user_id in blocked:
@@ -262,7 +282,8 @@ def presence_status():
             continue
         seen = parse_dt(person.get("last_seen_at"))
         statuses[user_id] = "active" if seen and seen.timestamp() >= cutoff else "offline"
-    return jsonify(statuses=statuses)
+        last_seen_at[user_id] = person.get("last_seen_at")
+    return jsonify(statuses=statuses, last_seen_at=last_seen_at)
 
 
 def _set_privacy(me, private):

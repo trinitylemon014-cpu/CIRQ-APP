@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ 'Followers' if kind == 'followers' else 'Following' }} · {{ prof.display_name }}{% endblock %}
+{% block content %}
+<a class="row muted" href="{{ url_for('profiles.view', username=prof.username) }}" style="margin-bottom:10px">{{ m.icon('arrow-left') }} {{ prof.display_name }}</a>
+<h1 class="page-title">{{ 'Followers' if kind == 'followers' else 'Following' }}</h1>
+<div class="tabs" role="tablist">
+  <a href="{{ url_for('profiles.connections', username=prof.username, kind='followers') }}" class="{{ 'active' if kind == 'followers' }}">Followers</a>
+  <a href="{{ url_for('profiles.connections', username=prof.username, kind='following') }}" class="{{ 'active' if kind == 'following' }}">Following</a>
+</div>
+<div class="card">
+  {% for p in items %}
+  <div class="person">
+    <a href="{{ url_for('profiles.view', username=p.username) }}">{{ m.avatar(p, 'sm') }}</a>
+    <div class="grow"><a href="{{ url_for('profiles.view', username=p.username) }}"><b>{{ p.display_name }}</b>{{ m.verified(p) }}</a><br><small class="muted">@{{ p.username }}</small></div>
+  </div>
+  {% else %}
+  <div class="empty">{{ m.icon('users') }}<p>No {{ kind }} yet.</p></div>
+  {% endfor %}
+</div>
+{% endblock %}
