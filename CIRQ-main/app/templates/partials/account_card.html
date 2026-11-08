@@ -1,0 +1,23 @@
+{# Reusable account card for Discover. Expects the display fields set by services/discovery._decorate:
+   p._state (follow state), p._followers (int or none), p._school, p._tier, p._reason, p._trend. Anything missing is simply omitted. #}
+{% import 'partials/macros.html' as m with context %}
+{% macro card(p, i=0, rail=false) %}
+{% set src = avatar_src(p, 160) %}
+<article class="dsc-card{{ ' is-trending' if p._trend }}{{ ' in-rail' if rail }}" style="--i:{{ i if i < 12 else 12 }}" data-dsc-card data-username="{{ p.username }}">
+  <div class="dsc-cover" aria-hidden="true">{% if src %}<img src="{{ src }}" alt="" loading="lazy">{% endif %}</div>
+  {% if p._trend or is_boosted(p) %}<div class="dsc-flags">{% if p._trend %}<span class="dsc-flag trend">{{ m.icon('trending','i-sm') }}+{{ p._trend }} this week</span>{% endif %}{{ m.boosted(p) }}</div>{% endif %}
+  <div class="dsc-avatar">{{ m.avatar(p, 76) }}</div>
+  <div class="dsc-body">
+    <h3 class="dsc-name"><a class="dsc-link" href="{{ url_for('profiles.view', username=p.username) }}">{{ p.display_name }}</a>{{ m.verified(p) }}</h3>
+    <p class="dsc-user">@{{ p.username }}</p>
+    {% if p.bio %}<p class="dsc-bio">{{ p.bio }}</p>{% endif %}
+    <div class="dsc-meta">
+      {% if p._followers is not none %}<span class="dsc-stat"><b data-dsc-followers="{{ p.username }}" data-count="{{ p._followers }}">{{ p._followers|short }}</b> follower{{ '' if p._followers == 1 else 's' }}</span>{% endif %}
+      {% if p._tier %}<span class="chip green">{{ m.icon('trophy','i-sm') }} {{ p._tier }}</span>{% endif %}
+      {% if p._school %}<span class="chip" title="{{ p._school.name }}">{{ m.icon('school','i-sm') }}<span class="dsc-school">{{ p._school.name }}</span></span>{% endif %}
+    </div>
+    {% if p._reason %}<p class="dsc-reason">{{ m.icon('users','i-sm') }}<span>{{ p._reason }}</span></p>{% endif %}
+  </div>
+  <div class="dsc-action">{{ m.follow_btn(p.username, p._state, private=p.is_private) }}</div>
+</article>
+{% endmacro %}
