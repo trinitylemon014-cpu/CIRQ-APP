@@ -1,14 +1,15 @@
 from collections import Counter
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, abort, current_app
 from app.decorators import login_required
-from app.extensions import limiter
+from app.extensions import limiter, db
 from app.services import supabase_service as sb, cloudinary_service as cs, social, recommender, boost_ad_service
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
 from app.services.notification_service import notify
-from app.utils import iso, clean_text, utcnow, hours_from_now, parse_dt
+from app.utils import iso, clean_text, utcnow, hours_from_now, parse_dt, encode_cursor, decode_cursor
 
 bp = Blueprint("feed", __name__)
+COMMENT_PAGE = 20   # comments are always loaded a page at a time, never all at once
 
 
 def _page_size():
@@ -228,25 +229,61 @@ def save_post(post_id):
     return jsonify(saved=state)
 
 
-@bp.get("/post/<post_id>")
-@login_required
-def detail(post_id):
+def _viewable_post(post_id):
     post = sb.get("posts", id=post_id)
     author = sb.get("profiles", id=post["author_id"]) if post else None
     if not post or not social.can_view_post(g.user, post, author):
         abort(404)
+    return post, author
+
+
+def _hydrate_comments(rows, hidden):
+    """Attach author, like count and 'did I like it' to comment rows. Blocked or unapproved authors are dropped."""
+    authors = sb.by_id("profiles", [c["author_id"] for c in rows])
+    ids = [c["id"] for c in rows]
+    like_n = Counter(r["comment_id"] for r in sb.in_("comment_likes", "comment_id", ids, cols="comment_id"))
+    mine = social._mine("comment_likes", "comment_id", ids, g.user["id"])
+    out = []
+    for c in rows:
+        a = authors.get(c["author_id"])
+        if c["author_id"] in hidden or not a or a.get("account_status") != "approved":
+            continue
+        out.append({**c, "author": a, "like_count": like_n[c["id"]], "liked": c["id"] in mine})
+    return out
+
+
+@bp.get("/post/<post_id>")
+@login_required
+def detail(post_id):
+    post, author = _viewable_post(post_id)
     card = social.hydrate_posts([post], g.user["id"])[0]
     hidden = social.blocked_between(g.user["id"])
-    comments = [c for c in sb.select("comments", post_id=post_id, moderation_status="ok", order="created_at", desc=False)
-                if c["author_id"] not in hidden]
-    authors = sb.by_id("profiles", [c["author_id"] for c in comments])
-    likes = sb.in_("comment_likes", "comment_id", [c["id"] for c in comments])
-    like_n = Counter(r["comment_id"] for r in likes)
-    mine = {r["comment_id"] for r in likes if r["user_id"] == g.user["id"]}
-    for c in comments:
-        c["author"] = authors.get(c["author_id"])
-        c["like_count"], c["liked"] = like_n[c["id"]], c["id"] in mine
+    rows = sb.select("comments", post_id=post_id, moderation_status="ok", order="created_at", desc=False)
+    comments = _hydrate_comments(rows, hidden)
     return render_template("feed/detail.html", post=card, comments=comments)
+
+
+@bp.get("/api/posts/<post_id>/comments")
+@login_required
+@limiter.limit("180 per minute", key_func=lambda: g.user["id"])
+def comments_page(post_id):
+    """One page of comments, newest first, as ready-to-insert HTML. Powers the side/sheet comment panel on reels and posts."""
+    post, _author = _viewable_post(post_id)
+    try:
+        cursor = decode_cursor(request.args.get("before"))
+    except ValueError:
+        abort(400, description="Invalid comments cursor.")
+    q = db().table("comments").select("*").eq("post_id", post_id).eq("moderation_status", "ok")
+    if cursor:
+        ts, cid = cursor
+        q = q.or_(f"created_at.lt.{ts},and(created_at.eq.{ts},id.lt.{cid})")
+    rows = q.order("created_at", desc=True).order("id", desc=True).limit(COMMENT_PAGE + 1).execute().data or []
+    has_more = len(rows) > COMMENT_PAGE
+    rows = rows[:COMMENT_PAGE]
+    comments = _hydrate_comments(rows, social.blocked_between(g.user["id"]))
+    html = render_template("partials/comment_rows.html", comments=comments, post_author_id=post["author_id"])
+    return jsonify(html=html, count=post.get("comment_count") or 0, has_more=has_more,
+                   next_cursor=encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else "")
 
 
 @bp.post("/posts/<post_id>/comments")
@@ -272,7 +309,10 @@ def add_comment(post_id):
     c["author"] = g.user
     c["like_count"], c["liked"] = 0, False
     if wants_json:
-        return jsonify(html=render_template("partials/comment.html", c=c), count=sb.get("posts", "comment_count", id=post_id)["comment_count"])
+        panel = request.form.get("view") == "panel"
+        html = (render_template("partials/comment_row.html", c=c, post_author_id=post["author_id"]) if panel
+                else render_template("partials/comment.html", c=c))
+        return jsonify(html=html, id=c["id"], count=sb.get("posts", "comment_count", id=post_id)["comment_count"])
     return redirect(url_for("feed.detail", post_id=post_id) + "#comments")
 
 
@@ -309,7 +349,7 @@ def delete_comment(comment_id):
         abort(403)
     sb.delete("comments", id=comment_id)
     if request.headers.get("X-Requested-With") == "fetch":
-        return jsonify(ok=True)
+        return jsonify(ok=True, count=(sb.get("posts", "comment_count", id=c["post_id"]) or {}).get("comment_count", 0))
     flash("Comment deleted.", "info")
     return redirect(request.referrer or url_for("feed.detail", post_id=c["post_id"]))
 
