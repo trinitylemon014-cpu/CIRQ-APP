@@ -1,14 +1,19 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Discover{% endblock %}
+{% block body_class %}{{ 'page-wide' if tab == 'people' }}{% endblock %}
 {% block content %}
 <h1 class="page-title">Discover</h1>
-<form class="row" method="get"><input type="hidden" name="tab" value="{{ tab }}"><input class="input" name="q" value="{{ q }}" placeholder="Search students, schools, events" aria-label="Search"><button class="send" aria-label="Search">{{ m.icon('search') }}</button></form>
-<div class="tabs">{% for key, label in [('people','People'),('schools','Schools'),('posts','Popular'),('events','Events')] %}<a href="?tab={{ key }}{{ '&q=' ~ q if q }}" class="{{ 'active' if tab == key }}">{{ label }}</a>{% endfor %}</div>
+<form class="dsc-search" method="get" role="search" data-dsc-form>
+  <input type="hidden" name="tab" value="{{ tab }}">
+  {% if tab == 'people' and acct %}{% if acct.cat != 'all' %}<input type="hidden" name="cat" value="{{ acct.cat }}">{% endif %}{% if acct.school %}<input type="hidden" name="school" value="{{ acct.school }}">{% endif %}{% endif %}
+  <span class="dsc-search-ic" aria-hidden="true">{{ m.icon('search') }}</span>
+  <input class="dsc-input" id="dsc-q" name="q" value="{{ q }}" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"
+         placeholder="{{ 'Search accounts or creators' if tab == 'people' else 'Search students, schools, events' }}" aria-label="Search" data-dsc-input>
+  <button class="dsc-clear" type="button" data-dsc-clear aria-label="Clear search" {{ 'hidden' if not q }}>{{ m.icon('x') }}</button>
+  <button class="btn sm dsc-go">Search</button>
+</form>
+<div class="tabs">{% for key, label in [('people','Accounts'),('schools','Schools'),('events','Events'),('posts','Posts')] %}<a href="?tab={{ key }}{{ '&q=' ~ q if q }}" class="{{ 'active' if tab == key }}">{{ label }}</a>{% endfor %}</div>
 {% if tab == 'people' %}
-  <form method="get" class="row" style="margin-bottom:10px"><input type="hidden" name="tab" value="people"><input type="hidden" name="q" value="{{ q }}"><select class="input" name="school" onchange="this.form.submit()" aria-label="Filter by school"><option value="">All schools</option>{% for s in all_schools %}<option value="{{ s.id }}" {{ 'selected' if sel_school == s.id }}>{{ s.name }}</option>{% endfor %}</select></form>
-  <div class="card">{% for p in people %}<div class="person"><a href="{{ url_for('profiles.view', username=p.username) }}">{{ m.avatar(p, 'sm') }}</a>
-    <div class="grow"><a href="{{ url_for('profiles.view', username=p.username) }}"><b>{{ p.display_name }}</b>{{ m.verified(p) }}</a> {{ m.boosted(p) }}<br><small class="muted">@{{ p.username }}{% if p._school %} · {{ p._school.name }}{% endif %}</small></div>
-    {{ m.follow_btn(p.username, p._state, private=p.is_private) }}</div>
-  {% else %}<div class="empty">{{ m.icon('users') }}<p>No students found. Try a different search.</p></div>{% endfor %}</div>
+  <div id="dsc-body" data-dsc-body data-url="{{ url_for('discover.index') }}">{% include 'discover/_accounts.html' %}</div>
 {% elif tab == 'schools' %}
   {% for s in schools %}<a class="card row" style="margin-bottom:10px" href="{{ url_for('schools.view', slug=s.slug) }}">{{ m.school_logo(s, 52) }}<div class="grow"><b>{{ s.name }}</b>{% if s.verified %} <span class="chip violet">Verified</span>{% endif %}<br><small class="muted">{{ s.city or '' }}{{ ', ' if s.city }}{{ s.country }}</small></div>{{ m.icon('arrow-left') }}</a>
   {% else %}{% call m.empty('school','No schools found','') %}{% endcall %}{% endfor %}
@@ -19,3 +24,4 @@
   {% else %}{% call m.empty('calendar','No upcoming events','Be the first to host one on LINKUP.') %}<a class="btn" href="{{ url_for('linkup.new') }}">Create event</a>{% endcall %}{% endfor %}
 {% endif %}
 {% endblock %}
+{% block scripts %}{% if tab == 'people' %}<script src="{{ url_for('static', filename='js/discover.js') }}" defer></script>{% endif %}{% endblock %}
