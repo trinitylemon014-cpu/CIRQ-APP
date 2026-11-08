@@ -382,6 +382,7 @@
         $$(`[data-follow="${who}"]`).forEach((b) => { b.textContent = label; b.classList.toggle("following", r.state !== "none"); b.dataset.state = r.state; });
         const n = $("[data-followers]"); if (n) n.textContent = r.followers;
         if (r.state === "requested") toast(`Request sent to @${who}`, "success");
+        document.dispatchEvent(new CustomEvent("cirq:follow-changed", { detail: { username: who, state: r.state, followers: r.followers } }));
       } catch (err) { toast(err.message, "error"); }
       fol.disabled = false; return;
     }
