@@ -13,14 +13,12 @@
     {% if r.author_id != cur.id %}<span style="display:inline-block;margin:8px 0">{{ m.follow_btn(r.author.username, 'following' if r.author_id in following else 'none') }}</span>{% endif %}
     <p style="margin:6px 0 0">{{ r.caption or '' }}</p></div>
   <div class="reel-progress" aria-hidden="true"><i></i></div>
-  <div class="side">
-    <button class="act {{ 'liked' if r.liked }}" type="button" data-like="{{ r.id }}">{{ m.icon('heart') }}<span data-count>{{ r.like_count }}</span></button>
-    <a class="act" href="{{ url_for('feed.detail', post_id=r.id) }}#comments">{{ m.icon('comment') }}<span>{{ r.comment_count }}</span></a>
-    <span class="act reel-view-count" aria-label="{{ '{:,}'.format(r.views_count or 0) }} views" title="{{ '{:,}'.format(r.views_count or 0) }} views">
-      {{ m.icon('eye') }}<span data-reel-view-count>{{ (r.views_count or 0)|short }}</span>
-    </span>
-    <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=r.id, _external=True) }}">{{ m.icon('share') }}<span>Share</span></button>
-    <button class="act {{ 'saved' if r.saved }}" type="button" data-save="{{ r.id }}" aria-pressed="{{ 'true' if r.saved else 'false' }}" aria-label="{{ 'Remove saved reel' if r.saved else 'Save reel' }}">{{ m.icon('bookmark') }}<span>{{ 'Saved' if r.saved else 'Save' }}</span></button>
+  <div class="side" role="group" aria-label="Reel actions">
+    <button class="act {{ 'liked' if r.liked }}" type="button" data-like="{{ r.id }}" aria-pressed="{{ 'true' if r.liked else 'false' }}" aria-label="Like">{{ m.icon('heart') }}<span data-count>{{ r.like_count }}</span></button>
+    <a class="act" href="{{ url_for('feed.detail', post_id=r.id) }}#comments" data-comments="{{ r.id }}" aria-label="Open comments">{{ m.icon('comment') }}<span data-comment-count-for="{{ r.id }}">{{ (r.comment_count or 0)|short }}</span></a>
+    <div class="act reel-view-count" role="img" aria-label="{{ '{:,}'.format(r.views_count or 0) }} views" title="{{ '{:,}'.format(r.views_count or 0) }} views">{{ m.icon('eye') }}<span data-reel-view-count>{{ (r.views_count or 0)|short }}</span></div>
+    <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=r.id, _external=True) }}" aria-label="Copy link to share">{{ m.icon('share') }}<span>Share</span></button>
+    <button class="act {{ 'saved' if r.saved }}" type="button" data-save="{{ r.id }}" aria-pressed="{{ 'true' if r.saved else 'false' }}" aria-label="{{ 'Remove from saved' if r.saved else 'Save' }}">{{ m.icon('bookmark') }}<span data-save-label>{{ 'Saved' if r.saved else 'Save' }}</span></button>
     <div class="menu reel-options">
       <button class="act" type="button" data-menu aria-label="More reel options" aria-expanded="false">{{ m.icon('more') }}<span>More</span></button>
       <div class="menu-list">
