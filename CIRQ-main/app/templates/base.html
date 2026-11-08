@@ -136,11 +136,40 @@
   </form>
 </dialog>
 
+
+{# One comment panel for the whole app: docks beside a reel on wide screens, floats at the side on mid screens, slides up as a sheet on phones. Driven by static/js/comments.js #}
+<aside class="cpanel" id="comments-panel" data-cpanel role="dialog" aria-modal="false" aria-labelledby="cpanel-title" aria-hidden="true" inert tabindex="-1">
+  <div class="cpanel-grip" data-cpanel-grip aria-hidden="true"><i></i></div>
+  <header class="cpanel-head" data-cpanel-head>
+    <h2 id="cpanel-title">Comments<span class="cpanel-count" data-cpanel-count></span></h2>
+    <button class="icon-btn" type="button" data-cpanel-close aria-label="Close comments">{{ m.icon('x') }}</button>
+  </header>
+  <div class="cpanel-body" data-cpanel-body>
+    <div class="cpanel-list" data-cpanel-list aria-live="polite"></div>
+    <div class="cpanel-state" data-cpanel-state></div>
+    <div class="cpanel-sentinel" data-cpanel-sentinel aria-hidden="true"></div>
+  </div>
+  <footer class="cpanel-foot">
+    <div class="cpanel-emoji" role="group" aria-label="Quick reactions">
+      {% for e in ['❤️','🙌','🔥','👏','😢','😍','😮','😂'] %}<button type="button" data-cemoji="{{ e }}" aria-label="Add {{ e }}">{{ e }}</button>{% endfor %}
+    </div>
+    <form class="cpanel-form" data-cpanel-form autocomplete="off">
+      <span class="cpanel-me" data-cpanel-me data-username="{{ cur.username }}">{{ m.avatar(cur, 'sm') }}</span>
+      <div class="cpanel-field">
+        <textarea name="body" rows="1" maxlength="500" placeholder="Add a comment…" aria-label="Add a comment" data-cpanel-input enterkeyhint="send"></textarea>
+        <span class="cpanel-chars" data-cpanel-chars hidden></span>
+      </div>
+      <button class="cpanel-send" type="submit" data-cpanel-send disabled>Post</button>
+    </form>
+  </footer>
+</aside>
+<div class="cpanel-backdrop" data-cpanel-close hidden></div>
 {% else %}
 <main id="main">{% block bare %}{% block public %}{% endblock %}{% endblock %}</main>
 {% endif %}
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
+{% if cur and cur.account_status == 'approved' and not bare %}<script src="{{ url_for('static', filename='js/comments.js') }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>
