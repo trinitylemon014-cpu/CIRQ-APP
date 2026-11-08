@@ -110,6 +110,18 @@ def can_view_post(viewer, post, author):
     return is_following(viewer["id"], author["id"])
 
 
+def _mine(table, col, ids, uid):
+    """Which of `ids` this user has a row for (likes, saves...). Filters in SQL, so the cost doesn't grow with a post's popularity."""
+    ids = list({i for i in ids if i})
+    if not uid or not ids:
+        return set()
+    out = set()
+    for i in range(0, len(ids), 80):
+        rows = db().table(table).select(col).eq("user_id", uid).in_(col, ids[i:i + 80]).execute().data or []
+        out |= {r[col] for r in rows}
+    return out
+
+
 def hydrate_posts(posts, viewer_id):
     if not posts:
         return []
@@ -118,7 +130,8 @@ def hydrate_posts(posts, viewer_id):
     media = {}
     for m in sb.in_("post_media", "post_id", ids):
         media.setdefault(m["post_id"], []).append(m)
-    liked = {r["post_id"] for r in sb.in_("likes", "post_id", ids) if r["user_id"] == viewer_id} if viewer_id else set()
+    liked = _mine("likes", "post_id", ids, viewer_id)
+    saved = _mine("saved_posts", "post_id", ids, viewer_id)
     schools = sb.by_id("schools", [a.get("school_id") for a in authors.values()])
     out = []
     for p in posts:
@@ -126,8 +139,56 @@ def hydrate_posts(posts, viewer_id):
         if not a:
             continue
         out.append({**p, "author": a, "school": schools.get(a.get("school_id")), "media": media.get(p["id"], []),
-                    "liked": p["id"] in liked})
+                    "liked": p["id"] in liked, "saved": p["id"] in saved})
     return out
+
+
+def _saved_visible(viewer, post, author, hidden, following):
+    """Bulk-friendly version of can_view_post for the saved grid (no per-row block/follow queries)."""
+    if not author or post.get("moderation_status") != "ok":
+        return False
+    if post["author_id"] == viewer["id"]:
+        return not post.get("community_id")
+    if author.get("account_status") != "approved" or post["author_id"] in hidden:
+        return False
+    if post.get("community_id"):
+        return can_view_post(viewer, post, author)
+    if post.get("visibility") == "public" and not author.get("is_private"):
+        return True
+    return post["author_id"] in following
+
+
+def saved_page(viewer, kind=None, before=None, n=18):
+    """The viewer's bookmarks, newest-saved first, as (hydrated posts, next cursor).
+
+    `kind` is None (everything), 'post' or 'reel'. Posts that were deleted, removed by moderation or are no longer
+    visible to the viewer (blocked, account went private) are skipped silently instead of leaving broken tiles."""
+    uid = viewer["id"]
+    hidden, following = blocked_between(uid), set(following_ids(uid))
+    batch, out, scan_from, exhausted, rounds = n * 2, [], before, False, 0
+    while len(out) <= n and not exhausted and rounds < 6:
+        rounds += 1
+        q = db().table("saved_posts").select("post_id,created_at").eq("user_id", uid).order("created_at", desc=True).limit(batch)
+        if scan_from:
+            q = q.lt("created_at", scan_from)
+        rows = q.execute().data or []
+        exhausted = len(rows) < batch
+        if not rows:
+            break
+        scan_from = rows[-1]["created_at"]
+        posts = sb.by_id("posts", [r["post_id"] for r in rows])
+        authors = sb.by_id("profiles", [p["author_id"] for p in posts.values()])
+        for r in rows:
+            p = posts.get(r["post_id"])
+            if not p or (kind and p.get("kind") != kind) or p.get("kind") not in ("post", "reel"):
+                continue
+            if _saved_visible(viewer, p, authors.get(p["author_id"]), hidden, following):
+                out.append({**p, "saved_at": r["created_at"]})
+    if len(out) > n:
+        cursor = out[n - 1]["saved_at"]
+    else:
+        cursor = None if exhausted else scan_from
+    return hydrate_posts(out[:n], uid), cursor
 
 
 def profile_stats(profile):
