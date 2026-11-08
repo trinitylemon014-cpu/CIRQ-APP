@@ -1,0 +1,22 @@
+{# One comment in the side / sheet comment panel. Needs: c (with author, like_count, liked) and post_author_id. #}
+{% import 'partials/macros.html' as m with context %}
+{% set is_mine = c.author_id == cur.id %}
+{% set can_delete = is_mine or post_author_id == cur.id or cur.get('role') == 'admin' %}
+<article class="crow" id="c-{{ c.id }}" data-comment="{{ c.id }}">
+  <a class="crow-av" href="{{ url_for('profiles.view', username=c.author.username) }}" aria-label="{{ c.author.username }}'s profile">{{ m.avatar(c.author, 'sm') }}</a>
+  <div class="crow-main">
+    <div class="crow-top">
+      <a class="crow-name" href="{{ url_for('profiles.view', username=c.author.username) }}">{{ c.author.username }}</a>{{ m.verified(c.author) }}
+      {% if c.author_id == post_author_id %}<span class="crow-tag">Author</span>{% endif %}
+      <time class="crow-time">{{ c.created_at|ago }}</time>
+    </div>
+    <p class="crow-text">{{ c.body }}</p>
+    {% if can_delete or not is_mine %}
+    <div class="crow-actions">
+      {% if can_delete %}<button type="button" data-comment-delete="{{ c.id }}">Delete</button>{% endif %}
+      {% if not is_mine %}<button type="button" data-report="comment:{{ c.id }}">Report</button>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  <button class="crow-like {{ 'liked' if c.liked }}" type="button" data-clike="{{ c.id }}" aria-pressed="{{ 'true' if c.liked else 'false' }}" aria-label="Like comment">{{ m.icon('heart') }}<span data-count>{{ c.like_count or '' }}</span></button>
+</article>
