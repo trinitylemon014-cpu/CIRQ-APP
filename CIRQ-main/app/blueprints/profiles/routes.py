@@ -16,6 +16,13 @@ def _profile_or_404(username):
     return p
 
 
+@bp.get("/saved")
+@login_required
+def saved_shortcut():
+    """Short link to 'Saved posts and reels' on your own profile."""
+    return redirect(url_for("profiles.view", username=g.user["username"], tab="saved"))
+
+
 @bp.get("/u/<username>")
 @login_required
 def view(username):
@@ -23,27 +30,39 @@ def view(username):
     me = g.user
     if social.is_blocked(me["id"], prof["id"]) and prof["id"] != me["id"]:
         abort(404)
+    mine = prof["id"] == me["id"]
     stats = social.profile_stats(prof)
     school = sb.get("schools", id=prof["school_id"]) if prof.get("school_id") else None
     can_see = social.can_see_profile_content(me, prof)
     tab = request.args.get("tab", "posts")
+    if tab not in ("posts", "reels", "saved") or (tab == "saved" and not mine):
+        tab = "posts"                      # bookmarks are private: only the owner ever sees the Saved tab
+    saved_type = request.args.get("type", "all") if tab == "saved" else "all"
+    if saved_type not in ("all", "posts", "reels"):
+        saved_type = "all"
+    before = request.args.get("before")
+    if before and not parse_dt(before):
+        abort(400, description="Invalid cursor.")
     items, cursor = [], None
-    if can_see:
+    if can_see and tab == "saved":
+        items, cursor = social.saved_page(me, {"posts": "post", "reels": "reel"}.get(saved_type), before)
+    elif can_see:
         n = current_app.config["PAGE_SIZE"]
         q = db().table("posts").select("*").eq("author_id", prof["id"]).eq("moderation_status", "ok") \
             .eq("kind", "reel" if tab == "reels" else "post").is_("community_id", "null").order("created_at", desc=True).limit(n + 1)
-        if request.args.get("before"):
-            q = q.lt("created_at", request.args["before"])
+        if before:
+            q = q.lt("created_at", before)
         rows = q.execute().data or []
-        if me["id"] != prof["id"] and not social.is_following(me["id"], prof["id"]):
+        if not mine and not social.is_following(me["id"], prof["id"]):
             rows = [r for r in rows if r["visibility"] == "public"]
         cursor = rows[n - 1]["created_at"] if len(rows) > n else None
         items = social.hydrate_posts(rows[:n], me["id"])
     if request.args.get("partial"):
+        if tab == "saved":
+            return render_template("partials/saved_tiles.html", posts=items, cursor=cursor)
         return render_template("partials/post_list.html", posts=items, cursor=cursor)
-    mine = prof["id"] == me["id"]
     return render_template("profiles/view.html", prof=prof, stats=stats, school=school, can_see=can_see, items=items, posts=items, cursor=cursor,
-                           tab=tab, follow_state="none" if mine else social.follow_state(me["id"], prof["id"]),
+                           tab=tab, saved_type=saved_type, follow_state="none" if mine else social.follow_state(me["id"], prof["id"]),
                            can_message=(not mine) and social.can_message(me, prof),
                            pending_requests=social.pending_request_count(me["id"]) if mine and prof.get("is_private") else 0,
                            achievements=[a for a in social.user_achievements(prof["id"]) if a["earned"]])
