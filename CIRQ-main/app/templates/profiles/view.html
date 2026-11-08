@@ -12,7 +12,7 @@
     {% if prof.role == 'admin' %}<span class="chip violet">{{ m.icon('code','i-sm') }} Team</span>{% endif %}
   </div>
   {% if prof.bio %}<p style="margin-top:14px">{{ prof.bio }}</p>{% endif %}
-  <div class="stats"><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='followers') }}"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></a><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='following') }}"><b>{{ stats.following|short }}</b><small>Following</small></a><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Reels' if tab == 'reels' else 'Posts' }}</small></div></div>
+  <div class="stats"><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='followers') }}"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></a><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='following') }}"><b>{{ stats.following|short }}</b><small>Following</small></a><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Saved' if tab == 'saved' else ('Reels' if tab == 'reels' else 'Posts') }}</small></div></div>
   {% if mine %}<div class="row wrap" style="justify-content:center"><a class="btn ghost" href="{{ url_for('profiles.settings') }}">Edit profile</a><a class="btn ghost" href="{{ url_for('profiles.status') }}">CIRQ STATUS</a>{% if prof.is_private %}<a class="btn ghost" href="{{ url_for('profiles.follow_requests') }}">Follow requests{% if pending_requests %} <span class="chip lime">{{ pending_requests }}</span>{% endif %}</a>{% endif %}</div>
   {% else %}
   <div class="row" style="justify-content:center">{{ m.follow_btn(prof.username, follow_state, small=False, private=prof.is_private) }}
@@ -23,8 +23,23 @@
   {% endif %}
 </section>
 {% if achievements %}<div class="tray" style="margin-top:10px">{% for a in achievements %}<span class="chip lime" title="{{ a.description }}">{{ m.icon(a.icon,'i-sm') }} {{ a.name }}</span>{% endfor %}</div>{% endif %}
-<div class="tabs" role="tablist"><a href="?tab=posts" class="{{ 'active' if tab != 'reels' }}">Posts</a><a href="?tab=reels" class="{{ 'active' if tab == 'reels' }}">Reels</a></div>
-{% if not can_see %}{% call m.empty('lock', 'This account is private', ('Your request is waiting for approval.' if follow_state == 'requested' else 'Follow this account to see their photos, videos and stories.')) %}{% endcall %}
+<div class="tabs" role="tablist"><a href="?tab=posts" class="{{ 'active' if tab == 'posts' }}">Posts</a><a href="?tab=reels" class="{{ 'active' if tab == 'reels' }}">Reels</a>{% if mine %}<a href="?tab=saved" class="{{ 'active' if tab == 'saved' }}">{{ m.icon('bookmark','i-sm') }} Saved</a>{% endif %}</div>
+{% if tab == 'saved' %}
+<section class="saved-page" aria-labelledby="saved-title">
+  <div class="saved-head">
+    <div><h2 id="saved-title">Saved posts and reels</h2><p class="muted small">Only you can see what you save.</p></div>
+    <nav class="saved-filter" aria-label="Filter saved items">
+      <a href="?tab=saved" class="{{ 'active' if saved_type == 'all' }}">All</a>
+      <a href="?tab=saved&type=posts" class="{{ 'active' if saved_type == 'posts' }}">Posts</a>
+      <a href="?tab=saved&type=reels" class="{{ 'active' if saved_type == 'reels' }}">Reels</a>
+    </nav>
+  </div>
+  <div class="saved-grid" id="feed" data-feed-url="{{ url_for('profiles.view', username=prof.username, tab='saved', type=saved_type) }}">{% include 'partials/saved_tiles.html' %}</div>
+  <div class="card empty saved-empty" data-saved-empty {{ 'hidden' if items }}>{{ m.icon('bookmark') }}<h3>{{ 'Nothing saved yet' if saved_type == 'all' else ('No saved reels yet' if saved_type == 'reels' else 'No saved posts yet') }}</h3>
+    <p>Tap the bookmark on any post or reel to keep it here for later.</p><a class="btn sm" href="{{ url_for('reels.index') }}">Explore reels</a></div>
+  <div class="row" style="justify-content:center;margin-top:16px"><button class="btn ghost" id="load-more" type="button" data-target="#feed" {{ 'hidden' if not cursor }}>Load more</button></div>
+</section>
+{% elif not can_see %}{% call m.empty('lock', 'This account is private', ('Your request is waiting for approval.' if follow_state == 'requested' else 'Follow this account to see their photos, videos and stories.')) %}{% endcall %}
 {% elif items %}<div id="feed" data-feed-url="{{ url_for('profiles.view', username=prof.username, tab=tab) }}">{% include 'partials/post_list.html' %}</div>
   <div class="row" style="justify-content:center;margin-top:16px"><button class="btn ghost" id="load-more" type="button" data-target="#feed" {{ 'hidden' if not cursor }}>Load more</button></div>
 {% else %}{% call m.empty('image', 'Nothing here yet', '') %}{% endcall %}{% endif %}
