@@ -313,7 +313,7 @@ def test_reel_saves_are_private_and_visibility_checked(as_user, db, mk):
     response = viewer.post(f"/posts/{item['id']}/save")
     assert response.get_json() == {"saved": True}
     assert len(db.data["saved_posts"]) == 1
-    assert b"Remove saved reel" in viewer.get("/reels").data
+    assert b"Remove from saved" in viewer.get("/reels").data
     assert viewer.post(f"/posts/{item['id']}/save").get_json() == {"saved": False}
     assert not db.data["saved_posts"]
 
