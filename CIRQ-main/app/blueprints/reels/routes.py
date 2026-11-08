@@ -103,10 +103,6 @@ def index():
     else:
         cursor = _cursor_for(page[-1]) if has_more and page else None
         after_cursor = None
-    saved = {row["post_id"] for row in sb.in_("saved_posts", "post_id", [r["id"] for r in page])
-             if row["user_id"] == me["id"]} if page else set()
-    for reel in page:
-        reel["saved"] = reel["id"] in saved
     sponsored_ad = boost_ad_service.for_viewer(me["id"], request.args.get(direction, ""))
     if request.args.get("partial"):
         rendered_page = page if direction == "before" else sorted(
