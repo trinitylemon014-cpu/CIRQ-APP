@@ -232,6 +232,7 @@
     setTimeout(() => el.remove(), 5000);
   }
   setTimeout(() => $$(".flash").forEach((f) => f.remove()), 6000);
+  window.CIRQ = Object.assign(window.CIRQ || {}, { api, toast, csrf });   // shared with comments.js
 
   /* ---------- viewing signals: what a student dwells on / watches (powers "Suggested for you") ---------- */
   const sig = { q: [], timer: null };
@@ -328,7 +329,7 @@
       try {
         const r = await api(`/comments/${clike.dataset.clike}/like`);
         clike.classList.toggle("liked", r.liked); clike.setAttribute("aria-pressed", r.liked);
-        $("[data-count]", clike).textContent = r.count;
+        $("[data-count]", clike).textContent = clike.classList.contains("crow-like") ? (r.count || "") : r.count;
       } catch (err) { toast(err.message, "error"); }
       clike.disabled = false; return;
     }
@@ -345,13 +346,26 @@
     }
 
     const save = c("[data-save]");
-    if (save) {
+    if (save) {                // bookmark / un-bookmark a post or reel (reel viewer, post cards and the Saved grid)
+      if (save.disabled) return;
       save.disabled = true;
       try {
         const r = await api(`/posts/${save.dataset.save}/save`);
-        save.classList.toggle("saved", r.saved); save.setAttribute("aria-pressed", r.saved);
-        save.setAttribute("aria-label", r.saved ? "Remove saved reel" : "Save reel");
-        $("span", save).textContent = r.saved ? "Saved" : "Save";
+        $$(`[data-save="${save.dataset.save}"]`).forEach((b) => {   // keep every copy of this post's button in sync
+          b.classList.toggle("saved", r.saved); b.setAttribute("aria-pressed", r.saved);
+          b.setAttribute("aria-label", r.saved ? "Remove from saved" : "Save");
+          const lbl = $("[data-save-label]", b); if (lbl) lbl.textContent = r.saved ? "Saved" : "Save";
+        });
+        const tile = save.closest("[data-saved-tile]");
+        if (tile && !r.saved) {          // un-saving from the Saved grid removes the tile right away
+          const grid = tile.parentElement;
+          tile.classList.add("gone");
+          setTimeout(() => {
+            tile.remove();
+            if (!$("[data-saved-tile]", grid)) { const e = $("[data-saved-empty]"); if (e && !$("[data-more-cursor]", grid)) e.hidden = false; }
+          }, 260);
+        }
+        toast(r.saved ? "Saved to your profile" : "Removed from saved", "success");
       } catch (err) { toast(err.message, "error"); }
       save.disabled = false; return;
     }
@@ -831,7 +845,7 @@
         if (en.intersectionRatio > 0.1) arm(r);
         r._viewVisible = en.isIntersecting && en.intersectionRatio >= 0.6;
         syncReelViewTimer(r);
-        if (en.isIntersecting && en.intersectionRatio > 0.65) { $$("video", reels).forEach((o) => { if (o !== v) o.pause(); }); r._active = true; playReel(r); }
+        if (en.isIntersecting && en.intersectionRatio > 0.65) { $$("video", reels).forEach((o) => { if (o !== v) o.pause(); }); r._active = true; playReel(r); document.dispatchEvent(new CustomEvent("cirq:reel-active", { detail: { id: r.dataset.id } })); }
         else { if (r._active) reportWatch(r); v.pause(); if (en.intersectionRatio === 0) v.currentTime = 0; }
       });
     }, { root: reels, threshold: [0, 0.1, 0.65] });
