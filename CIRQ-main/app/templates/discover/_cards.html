@@ -1,0 +1,3 @@
+{% import 'partials/account_card.html' as ac with context %}
+{% for p in acct.results %}{{ ac.card(p, loop.index0) }}{% endfor %}
+{% if acct.has_more %}<span data-dsc-next="{{ acct.page + 1 }}" hidden></span>{% endif %}

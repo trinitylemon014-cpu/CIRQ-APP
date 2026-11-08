@@ -1,0 +1,62 @@
+{# Body of Discover > Accounts: browse chips, then either the three sections (home) or one filtered grid (results). Swapped in place by discover.js. #}
+{% import 'partials/macros.html' as m with context %}
+{% import 'partials/account_card.html' as ac with context %}
+{% set filtered = acct.mode == 'results' %}
+{% macro nav(label, cat=none, on=false) %}<a class="dsc-chip {{ 'active' if on }}" data-dsc-nav href="{{ url_for('discover.index', tab='people', q=(acct.q or none), cat=cat) }}"{{ ' aria-current=page' if on }}>{{ label }}</a>{% endmacro %}
+
+<nav class="dsc-chips" aria-label="Browse accounts">
+  {% set none_active = not acct.view and not acct.school %}
+  {{ nav('All', on=(none_active and acct.cat == 'all')) }}
+  {% if cur.school_id %}{{ nav('My school', cat='school', on=(none_active and acct.cat == 'school')) }}{% endif %}
+  {{ nav('Verified', cat='verified', on=(none_active and acct.cat == 'verified')) }}
+  {{ nav('Reel creators', cat='creators', on=(none_active and acct.cat == 'creators')) }}
+  <form class="dsc-school-pick" method="get" action="{{ url_for('discover.index') }}">
+    <input type="hidden" name="tab" value="people">{% if acct.q %}<input type="hidden" name="q" value="{{ acct.q }}">{% endif %}
+    <label class="sr-only" for="dsc-school">Browse by school</label>
+    <select id="dsc-school" class="dsc-select {{ 'active' if acct.school }}" name="school" data-dsc-school>
+      <option value="">Browse by school</option>
+      {% for s in all_schools %}<option value="{{ s.id }}" {{ 'selected' if acct.school == s.id }}>{{ s.name }}</option>{% endfor %}
+    </select>
+    <noscript><button class="btn sm ghost">Go</button></noscript>
+  </form>
+</nav>
+
+{% if not filtered %}
+  {% set S = acct.sections %}
+  <section class="dsc-section" aria-labelledby="dsc-h-popular">
+    <header class="dsc-head"><div><h2 id="dsc-h-popular">Popular accounts</h2><p>Most followed on CIRQ, with a lift for your school.</p></div>
+      {% if S.popular|length >= 12 %}<a class="dsc-more" data-dsc-nav href="{{ url_for('discover.index', tab='people', view='popular') }}">See all {{ m.icon('arrow-left') }}</a>{% endif %}</header>
+    {% if S.popular %}<div class="dsc-grid">{% for p in S.popular %}{{ ac.card(p, loop.index0) }}{% endfor %}</div>
+    {% else %}<div class="card empty dsc-empty">{{ m.icon('users') }}<h3>No accounts to show yet</h3><p>As classmates join CIRQ, the most popular accounts will appear here.</p></div>{% endif %}
+  </section>
+
+  <section class="dsc-section" aria-labelledby="dsc-h-rec">
+    <header class="dsc-head"><div><h2 id="dsc-h-rec">Recommended for you</h2><p>Based on who you follow, your school and the posts you enjoy.</p></div>
+      {% if S.recommended|length >= 8 %}<a class="dsc-more" data-dsc-nav href="{{ url_for('discover.index', tab='people', view='recommended') }}">See all {{ m.icon('arrow-left') }}</a>{% endif %}</header>
+    {% if S.recommended %}<div class="dsc-grid">{% for p in S.recommended %}{{ ac.card(p, loop.index0) }}{% endfor %}</div>
+    {% else %}<div class="card empty dsc-empty">{{ m.icon('heart') }}<h3>Nothing to recommend yet</h3><p>Follow a few accounts and like some posts. We'll tailor this list to you.</p></div>{% endif %}
+  </section>
+
+  <section class="dsc-section" aria-labelledby="dsc-h-trend">
+    <header class="dsc-head"><div><h2 id="dsc-h-trend">Trending creators</h2><p>Gaining the most new followers this week.</p></div>
+      <div class="dsc-head-tools">
+        {% if S.trending|length > 3 %}<span class="dsc-arrows"><button type="button" class="icon-btn" data-dsc-scroll="-1" aria-label="Scroll trending left">{{ m.icon('arrow-left') }}</button><button type="button" class="icon-btn flip" data-dsc-scroll="1" aria-label="Scroll trending right">{{ m.icon('arrow-left') }}</button></span>{% endif %}
+        {% if S.trending|length >= 10 %}<a class="dsc-more" data-dsc-nav href="{{ url_for('discover.index', tab='people', view='trending') }}">See all {{ m.icon('arrow-left') }}</a>{% endif %}
+      </div></header>
+    {% if S.trending %}<div class="dsc-rail" data-dsc-rail tabindex="0" aria-label="Trending creators">{% for p in S.trending %}{{ ac.card(p, loop.index0, rail=true) }}{% endfor %}</div>
+    {% else %}<div class="card empty dsc-empty">{{ m.icon('trending') }}<h3>No one is trending this week</h3><p>Accounts that gain followers quickly will show up here.</p></div>{% endif %}
+  </section>
+{% else %}
+  <section class="dsc-section" aria-labelledby="dsc-h-results">
+    <header class="dsc-head"><div><h2 id="dsc-h-results">{{ acct.title }}</h2><p>{{ acct.total }} account{{ '' if acct.total == 1 else 's' }}</p></div>
+      <a class="dsc-more" data-dsc-nav href="{{ url_for('discover.index', tab='people') }}">Clear</a></header>
+    {% if acct.results %}
+      <div class="dsc-grid" data-dsc-results>{% include 'discover/_cards.html' %}</div>
+      <div class="dsc-loadmore" {{ 'hidden' if not acct.has_more }}><button class="btn ghost" type="button" data-dsc-more data-next="{{ acct.page + 1 }}">Show more</button></div>
+    {% else %}
+      <div class="card empty dsc-empty">{{ m.icon('search') }}<h3>No accounts found</h3>
+        <p>{% if acct.q %}We couldn't find anyone matching “{{ acct.q }}”. Check the spelling or try a name or username.{% else %}There's no one here yet. Try a different category.{% endif %}</p>
+        <a class="btn sm" data-dsc-nav href="{{ url_for('discover.index', tab='people') }}">Back to Discover</a></div>
+    {% endif %}
+  </section>
+{% endif %}
