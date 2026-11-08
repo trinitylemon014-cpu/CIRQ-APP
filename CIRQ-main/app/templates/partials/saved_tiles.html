@@ -1,0 +1,21 @@
+{# Tiles for "Saved posts and reels". Each tile: a full-tile link to the post plus an un-save bookmark that sits above it. #}
+{% import 'partials/macros.html' as m with context %}
+{% for p in posts %}{% set md = (p.media|first) if p.media else none %}
+<div class="saved-tile {{ 'is-reel' if p.kind == 'reel' }}" data-saved-tile>
+  <a class="saved-link" href="{{ url_for('feed.detail', post_id=p.id) }}" aria-label="{{ 'Reel' if p.kind == 'reel' else 'Post' }} by {{ p.author.username }}{% if p.caption %}: {{ p.caption|truncate(70) }}{% endif %}">
+    {% if md and md.media_type == 'video' %}<img src="{{ media_src(md, 420, thumb=True) }}" alt="" loading="lazy">
+    {% elif md %}<img src="{{ media_src(md, 420) }}" alt="" loading="lazy">
+    {% else %}<span class="saved-text">{{ (p.caption or '')|truncate(120) }}</span>{% endif %}
+    <span class="saved-shade" aria-hidden="true"></span>
+    <span class="saved-meta">
+      {% if p.kind == 'reel' %}<span>{{ m.icon('play','i-sm') }}{{ (p.views_count or 0)|short }}</span>
+      {% else %}<span>{{ m.icon('heart','i-sm') }}{{ (p.like_count or 0)|short }}</span>{% endif %}
+      <span class="saved-by">@{{ p.author.username }}</span>
+    </span>
+  </a>
+  {% if p.kind == 'reel' %}<span class="saved-kind" aria-hidden="true">{{ m.icon('film','i-sm') }}</span>
+  {% elif p.media|length > 1 %}<span class="saved-kind" aria-hidden="true">{{ m.icon('layers','i-sm') }}</span>{% endif %}
+  <button class="saved-unsave saved" type="button" data-save="{{ p.id }}" aria-pressed="true" aria-label="Remove from saved">{{ m.icon('bookmark','i-sm') }}</button>
+</div>
+{% endfor %}
+{% if cursor %}<div data-more-cursor="{{ cursor }}" hidden></div>{% endif %}
