@@ -32,9 +32,10 @@
   {{ m.music(p) }}
   <div class="post-actions">
     <button class="act {{ 'liked' if p.liked }}" type="button" data-like="{{ p.id }}" aria-pressed="{{ 'true' if p.liked else 'false' }}" aria-label="Like">{{ m.icon('heart') }}<span data-count>{{ p.like_count }}</span></button>
-    <a class="act" href="{{ url_for('feed.detail', post_id=p.id) }}#comments" aria-label="Comments">{{ m.icon('comment') }}<span>{{ p.comment_count }}</span></a>
+    <a class="act" href="{{ url_for('feed.detail', post_id=p.id) }}#comments" data-comments="{{ p.id }}" aria-label="Open comments">{{ m.icon('comment') }}<span data-comment-count-for="{{ p.id }}">{{ p.comment_count }}</span></a>
     {% if p.kind == 'reel' %}<span class="act reel-view-count" aria-label="{{ '{:,}'.format(p.views_count or 0) }} views" title="{{ '{:,}'.format(p.views_count or 0) }} views">{{ m.icon('eye') }}<span>{{ (p.views_count or 0)|short }}</span></span>{% endif %}
     <span class="sp"></span>
     <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=p.id, _external=True) }}" aria-label="Copy link">{{ m.icon('share') }}</button>
+    <button class="act {{ 'saved' if p.saved }}" type="button" data-save="{{ p.id }}" aria-pressed="{{ 'true' if p.saved else 'false' }}" aria-label="{{ 'Remove from saved' if p.saved else 'Save' }}">{{ m.icon('bookmark') }}</button>
   </div>
 </article>
