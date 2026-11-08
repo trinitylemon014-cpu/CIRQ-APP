@@ -1,8 +1,10 @@
 import re
+import base64
+import binascii
 import hashlib
 import secrets
-import re
 import unicodedata
+import uuid
 from datetime import datetime, timezone, timedelta
 
 USERNAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9_.]{1,22})[a-z0-9]$")
@@ -134,6 +136,25 @@ def new_token():
 
 def hash_token(token):
     return hashlib.sha256((token or "").encode()).hexdigest()
+
+
+def encode_cursor(created_at, row_id):
+    """Opaque keyset cursor (created_at + id) so pages stay stable even when rows share a timestamp."""
+    return base64.urlsafe_b64encode(f"{created_at}|{row_id}".encode()).decode().rstrip("=")
+
+
+def decode_cursor(cursor):
+    """Inverse of encode_cursor. Returns (created_at, id), or None for an empty cursor. Raises ValueError if malformed."""
+    if not cursor:
+        return None
+    try:
+        created_at, row_id = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode().split("|", 1)
+        if not parse_dt(created_at):
+            raise ValueError("bad timestamp")
+        uuid.UUID(row_id)
+    except (binascii.Error, UnicodeDecodeError, ValueError, TypeError) as exc:
+        raise ValueError("invalid cursor") from exc
+    return created_at, row_id
 
 
 def clean_text(value, limit):
