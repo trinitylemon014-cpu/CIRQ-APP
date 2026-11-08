@@ -284,6 +284,24 @@ class FakeDB:
             return SimpleNamespace(execute=lambda: SimpleNamespace(data=[{
                 "counted": counted, "views_count": post.get("views_count", 0),
             }]))
+        if name in ("cirq_discover_pool", "cirq_follower_counts"):
+            if not getattr(self, "discover_rpc", True):          # tests can switch the migration "off" to exercise the fallback
+                raise RuntimeError("function public.%s does not exist" % name)
+            approved = {p["id"] for p in self.data.get("profiles", []) if p.get("account_status") == "approved"}
+            agg = {}
+            for f in self.data.get("follows", []):
+                if f["followee_id"] in approved:
+                    a = agg.setdefault(f["followee_id"], [0, 0])
+                    a[0] += 1
+                    if name == "cirq_discover_pool" and f["created_at"] >= params["p_since"]:
+                        a[1] += 1
+            if name == "cirq_follower_counts":
+                rows = [{"profile_id": i, "followers": agg[i][0]} for i in params["p_ids"] if i in agg]
+            else:
+                pop = sorted(agg.items(), key=lambda kv: -kv[1][0])[:params["p_limit"]]
+                rise = sorted([kv for kv in agg.items() if kv[1][1] > 0], key=lambda kv: (-kv[1][1], -kv[1][0]))[:params["p_limit"]]
+                rows = [{"profile_id": k, "followers": v[0], "recent": v[1]} for k, v in {**dict(pop), **dict(rise)}.items()]
+            return SimpleNamespace(execute=lambda: SimpleNamespace(data=rows))
         assert name == "cirq_apply_coins"
         u, amt, reason, ref = params["p_user"], params["p_amount"], params["p_reason"], params["p_ref"] or ""
         prof = next(p for p in self.data["profiles"] if p["id"] == u)
