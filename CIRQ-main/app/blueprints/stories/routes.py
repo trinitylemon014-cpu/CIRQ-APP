@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from flask import Blueprint, request, redirect, url_for, flash, g, jsonify, abort, current_app
 from app.decorators import login_required
@@ -9,6 +10,9 @@ from app.services.notification_service import notify
 from app.utils import iso, utcnow, parse_dt, hours_from_now, clean_text, normalize_username, time_ago
 
 bp = Blueprint("stories", __name__, url_prefix="/stories")
+
+STORY_TEXT_MAX = 280
+STORY_BGS = ("violet", "ocean", "sunset", "forest", "rose", "midnight", "gold", "mono")   # colour themes for text stories
 
 
 def active_stories(author_id):
@@ -37,21 +41,35 @@ def _live_story(story_id):
 @login_required
 @limiter.limit("20 per hour")
 def create():
-    f = request.files.get("media")
+    """Share a story: a photo/video (optionally with a caption) or simple written text on a colour background. Music works with both."""
+    is_text = request.form.get("story_type") == "text"
+    f = None if is_text else request.files.get("media")
     music = request.files.get("audio")
     has_music = bool(music and music.filename)
-    caption = clean_text(request.form.get("caption"), 150)
+    caption = None if is_text else clean_text(request.form.get("caption"), 150)
     title = clean_text(request.form.get("audio_title"), 80)
-    ok, why = check_text(caption)
+    text, bg = "", None
+    if is_text:
+        text = re.sub(r"\n{3,}", "\n\n", clean_text(request.form.get("text"), 10_000))
+        if not text:
+            flash("Write something for your story first.", "error")
+            return redirect(url_for("feed.home"))
+        if len(text) > STORY_TEXT_MAX:
+            flash(f"Text stories can be up to {STORY_TEXT_MAX} characters.", "error")
+            return redirect(url_for("feed.home"))
+        bg = request.form.get("bg") if request.form.get("bg") in STORY_BGS else STORY_BGS[0]
+    ok, why = check_text(text or caption)
     if ok and title:
         ok, why = check_text(title)
     if not ok:
         flash(why, "error")
         return redirect(url_for("feed.home"))
+    info = None
     try:
         if has_music:
             cs.validate_audio(music)          # reject a bad music file before anything is uploaded
-        info = cs.upload(f, "stories", g.user["id"])
+        if not is_text:
+            info = cs.upload(f, "stories", g.user["id"])
     except UploadError as e:
         flash(str(e), "error")
         return redirect(url_for("feed.home"))
@@ -60,13 +78,17 @@ def create():
         try:
             audio = cs.upload_audio(music, "stories", g.user["id"])
         except UploadError as e:
-            cs.destroy(info["public_id"], info["media_type"], info["delivery_type"])   # don't leave the photo/video orphaned
+            if info:
+                cs.destroy(info["public_id"], info["media_type"], info["delivery_type"])   # don't leave the photo/video orphaned
             flash(str(e), "error")
             return redirect(url_for("feed.home"))
-    sb.insert("stories", {"author_id": g.user["id"], "media_type": info["media_type"], "url": info["url"],
-                          "public_id": info["public_id"], "delivery_type": info["delivery_type"], "caption": caption or None,
-                          "expires_at": iso(hours_from_now(current_app.config["STORY_TTL_HOURS"])),
-                          **cs.audio_fields(audio, title)})
+    row = {"author_id": g.user["id"], "caption": caption or None,
+           "expires_at": iso(hours_from_now(current_app.config["STORY_TTL_HOURS"])), **cs.audio_fields(audio, title)}
+    if is_text:
+        row.update(media_type="text", url=None, public_id=None, text_body=text, bg_style=bg)
+    else:
+        row.update(media_type=info["media_type"], url=info["url"], public_id=info["public_id"], delivery_type=info["delivery_type"])
+    sb.insert("stories", row)
     social.grant_achievement(g.user["id"], "storyteller")
     flash("Story shared for 24 hours.", "success")
     return redirect(url_for("feed.home"))
@@ -96,7 +118,8 @@ def api(username):
     return jsonify(user={"username": prof["username"], "name": prof["display_name"], "avatar": cs.avatar_src(prof, 80)},
                    me=mine,
                    can_reply=(not mine) and social.can_message(g.user, prof),
-                   stories=[{"id": s["id"], "type": s["media_type"], "src": cs.media_src(s, 900), "caption": s["caption"],
+                   stories=[{"id": s["id"], "type": s["media_type"], "src": None if s["media_type"] == "text" else cs.media_src(s, 900), "caption": s["caption"],
+                             "text": s.get("text_body"), "bg": (s.get("bg_style") or STORY_BGS[0]) if s["media_type"] == "text" else None,
                              "seen": s["id"] in seen, "liked": s["id"] in liked, "expires_at": s["expires_at"],
                              "audio": cs.audio_src(s) or None, "audio_title": s.get("audio_title"), "comments": comment_n[s["id"]],
                              # Only the owner ever sees the numbers.
@@ -277,7 +300,7 @@ def delete(story_id):
         abort(404)
     if s["author_id"] != g.user["id"]:
         abort(403)
-    cs.destroy(s["public_id"], s["media_type"], s.get("delivery_type", "upload"))
+    cs.destroy(s.get("public_id"), s["media_type"], s.get("delivery_type", "upload"))      # a text story has no file
     cs.destroy(s.get("audio_public_id"), "audio")
     sb.delete("stories", id=story_id)
     if request.headers.get("X-Requested-With") == "fetch":
