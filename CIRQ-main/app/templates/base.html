@@ -111,13 +111,31 @@
 
 <dialog id="story-sheet" aria-label="New story">
   <form id="story-form" class="stack" method="post" action="{{ url_for('stories.create') }}" enctype="multipart/form-data" data-story-form>{{ m.csrf() }}
+    <input type="hidden" name="story_type" value="media" data-story-type>
     <div class="row between"><h2 style="margin:0">New story</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
-    <div class="story-preview" data-media-preview hidden></div>
-    <div class="row wrap" style="gap:10px">
-      <label class="file-drop grow" style="margin:0;padding:12px 16px">{{ m.icon('image') }} <span data-file-label>Photo or video</span><input type="file" name="media" accept="image/*,video/mp4,video/quicktime,video/webm" data-preview></label>
-      <button type="button" class="file-drop cam-btn grow" style="margin:0;padding:12px 16px;justify-content:center" data-camera="#story-form input[name=media]" data-camera-modes="photo,video" data-camera-max="30" data-camera-max-mb="{{ config.MAX_VIDEO_MB }}">{{ m.icon('camera') }} Open camera</button>
+    <div class="story-modes" role="tablist" aria-label="Story type">
+      <button type="button" role="tab" aria-selected="true" data-story-mode="media">{{ m.icon('image','i-sm') }} Photo or video</button>
+      <button type="button" role="tab" aria-selected="false" data-story-mode="text">{{ m.icon('edit','i-sm') }} Text</button>
     </div>
-    <input class="input" name="caption" maxlength="150" placeholder="Add a caption" aria-label="Caption">
+    <div class="stack" data-story-panel="media">
+      <div class="story-preview" data-media-preview hidden></div>
+      <div class="row wrap" style="gap:10px">
+        <label class="file-drop grow" style="margin:0;padding:12px 16px">{{ m.icon('image') }} <span data-file-label>Photo or video</span><input type="file" name="media" accept="image/*,video/mp4,video/quicktime,video/webm" data-preview></label>
+        <button type="button" class="file-drop cam-btn grow" style="margin:0;padding:12px 16px;justify-content:center" data-camera="#story-form input[name=media]" data-camera-modes="photo,video" data-camera-max="30" data-camera-max-mb="{{ config.MAX_VIDEO_MB }}">{{ m.icon('camera') }} Open camera</button>
+      </div>
+      <input class="input" name="caption" maxlength="150" placeholder="Add a caption" aria-label="Caption">
+    </div>
+    <div class="stack" data-story-panel="text" hidden>
+      <div class="story-compose bg-violet" data-compose>
+        <textarea name="text" rows="1" maxlength="280" placeholder="Type something…" aria-label="Story text" data-compose-text disabled></textarea>
+      </div>
+      <div class="compose-foot">
+        <div class="bg-picker" role="radiogroup" aria-label="Background colour">
+          {% for b in ['violet','ocean','sunset','forest','rose','midnight','gold','mono'] %}<label class="bg-swatch bg-{{ b }}" title="{{ b|capitalize }}"><input type="radio" name="bg" value="{{ b }}" {{ 'checked' if loop.first }} disabled><span class="sr-only">{{ b|capitalize }}</span></label>{% endfor %}
+        </div>
+        <span class="compose-count" data-compose-count aria-live="polite">0/280</span>
+      </div>
+    </div>
     <label class="file-drop" style="margin:0;padding:12px 16px">{{ m.icon('music') }} <span data-file-label>Add music (optional)</span><input type="file" name="audio" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg"></label>
     <input class="input" name="audio_title" maxlength="80" placeholder="Song title (optional)" aria-label="Song title" data-audio-title hidden>
     <p class="hint" style="margin:0">Only share music you have the right to use. Stories disappear after 24 hours.</p>
