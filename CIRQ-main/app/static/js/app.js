@@ -420,7 +420,9 @@
       return;
     }
     if (f.matches("[data-story-form]")) {
-      if (!f.elements.media.files[0]) { e.preventDefault(); toast("Choose a photo or video first, or open the camera.", "error"); return; }
+      if (f.elements.story_type.value === "text") {
+        if (!f.elements.text.value.trim()) { e.preventDefault(); toast("Write something for your story first.", "error"); $("[data-compose-text]", f).focus(); return; }
+      } else if (!f.elements.media.files[0]) { e.preventDefault(); toast("Choose a photo or video first, or open the camera.", "error"); return; }
       const b = $("button[type=submit]", f); b.disabled = true; b.textContent = "Sharing…";   // the page redirects when the upload is done
       return;
     }
@@ -488,6 +490,32 @@
   document.addEventListener("ended", (e) => {      // media events don't bubble, so listen in the capture phase
     if (e.target.matches && e.target.matches("[data-music] audio")) { setMusicState(e.target.closest("[data-music]"), false); if (playingMusic === e.target.closest("[data-music]")) playingMusic = null; }
   }, true);
+
+  /* ---------- text stories: shared sizing + the composer ---------- */
+  // Shorter text gets bigger type, so a one-liner looks bold and a paragraph still fits. Used by the composer and the viewer.
+  const storyFont = (n) => (n <= 30 ? 2.3 : n <= 70 ? 1.85 : n <= 120 ? 1.5 : n <= 200 ? 1.25 : 1.1);
+  function setStoryMode(form, mode) {
+    $("[data-story-type]", form).value = mode;
+    $$("[data-story-mode]", form).forEach((b) => b.setAttribute("aria-selected", String(b.dataset.storyMode === mode)));
+    $$("[data-story-panel]", form).forEach((p) => {
+      const on = p.dataset.storyPanel === mode; p.hidden = !on;
+      $$("input, textarea", p).forEach((i) => { i.disabled = !on; });        // a hidden panel never submits (no stray file or text)
+    });
+    if (mode === "text") { const t = $("[data-compose-text]", form); fitCompose(t); setTimeout(() => t.focus({ preventScroll: true }), 40); }
+  }
+  function fitCompose(t) {
+    t.style.fontSize = `${storyFont(t.value.length)}rem`;
+    t.style.height = "auto"; t.style.height = `${Math.min(t.scrollHeight, 270)}px`;
+    const c = $("[data-compose-count]", t.closest("form")); c.textContent = `${t.value.length}/${t.maxLength}`; c.classList.toggle("warn", t.value.length >= t.maxLength - 20);
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-story-mode]"); if (b) setStoryMode(b.closest("form"), b.dataset.storyMode);
+  });
+  document.addEventListener("input", (e) => { if (e.target.matches("[data-compose-text]")) fitCompose(e.target); });
+  document.addEventListener("change", (e) => {
+    if (!e.target.matches(".bg-picker input")) return;
+    const box = $("[data-compose]", e.target.closest("form")); box.className = `story-compose bg-${e.target.value}`;
+  });
 
   /* ---------- preview of a chosen / recorded photo or video (story composer) ---------- */
   function previewMedia(input) {
@@ -602,7 +630,11 @@
     const s = S.items[S.i]; const bars = $(".story-bars", viewer);
     bars.innerHTML = S.items.map((_, k) => `<i><b style="width:${k < S.i ? 100 : 0}%"></b></i>`).join("");
     const holder = $("[data-smedia]", viewer); holder.innerHTML = "";
-    if (s.type === "video") {
+    if (s.type === "text") {
+      const box = document.createElement("div"), p = document.createElement("p"), txt = s.text || "";
+      box.className = `story-text bg-${s.bg || "violet"}`; p.textContent = txt; p.style.fontSize = `${storyFont(txt.length)}rem`;
+      box.append(p); holder.append(box); run(Math.min(12000, 5000 + txt.length * 35));      // a little longer to read than a photo
+    } else if (s.type === "video") {
       const v = document.createElement("video"); v.src = s.src; v.autoplay = true; v.playsInline = true; v.controls = false; holder.append(v);
       v.onloadedmetadata = () => run(Math.min(30000, (v.duration || 8) * 1000)); v.onended = () => { if (!S.paused) step(1); }; v.onerror = () => run(4000);
     } else { const im = document.createElement("img"); im.src = s.src; im.alt = "Story"; holder.append(im); run(5000); }
