@@ -50,7 +50,13 @@ def _decorate(msgs):
         # A story reply shows a small thumbnail while the story is still live; afterwards just the label.
         st = stories.get(m.get("story_id"))
         exp = parse_dt(st["expires_at"]) if st else None
-        m["story"] = {"src": cs.media_src(st, 160, thumb=True)} if st and exp and exp > now and st["moderation_status"] == "ok" else None
+        live = bool(st and exp and exp > now and st["moderation_status"] == "ok")
+        if not live:
+            m["story"] = None
+        elif st["media_type"] == "text":
+            m["story"] = {"src": None, "bg": st.get("bg_style") or "violet"}      # a small coloured "Aa" tile instead of a picture
+        else:
+            m["story"] = {"src": cs.media_src(st, 160, thumb=True)}
         if m.get("media_public_id"):
             m["media_row"] = {"url": m["media_url"], "public_id": m["media_public_id"], "media_type": m["media_type"], "delivery_type": "authenticated"}
         m["attachments"] = attachments.get(m["id"], [])
