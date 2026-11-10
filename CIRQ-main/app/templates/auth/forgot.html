@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Forgot password{% endblock %}
 {% block public %}
 <div class="auth-shell"><div class="auth-card">
-  <div class="auth-logo"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="CIRQ" style="width:72px;height:72px"><h1 style="margin-top:12px;font-size:1.8rem">Recover your account</h1>
+  <div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:12px;font-size:1.8rem">Recover your account</h1>
   <p class="muted" style="text-align:center">Tell us who you are. An administrator will review your request, then you'll get a one-time link to choose a new password.</p></div>
   <form class="card" method="post" novalidate>{{ m.csrf() }}
     {{ m.field('identifier', 'Username or email', placeholder='your.username or you@example.com', autocomplete='username') }}
