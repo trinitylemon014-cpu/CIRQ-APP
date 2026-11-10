@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Choose a new password{% endblock %}
 {% block public %}
-<div class="auth-shell"><div class="auth-card"><div class="auth-logo"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="CIRQ" style="width:72px;height:72px"><h1 style="margin-top:12px;font-size:1.8rem">New password</h1></div>
+<div class="auth-shell"><div class="auth-card"><div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:12px;font-size:1.8rem">New password</h1></div>
 <form class="card" method="post">{{ m.csrf() }}
   {{ m.pw_field('password', 'New password', 'new-password') }}
   {{ m.pw_field('password2', 'Confirm new password', 'new-password') }}
