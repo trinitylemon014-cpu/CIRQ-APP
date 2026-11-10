@@ -83,6 +83,27 @@
     setInterval(refreshPresence, 60000);
   }
 
+  /* ---------- post captions: show "…more" only when the text is actually clamped ---------- */
+  function markClampedCaptions(root) {
+    $$(".post-caption:not([data-clamp-checked])", root || document).forEach((el) => {
+      if (!el.offsetParent) return;                       // hidden for now (e.g. editing): check again later
+      el.dataset.clampChecked = "1";
+      if (el.scrollHeight > el.clientHeight + 1) el.classList.add("is-clamped");
+    });
+  }
+  document.addEventListener("click", (event) => {
+    const more = event.target.closest("[data-caption-more]");
+    if (more) { more.closest(".post-caption").classList.add("is-open"); }
+  });
+  markClampedCaptions();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { $$(".post-caption").forEach((el) => { delete el.dataset.clampChecked; el.classList.remove("is-clamped"); }); markClampedCaptions(); });
+  if ("MutationObserver" in window) {
+    let queued = false;
+    new MutationObserver(() => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; markClampedCaptions(); }); })
+      .observe(document.body, { childList: true, subtree: true });
+  }
+  window.addEventListener("resize", () => { $$(".post-caption:not(.is-open)").forEach((el) => { el.classList.remove("is-clamped"); delete el.dataset.clampChecked; }); markClampedCaptions(); });
+
   /* ---------- responsive all-pages menu ---------- */
   const pageMenu = $("#mobile-page-menu"), menuBackdrop = $(".mobile-menu-backdrop");
   const menuTriggers = $$("[data-mobile-menu-trigger]");
@@ -340,7 +361,7 @@
       try {
         const r = await api(`/posts/${like.dataset.like}/like`);
         like.classList.toggle("liked", r.liked); like.setAttribute("aria-pressed", r.liked);
-        $("[data-count]", like).textContent = r.count;
+        $("[data-count]", like).textContent = r.count; { const lbl = $(".act-lbl", like); if (lbl) lbl.textContent = r.count === 1 ? " Like" : " Likes"; }
       } catch (err) { toast(err.message, "error"); }
       like.disabled = false; return;
     }
