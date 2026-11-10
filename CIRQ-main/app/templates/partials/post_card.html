@@ -3,9 +3,9 @@
   {% if p.suggested %}<div class="sugg-tag">{{ m.icon('rocket','i-sm') }}<span><b>Suggested for you</b><small>{{ p.reason }}</small></span>
     {% if p.author_id != cur.id %}{{ m.follow_btn(p.author.username, 'none', private=p.author.is_private) }}{% endif %}</div>{% endif %}
   <div class="post-head">
-    <a href="{{ url_for('profiles.view', username=p.author.username) }}">{{ m.avatar(p.author, 46) }}</a>
+    <a href="{{ url_for('profiles.view', username=p.author.username) }}">{{ m.avatar(p.author, 44) }}</a>
     <div class="who"><a href="{{ url_for('profiles.view', username=p.author.username) }}"><b>{{ p.author.display_name }}</b>{{ m.verified(p.author) }}</a>
-      <small>@{{ p.author.username }}{% if p.school %} · {{ p.school.name }}{% endif %} · <a href="{{ url_for('feed.detail', post_id=p.id) }}">{{ p.created_at|ago }}</a>{% if p.edited_at %} · edited{% endif %}{% if p.visibility == 'followers' %} · {{ m.icon('lock','i-sm') }}{% endif %}</small></div>
+      <small>@{{ p.author.username }}{% if p.school %} · {{ p.school.name }}{% endif %} · <a href="{{ url_for('feed.detail', post_id=p.id) }}">{{ p.created_at|ago }}</a>{% if p.edited_at %} · edited{% endif %} · {% if p.visibility == 'followers' %}<span title="Followers only">{{ m.icon('lock','i-sm') }}</span>{% else %}<span title="Public">{{ m.icon('globe','i-sm') }}</span>{% endif %}</small></div>
     {{ m.boosted(p.author) }}
     <div class="menu">
       <button class="icon-btn" type="button" data-menu aria-label="More options" aria-haspopup="true">{{ m.icon('more') }}</button>
@@ -17,7 +17,6 @@
       </div>
     </div>
   </div>
-  {% if p.caption %}<div class="post-body" data-caption>{{ p.caption }}</div>{% endif %}
   {% if p.author_id == cur.id %}
   <form class="stack" method="post" action="{{ url_for('feed.edit_post', post_id=p.id) }}" data-edit-form hidden>{{ m.csrf() }}
     <textarea class="input" name="caption" maxlength="2000">{{ p.caption or '' }}</textarea>
@@ -30,9 +29,10 @@
     </div>
   {% endfor %}
   {{ m.music(p) }}
+  {% if p.caption %}<div class="post-caption" data-caption><b class="post-author">{{ p.author.username }}</b> <span class="cap-text">{{ p.caption }}</span><button class="more" type="button" data-caption-more>…more</button></div>{% endif %}
   <div class="post-actions">
-    <button class="act {{ 'liked' if p.liked }}" type="button" data-like="{{ p.id }}" aria-pressed="{{ 'true' if p.liked else 'false' }}" aria-label="Like">{{ m.icon('heart') }}<span data-count>{{ p.like_count }}</span></button>
-    <a class="act" href="{{ url_for('feed.detail', post_id=p.id) }}#comments" data-comments="{{ p.id }}" aria-label="Open comments">{{ m.icon('comment') }}<span data-comment-count-for="{{ p.id }}">{{ p.comment_count }}</span></a>
+    <button class="act {{ 'liked' if p.liked }}" type="button" data-like="{{ p.id }}" aria-pressed="{{ 'true' if p.liked else 'false' }}" aria-label="Like">{{ m.icon('thumb') }}<span><span data-count>{{ p.like_count }}</span><span class="act-lbl"> {{ 'Like' if p.like_count == 1 else 'Likes' }}</span></span></button>
+    <a class="act" href="{{ url_for('feed.detail', post_id=p.id) }}#comments" data-comments="{{ p.id }}" aria-label="Open comments">{{ m.icon('comment') }}<span><span data-comment-count-for="{{ p.id }}">{{ p.comment_count }}</span><span class="act-lbl"> {{ 'Comment' if p.comment_count == 1 else 'Comments' }}</span></span></a>
     {% if p.kind == 'reel' %}<span class="act reel-view-count" aria-label="{{ '{:,}'.format(p.views_count or 0) }} views" title="{{ '{:,}'.format(p.views_count or 0) }} views">{{ m.icon('eye') }}<span>{{ (p.views_count or 0)|short }}</span></span>{% endif %}
     <span class="sp"></span>
     <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=p.id, _external=True) }}" aria-label="Copy link">{{ m.icon('share') }}</button>
