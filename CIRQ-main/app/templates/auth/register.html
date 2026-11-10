@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Join CIRQ{% endblock %}
 {% block public %}
 <div class="auth-shell"><div class="auth-split"><aside class="auth-art"><img src="{{ url_for('static', filename='images/auth-register.jpg') }}" alt=""><span class="tag">Your school. Your people. Your talent.</span></aside><div class="auth-card card" style="padding:26px">
-  <div class="auth-logo"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="CIRQ"><h1 style="margin-top:14px;font-size:2rem">Join CIRQ</h1><p class="muted">Get <b class="coin" style="display:inline-flex">{{ config.WELCOME_COINS }} app coins</b> when your account is approved</p></div>
+  <div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:14px;font-size:2rem">Join CIRQ</h1><p class="muted">Get <b class="coin" style="display:inline-flex">{{ config.WELCOME_COINS }} app coins</b> when your account is approved</p></div>
   <form method="post" novalidate>{{ m.csrf() }}
     {{ m.field('username', 'Username', value=form.get('username',''), placeholder='letters, numbers, . or _', autocomplete='username', hint='3-24 characters. This is what you log in with.') }}
     {{ m.field('display_name', 'Your name', value=form.get('display_name',''), placeholder='Name shown on your profile', autocomplete='name') }}
