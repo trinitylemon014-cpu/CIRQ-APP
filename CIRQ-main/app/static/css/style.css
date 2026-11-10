@@ -1455,3 +1455,17 @@ dialog::backdrop { background: rgba(27, 31, 59, .5); backdrop-filter: blur(6px);
 .profile-cta .btn { padding: 0 20px; white-space: nowrap; }
 .profile-cta .menu .icon-btn { width: 36px; height: 36px; }
 .game-card::after { display: none; }
+
+/* ---------- 19.21 Reels: readable overlay text on top of video ---------- */
+.reel .shade { height: 62%; background: linear-gradient(to top, rgba(15, 18, 38, .94) 0%, rgba(15, 18, 38, .6) 55%, transparent 100%); }
+.reel .info, .reel .info a, .reel .info b, .reel .info p, .reel .info small { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .75), 0 2px 12px rgba(0, 0, 0, .55); }
+.reel .info > a.row b { font-size: 1.02rem; font-weight: 900; letter-spacing: .005em; }
+.reel .info > a.row:hover b { text-decoration: underline; text-underline-offset: 3px; }
+.reel .info p { font-weight: 600; line-height: 1.45; }
+.reel .info .btn, .reel .info .btn * { text-shadow: none; }
+.reel .info .btn.following { background: rgba(255, 255, 255, .92); color: var(--text); }
+.reel .info .av { box-shadow: 0 0 0 2px #fff; }
+.reel .info .music, .reel .info .music * { text-shadow: none; }
+.reel .side .act, .reel .side .act span { color: #fff; }
+.reel .side .act.liked, .reel .side .act.liked .i { color: #ff4d7a; } .reel .side .act.liked .i { fill: #ff4d7a; }
+.reel .side .act.saved, .reel .side .act.saved .i { color: var(--lime); } .reel .side .act.saved .i { fill: var(--lime); }
