@@ -1,5 +1,8 @@
 {% macro icon(name, cls='') %}<svg class="i {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{% endmacro %}
 
+{# The CIRQ brand tile: lime rounded square with the "C." mark, the same idea as the reference design's logo tile. #}
+{% macro brand_tile(cls='') %}<span class="brand-tile {{ cls }}" aria-hidden="true">C.</span>{% endmacro %}
+
 {% macro avatar(p, size=44, ring=False) %}
 {% set named_sizes = {'xs': 28, 'sm': 36, 'md': 44, 'lg': 56, 'xl': 96} %}
 {% set variant = size if size is string and size in named_sizes else '' %}
