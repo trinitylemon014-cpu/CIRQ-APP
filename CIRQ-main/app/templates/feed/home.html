@@ -1,25 +1,31 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Home{% endblock %}
 {% block content %}
 <div class="tray" aria-label="Stories">
-  <button class="tray-item tray-add" type="button" data-open="create-sheet"><span class="av ring" style="--s:64px"><span style="color:var(--green)">{{ m.icon('plus','i-lg') }}</span></span><span class="name">Your story</span></button>
-  {% for t in tray %}<button class="tray-item {{ 'seen' if t.unseen == 0 }}" type="button" data-story="{{ t.author.username }}">{{ m.avatar(t.author, 64, ring=True) }}<span class="name">{{ 'You' if t.author.id == cur.id else t.author.username }}</span></button>{% endfor %}
+  <button class="tray-item tray-add" type="button" data-open="create-sheet" aria-label="Add to your story"><span class="tray-me">{{ m.avatar(cur, 66, ring=True) }}<span class="tray-plus">{{ m.icon('plus') }}</span></span><span class="name">Your story</span></button>
+  {% for t in tray %}<button class="tray-item {{ 'seen' if t.unseen == 0 }}" type="button" data-story="{{ t.author.username }}">{{ m.avatar(t.author, 66, ring=True) }}<span class="name">{{ 'You' if t.author.id == cur.id else t.author.username }}</span></button>{% endfor %}
 </div>
 
-<form class="card composer" id="composer" method="post" action="{{ url_for('feed.create_post') }}" enctype="multipart/form-data">{{ m.csrf() }}
+<nav class="feed-tabs" aria-label="Feed">
+  <a href="{{ url_for('feed.home') }}" class="{{ 'active' if feed_tab == 'home' }}" {% if feed_tab == 'home' %}aria-current="page"{% endif %}>Home</a>
+  <a href="{{ url_for('feed.home', feed='foryou') }}" class="{{ 'active' if feed_tab == 'foryou' }}" {% if feed_tab == 'foryou' %}aria-current="page"{% endif %}>For you</a>
+</nav>
+{% if for_you_empty %}<p class="muted small" style="margin:-6px 4px 14px">Nothing new to suggest right now, so here's the latest from your circle.</p>{% endif %}
+
+{% if feed_tab == 'home' %}<form class="card composer" id="composer" method="post" action="{{ url_for('feed.create_post') }}" enctype="multipart/form-data">{{ m.csrf() }}
   <div class="row" style="align-items:flex-start">{{ m.avatar(cur, 46) }}<textarea name="caption" maxlength="2000" placeholder="What's happening at your school, {{ cur.display_name.split(' ')[0] }}?" aria-label="Write a post"></textarea></div>
   <input class="input" name="audio_title" maxlength="80" placeholder="Song title (optional)" aria-label="Song title" data-audio-title hidden style="margin-top:8px">
   <div class="row between wrap" style="margin-top:6px">
     <div class="row wrap">
-      <label class="file-drop" style="padding:8px 14px;margin:0;border-radius:99px">{{ m.icon('image') }} <span data-file-label>Photo / video</span><input type="file" name="media" accept="image/*,video/mp4,video/quicktime,video/webm"></label>
-      <button type="button" class="file-drop cam-btn" style="padding:8px 14px;margin:0;border-radius:99px" data-camera="#composer input[name=media]" data-camera-modes="photo,video" data-camera-max="60" data-camera-max-mb="{{ config.MAX_VIDEO_MB }}">{{ m.icon('camera') }} Camera</button>
-      <label class="file-drop" style="padding:8px 14px;margin:0;border-radius:99px">{{ m.icon('music') }} <span data-file-label>Music</span><input type="file" name="audio" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg"></label>
+      <label class="file-drop chip-btn">{{ m.icon('image') }} <span data-file-label>Photo / video</span><input type="file" name="media" accept="image/*,video/mp4,video/quicktime,video/webm"></label>
+      <button type="button" class="file-drop chip-btn cam-btn" data-camera="#composer input[name=media]" data-camera-modes="photo,video" data-camera-max="60" data-camera-max-mb="{{ config.MAX_VIDEO_MB }}">{{ m.icon('camera') }} Camera</button>
+      <label class="file-drop chip-btn">{{ m.icon('music') }} <span data-file-label>Music</span><input type="file" name="audio" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg"></label>
       <select class="input" name="visibility" aria-label="Who can see this" style="min-height:40px;width:auto;font-size:.88rem"><option value="public">Everyone</option><option value="followers" {{ 'selected' if cur.is_private }}>Followers</option></select>
     </div>
     <button class="btn sm" type="submit">Post</button>
   </div>
-</form>
+</form>{% endif %}
 
-<div id="feed" data-feed-url="{{ url_for('feed.home') }}" style="margin-top:14px">
+<div id="feed" data-feed-url="{{ url_for('feed.home', feed=('foryou' if feed_tab == 'foryou' and not for_you_empty else None)) }}" style="margin-top:14px">
   {% if posts %}{% include 'partials/post_list.html' %}
   {% else %}{% call m.empty('users', 'Your feed is waiting', 'Follow classmates or share your first post to get things going.') %}<a class="btn" href="{{ url_for('discover.index') }}">Find students</a>{% endcall %}{% if sponsored_ad %}{% include 'partials/sponsored_post_ad.html' %}{% endif %}{% endif %}
 </div>
