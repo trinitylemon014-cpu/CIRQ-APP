@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Log in{% endblock %}
 {% block public %}
 <div class="auth-shell"><div class="auth-split"><aside class="auth-art"><img src="{{ url_for('static', filename='images/auth-login.jpg') }}" alt=""><span class="tag">Same schools · different stories</span></aside><div class="auth-card card" style="padding:26px">
-  <div class="auth-logo"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="CIRQ"><h1 style="margin-top:14px;font-size:2rem">Welcome back</h1><p class="muted">Log in with your username or email</p></div>
+  <div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:14px;font-size:2rem">Welcome back</h1><p class="muted">Log in with your username or email</p></div>
   <form method="post" novalidate>{{ m.csrf() }}
     {{ m.field('identifier', 'Username or email', value=identifier, placeholder='your.username or you@example.com', autocomplete='username') }}
     {{ m.pw_field('password', 'Password') }}
