@@ -80,12 +80,29 @@ def story_tray(uid):
     return items
 
 
+def for_you_posts(user):
+    """The "For you" tab: posts the recommender picked from people the student doesn't follow yet. Never raises."""
+    try:
+        return recommender.suggest(user["id"], user, exclude_ids=(), n=10)
+    except Exception:
+        current_app.logger.exception("for-you feed failed")
+        return []
+
+
 @bp.get("/feed")
 @login_required
 def home():
     before = request.args.get("before")
-    posts, cursor = feed_posts(g.user["id"], before)
-    posts = with_suggestions(g.user, posts)
+    tab = "foryou" if request.args.get("feed") == "foryou" and not before else "home"
+    posts, cursor, for_you_empty = [], None, False
+    if tab == "foryou":
+        posts = for_you_posts(g.user)
+        if not posts:   # nothing new to recommend right now: show the normal feed rather than an empty tab
+            for_you_empty = True
+            posts, cursor = feed_posts(g.user["id"])
+    else:
+        posts, cursor = feed_posts(g.user["id"], before)
+        posts = with_suggestions(g.user, posts)
     sponsored_ad = boost_ad_service.for_viewer(g.user["id"], before or "")
     if request.args.get("partial"):
         return render_template("partials/post_list.html", posts=posts, cursor=cursor, sponsored_ad=sponsored_ad)
@@ -94,7 +111,7 @@ def home():
                    if p["id"] != g.user["id"] and not social.is_following(g.user["id"], p["id"])
                    and not social.has_requested(g.user["id"], p["id"])][:4]
     return render_template("feed/home.html", posts=posts, cursor=cursor, tray=tray, suggestions=suggestions,
-                           sponsored_ad=sponsored_ad)
+                           sponsored_ad=sponsored_ad, feed_tab=tab, for_you_empty=for_you_empty)
 
 
 def _save_media(file, kind_folder, post_id, owner_id, allow_video=True):
