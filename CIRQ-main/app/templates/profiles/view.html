@@ -1,29 +1,40 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}{{ prof.display_name }}{% endblock %}
 {% block content %}
 {% set mine = prof.id == cur.id %}
-<section class="card hero">
-  {{ m.avatar(prof, 'xl') }}
-  <h1 style="font-size:1.7rem;margin-bottom:2px">{{ prof.display_name }}{{ m.verified(prof) }}</h1>
-  <div class="muted">@{{ prof.username }} · <span class="presence-text" data-presence-label data-user-id="{{ prof.id }}" hidden></span></div>
-  <div class="row wrap" style="justify-content:center;margin-top:10px">
-    <span class="chip green">{{ m.icon('trophy','i-sm') }} {{ stats.tier.name }}</span>
-    {% if school %}<a class="chip" href="{{ url_for('schools.view', slug=school.slug) }}">{{ m.icon('school','i-sm') }} {{ school.name }}{% if school.verified %} ✓{% endif %}</a>{% endif %}
-    {{ m.boosted(prof) }}{% if prof.is_private %}<span class="chip">{{ m.icon('lock','i-sm') }} Private account</span>{% endif %}
-    {% if prof.role == 'admin' %}<span class="chip violet">{{ m.icon('code','i-sm') }} Team</span>{% endif %}
+<section class="card profile">
+  <div class="profile-cover" aria-hidden="true"></div>
+  <div class="profile-body">
+    <div class="profile-top">
+      <div class="profile-av">{{ m.avatar(prof, 'xl') }}</div>
+      <div class="profile-cta">
+        {% if mine %}
+        <a class="btn" href="{{ url_for('profiles.settings') }}">Edit profile</a>
+        {% else %}
+        {{ m.follow_btn(prof.username, follow_state, small=False, private=prof.is_private) }}
+        {% if can_message %}<form method="post" action="{{ url_for('messages.start', username=prof.username) }}">{{ m.csrf() }}<button class="round-ghost" aria-label="Message @{{ prof.username }}">{{ m.icon('mail') }}</button></form>
+        {% else %}<button type="button" class="round-ghost" disabled aria-label="Message" title="Available once {{ prof.username }} approves your request">{{ m.icon('lock') }}</button>{% endif %}
+        <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="More">{{ m.icon('more') }}</button><div class="menu-list">{{ m.report_btn('profile', prof.id, 'Report profile') }}
+          <form method="post" action="{{ url_for('profiles.block', username=prof.username) }}" data-confirm="Block @{{ prof.username }}? You won't see each other's content.">{{ m.csrf() }}<button class="danger">{{ m.icon('x','i-sm') }} Block</button></form></div></div>
+        {% endif %}
+      </div>
+    </div>
+    <h1 class="profile-name">{{ prof.display_name }}{{ m.verified(prof) }}</h1>
+    <div class="profile-handle">@{{ prof.username }} <span class="presence-text" data-presence-label data-user-id="{{ prof.id }}" hidden></span></div>
+    <ul class="profile-info">
+      {% if prof.bio %}<li>{{ m.icon('edit') }}<span>{{ prof.bio }}</span></li>{% endif %}
+      {% if school %}<li>{{ m.icon('school') }}<a href="{{ url_for('schools.view', slug=school.slug) }}">{{ school.name }}{% if school.verified %} ✓{% endif %}</a></li>{% endif %}
+    </ul>
+    <div class="profile-chips">
+      <span class="chip green">{{ m.icon('trophy','i-sm') }} {{ stats.tier.name }}</span>
+      {{ m.boosted(prof) }}{% if prof.is_private %}<span class="chip">{{ m.icon('lock','i-sm') }} Private account</span>{% endif %}
+      {% if prof.role == 'admin' %}<span class="chip violet">{{ m.icon('code','i-sm') }} Team</span>{% endif %}
+    </div>
+    <div class="stats"><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Saved' if tab == 'saved' else ('Reels' if tab == 'reels' else 'Posts') }}</small></div><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='followers') }}"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></a><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='following') }}"><b>{{ stats.following|short }}</b><small>Following</small></a></div>
+    {% if mine %}<div class="profile-actions"><a class="btn ghost sm" href="{{ url_for('profiles.status') }}">CIRQ STATUS</a>{% if prof.is_private %}<a class="btn ghost sm" href="{{ url_for('profiles.follow_requests') }}">Follow requests{% if pending_requests %} <span class="chip lime">{{ pending_requests }}</span>{% endif %}</a>{% endif %}</div>{% endif %}
   </div>
-  {% if prof.bio %}<p style="margin-top:14px">{{ prof.bio }}</p>{% endif %}
-  <div class="stats"><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='followers') }}"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></a><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='following') }}"><b>{{ stats.following|short }}</b><small>Following</small></a><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Saved' if tab == 'saved' else ('Reels' if tab == 'reels' else 'Posts') }}</small></div></div>
-  {% if mine %}<div class="row wrap" style="justify-content:center"><a class="btn ghost" href="{{ url_for('profiles.settings') }}">Edit profile</a><a class="btn ghost" href="{{ url_for('profiles.status') }}">CIRQ STATUS</a>{% if prof.is_private %}<a class="btn ghost" href="{{ url_for('profiles.follow_requests') }}">Follow requests{% if pending_requests %} <span class="chip lime">{{ pending_requests }}</span>{% endif %}</a>{% endif %}</div>
-  {% else %}
-  <div class="row" style="justify-content:center">{{ m.follow_btn(prof.username, follow_state, small=False, private=prof.is_private) }}
-    {% if can_message %}<form method="post" action="{{ url_for('messages.start', username=prof.username) }}">{{ m.csrf() }}<button class="btn ghost">{{ m.icon('message','i-sm') }} Message</button></form>
-    {% else %}<button type="button" class="btn ghost" disabled title="Available once {{ prof.username }} approves your request">{{ m.icon('lock','i-sm') }} Message</button>{% endif %}
-    <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="More">{{ m.icon('more') }}</button><div class="menu-list">{{ m.report_btn('profile', prof.id, 'Report profile') }}
-      <form method="post" action="{{ url_for('profiles.block', username=prof.username) }}" data-confirm="Block @{{ prof.username }}? You won't see each other's content.">{{ m.csrf() }}<button class="danger">{{ m.icon('x','i-sm') }} Block</button></form></div></div></div>
-  {% endif %}
 </section>
-{% if achievements %}<div class="tray" style="margin-top:10px">{% for a in achievements %}<span class="chip lime" title="{{ a.description }}">{{ m.icon(a.icon,'i-sm') }} {{ a.name }}</span>{% endfor %}</div>{% endif %}
-<div class="tabs" role="tablist"><a href="?tab=posts" class="{{ 'active' if tab == 'posts' }}">Posts</a><a href="?tab=reels" class="{{ 'active' if tab == 'reels' }}">Reels</a>{% if mine %}<a href="?tab=saved" class="{{ 'active' if tab == 'saved' }}">{{ m.icon('bookmark','i-sm') }} Saved</a>{% endif %}</div>
+{% if achievements %}<div class="tray" style="margin-top:12px">{% for a in achievements %}<span class="chip lime" title="{{ a.description }}">{{ m.icon(a.icon,'i-sm') }} {{ a.name }}</span>{% endfor %}</div>{% endif %}
+<div class="tabs icons" role="tablist" style="margin-top:14px"><a href="?tab=posts" class="{{ 'active' if tab == 'posts' }}" aria-label="Posts">{{ m.icon('grid') }}</a><a href="?tab=reels" class="{{ 'active' if tab == 'reels' }}" aria-label="Reels">{{ m.icon('film') }}</a>{% if mine %}<a href="?tab=saved" class="{{ 'active' if tab == 'saved' }}" aria-label="Saved">{{ m.icon('bookmark') }}</a>{% endif %}</div>
 {% if tab == 'saved' %}
 <section class="saved-page" aria-labelledby="saved-title">
   <div class="saved-head">
