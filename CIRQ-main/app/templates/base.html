@@ -1,16 +1,16 @@
 {% import 'partials/macros.html' as m with context %}
 <!doctype html>
-<html lang="en" data-mobile-menu-direction="up">
+<html lang="en" data-mobile-menu-direction="down">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <meta name="theme-color" content="#040806">
+  <meta name="theme-color" content="#f6f6f1">
   <title>{% block title %}CIRQ{% endblock %} · CIRQ</title>
   <link rel="icon" href="{{ url_for('static', filename='images/favicon.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon-192.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}" data-presence-enabled="{{ '1' if cur and cur.account_status == 'approved' and cur.get('show_active_status', true) else '0' }}">
@@ -30,7 +30,7 @@
 {% set un = unread_notifs() %}
 <div class="shell">
   <aside class="sidebar" aria-label="Main">
-    <a class="brand" href="{{ url_for('feed.home') }}"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="">CIRQ</a>
+    <a class="brand" href="{{ url_for('feed.home') }}" aria-label="CIRQ home">{{ m.brand_tile() }}<span class="brand-word">CIRQ</span></a>
     {% for item in navigation if item.section == 'main' %}
     <a class="nav {{ 'active' if item.active }}" href="{{ item.href }}" {% if item.active %}aria-current="page"{% endif %}>{{ m.icon(item.icon) }} {{ item.label }}{% if item.badge %}<span class="n-badge">{{ item.badge }}</span>{% endif %}</a>
     {% endfor %}
@@ -41,12 +41,13 @@
 
   <main id="main" class="main">
     <header class="topbar">
-      <a class="logo" href="{{ url_for('feed.home') }}"><img src="{{ url_for('static', filename='images/mark.png') }}" alt="">CIRQ</a>
+      <a class="logo" href="{{ url_for('feed.home') }}" aria-label="CIRQ home">{{ m.brand_tile() }}<span class="brand-word">CIRQ</span></a>
       <div class="actions">
-        <button class="round-btn mobile-menu-trigger" type="button" data-mobile-menu-trigger aria-expanded="false" aria-controls="mobile-page-menu" aria-label="Open all pages menu">{{ m.icon('more') }}</button>
-        <a class="coin" href="{{ url_for('wallet.coins') }}" style="padding:0 6px" aria-label="App coins">{{ cur.coin_balance }}</a>
-        <a class="round-btn" href="{{ url_for('discover.index') }}" aria-label="Search">{{ m.icon('search') }}</a>
+        <a class="coin-pill" href="{{ url_for('wallet.coins') }}" aria-label="App coins"><span class="coin">{{ cur.coin_balance }}</span></a>
+        <a class="round-btn only-desktop" href="{{ url_for('discover.index') }}" aria-label="Search">{{ m.icon('search') }}</a>
         <a class="round-btn" href="{{ url_for('notifications.index') }}" aria-label="Notifications">{{ m.icon('bell') }}{% if un %}<span class="dot">{{ un if un < 100 else '99+' }}</span>{% endif %}</a>
+        <a class="round-btn" href="{{ url_for('messages.inbox') }}" aria-label="Messages">{{ m.icon('mail') }}{% if um %}<span class="dot">{{ um if um < 100 else '99+' }}</span>{% endif %}</a>
+        <button class="round-btn mobile-menu-trigger" type="button" data-mobile-menu-trigger aria-expanded="false" aria-controls="mobile-page-menu" aria-label="Open all pages menu">{{ m.icon('more') }}</button>
       </div>
     </header>
     {% block content %}{% endblock %}
@@ -64,11 +65,11 @@
 
 <nav class="bottom-nav" aria-label="Main">
   <div class="pill">
-    <a href="{{ url_for('feed.home') }}" class="{{ 'active' if ep == 'feed' }}" aria-label="Home">{{ m.icon('home') }}<span class="lbl">Home</span></a>
-    <a href="{{ url_for('reels.index') }}" class="{{ 'active' if ep in ('reels','discover') }}" aria-label="Reels">{{ m.icon('film') }}<span class="lbl">Reels</span></a>
+    <a href="{{ url_for('feed.home') }}" class="{{ 'active' if ep == 'feed' }}" aria-label="Home" {% if ep == 'feed' %}aria-current="page"{% endif %}>{{ m.icon('home') }}<span class="lbl">Home</span></a>
+    <a href="{{ url_for('discover.index') }}" class="{{ 'active' if ep == 'discover' }}" aria-label="Discover" {% if ep == 'discover' %}aria-current="page"{% endif %}>{{ m.icon('compass') }}<span class="lbl">Discover</span></a>
     <button class="fab" type="button" data-open="create-sheet" aria-label="Create">{{ m.icon('plus','i-lg') }}</button>
-    <a href="{{ url_for('messages.inbox') }}" class="{{ 'active' if ep == 'messages' }}" aria-label="Messages">{{ m.icon('message') }}<span class="lbl">Chats</span>{% if um %}<span class="badge-n">{{ um }}</span>{% endif %}</a>
-    <button class="mobile-menu-trigger" type="button" data-mobile-menu-trigger aria-expanded="false" aria-controls="mobile-page-menu" aria-label="Open all pages menu">{{ m.icon('more') }}<span class="lbl">More</span></button>
+    <a href="{{ url_for('reels.index') }}" class="{{ 'active' if ep == 'reels' }}" aria-label="Reels" {% if ep == 'reels' %}aria-current="page"{% endif %}>{{ m.icon('film') }}<span class="lbl">Reels</span></a>
+    <a href="{{ url_for('profiles.view', username=cur.username) }}" class="{{ 'active' if ep == 'profiles' }}" aria-label="Profile" {% if ep == 'profiles' %}aria-current="page"{% endif %}>{{ m.icon('user') }}<span class="lbl">Profile</span></a>
   </div>
 </nav>
 
