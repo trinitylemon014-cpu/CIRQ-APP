@@ -47,7 +47,7 @@
   }
 
   function setCount(id, n) {
-    $$(`[data-comment-count-for="${CSS.escape(String(id))}"]`).forEach((el) => (el.textContent = fmt(n)));
+    $$(`[data-comment-count-for="${CSS.escape(String(id))}"]`).forEach((el) => { el.textContent = fmt(n); const lbl = el.parentElement && el.parentElement.querySelector(".act-lbl"); if (lbl) lbl.textContent = n === 1 ? " Comment" : " Comments"; });
     if (S.id === id) countEl.textContent = n > 0 ? n.toLocaleString() : "";
   }
   function bumpCount(id, delta) {
