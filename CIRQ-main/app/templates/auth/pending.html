@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Account pending{% endblock %}
 {% block public %}
 <div class="auth-shell"><div class="card auth-card" style="text-align:center">
-  <img src="{{ url_for('static', filename='images/mark.png') }}" alt="" width="84" style="margin:0 auto 14px;border-radius:24px">
+  <div style="display:flex;justify-content:center;margin-bottom:14px">{{ m.brand_tile('xl') }}</div>
   {% if cur and cur.account_status == 'rejected' %}
   <h2>Account not approved</h2>
   <p class="muted">{{ cur.status_note or 'An administrator was unable to approve this account. Contact CIRQ support for help.' }}</p>
