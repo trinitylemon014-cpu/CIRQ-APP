@@ -99,6 +99,13 @@
   </nav>
 </section>
 
+{% if cur and cur.account_status == 'approved' and not bare %}
+<dialog id="likers-dialog" class="likers" aria-labelledby="likers-title">
+  <div class="row between"><h2 id="likers-title" data-likers-title style="margin:0">Likes</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
+  <div class="likers-list" data-likers-list aria-live="polite"></div>
+  <button class="btn ghost block" type="button" data-likers-more hidden>Show more</button>
+</dialog>
+{% endif %}
 <dialog id="create-sheet" aria-label="Create">
   <div class="row between"><h2 style="margin:0">Create</h2><button class="icon-btn" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
   <div class="sheet-grid">
@@ -188,7 +195,7 @@
 {% endif %}
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
-{% if cur and cur.account_status == 'approved' and not bare %}<script src="{{ url_for('static', filename='js/comments.js') }}" defer></script>{% endif %}
+{% if cur and cur.account_status == 'approved' and not bare %}<script src="{{ url_for('static', filename='js/comments.js') }}" defer></script><script src="{{ url_for('static', filename='js/likers.js') }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>
