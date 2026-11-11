@@ -70,3 +70,16 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+  # Coin loans: every 5 minutes expire unanswered offers, send due-date reminders, and automatically collect loans that have
+  # fallen due (then start the late-fee period for any borrower who couldn't pay). Safe to run twice: every step is idempotent.
+  - type: cron
+    name: cirq-lending
+    runtime: python
+    schedule: "*/5 * * * *"
+    buildCommand: "true"
+    startCommand: 'curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$APP_BASE_URL/admin/internal/lending-run"'
+    envVars:
+      - key: APP_BASE_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
