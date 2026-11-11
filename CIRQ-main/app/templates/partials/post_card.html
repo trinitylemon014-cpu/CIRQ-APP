@@ -31,7 +31,7 @@
   {{ m.music(p) }}
   {% if p.caption %}<div class="post-caption" data-caption><b class="post-author">{{ p.author.username }}</b> <span class="cap-text">{{ p.caption }}</span><button class="more" type="button" data-caption-more>…more</button></div>{% endif %}
   <div class="post-actions">
-    <button class="act {{ 'liked' if p.liked }}" type="button" data-like="{{ p.id }}" aria-pressed="{{ 'true' if p.liked else 'false' }}" aria-label="Like">{{ m.icon('thumb') }}<span><span data-count>{{ p.like_count }}</span><span class="act-lbl"> {{ 'Like' if p.like_count == 1 else 'Likes' }}</span></span></button>
+    <button class="act {{ 'liked' if p.liked }}" type="button" data-like="{{ p.id }}" aria-pressed="{{ 'true' if p.liked else 'false' }}" aria-label="Like">{{ m.icon('thumb') }}</button><button class="act likers-btn" type="button" data-likers="{{ url_for('feed.post_likers', post_id=p.id) }}" aria-label="See who liked this {{ 'reel' if p.kind == 'reel' else 'post' }}"><span data-likes-of="{{ p.id }}">{{ p.like_count }}</span><span class="act-lbl"> {{ 'Like' if p.like_count == 1 else 'Likes' }}</span></button>
     <a class="act" href="{{ url_for('feed.detail', post_id=p.id) }}#comments" data-comments="{{ p.id }}" aria-label="Open comments">{{ m.icon('comment') }}<span><span data-comment-count-for="{{ p.id }}">{{ p.comment_count }}</span><span class="act-lbl"> {{ 'Comment' if p.comment_count == 1 else 'Comments' }}</span></span></a>
     {% if p.kind == 'reel' %}<span class="act reel-view-count" aria-label="{{ '{:,}'.format(p.views_count or 0) }} views" title="{{ '{:,}'.format(p.views_count or 0) }} views">{{ m.icon('eye') }}<span>{{ (p.views_count or 0)|short }}</span></span>{% endif %}
     <span class="sp"></span>
