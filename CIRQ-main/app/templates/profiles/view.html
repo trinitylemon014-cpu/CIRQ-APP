@@ -13,6 +13,7 @@
         {{ m.follow_btn(prof.username, follow_state, small=False, private=prof.is_private) }}
         {% if can_message %}<form method="post" action="{{ url_for('messages.start', username=prof.username) }}">{{ m.csrf() }}<button class="round-ghost" aria-label="Message @{{ prof.username }}">{{ m.icon('mail') }}</button></form>
         {% else %}<button type="button" class="round-ghost" disabled aria-label="Message" title="Available once {{ prof.username }} approves your request">{{ m.icon('lock') }}</button>{% endif %}
+        {% if can_send_coins %}<a class="round-ghost" href="{{ url_for('lending.send', username=prof.username) }}" aria-label="Send coins to @{{ prof.username }}" title="Send coins">{{ m.icon('gift') }}</a>{% endif %}
         <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="More">{{ m.icon('more') }}</button><div class="menu-list">{{ m.report_btn('profile', prof.id, 'Report profile') }}
           <form method="post" action="{{ url_for('profiles.block', username=prof.username) }}" data-confirm="Block @{{ prof.username }}? You won't see each other's content.">{{ m.csrf() }}<button class="danger">{{ m.icon('x','i-sm') }} Block</button></form></div></div>
         {% endif %}
