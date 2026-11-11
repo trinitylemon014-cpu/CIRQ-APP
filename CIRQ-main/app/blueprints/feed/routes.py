@@ -2,7 +2,7 @@ from collections import Counter
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, g, abort, current_app
 from app.decorators import login_required
 from app.extensions import limiter, db
-from app.services import supabase_service as sb, cloudinary_service as cs, social, recommender, boost_ad_service
+from app.services import likers as likers_service,  supabase_service as sb, cloudinary_service as cs, social, recommender, boost_ad_service
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
 from app.services.notification_service import notify
@@ -228,6 +228,19 @@ def like(post_id):
     return jsonify(liked=liked, count=fresh["like_count"])
 
 
+@bp.get("/posts/<post_id>/likes")
+@login_required
+@limiter.limit("120 per hour")
+def post_likers(post_id):
+    """The 'who liked this' list for a post or reel: visible to anyone who can see the post."""
+    post = sb.get("posts", id=post_id)
+    author = sb.get("profiles", id=post["author_id"]) if post else None
+    if not post or not social.can_view_post(g.user, post, author):
+        abort(404)
+    people, nxt = likers_service.page("likes", "post_id", post_id, g.user, request.args.get("before"))
+    return render_template("partials/likers.html", people=people, next=nxt, first=not request.args.get("before"))
+
+
 @bp.post("/posts/<post_id>/save")
 @login_required
 @limiter.limit("240 per hour")
@@ -331,6 +344,21 @@ def add_comment(post_id):
                 else render_template("partials/comment.html", c=c))
         return jsonify(html=html, id=c["id"], count=sb.get("posts", "comment_count", id=post_id)["comment_count"])
     return redirect(url_for("feed.detail", post_id=post_id) + "#comments")
+
+
+@bp.get("/comments/<comment_id>/likes")
+@login_required
+@limiter.limit("120 per hour")
+def comment_likers(comment_id):
+    """The 'who liked this comment' list. Same visibility rules as liking the comment."""
+    c = sb.get("comments", id=comment_id)
+    post = sb.get("posts", id=c["post_id"]) if c else None
+    author = sb.get("profiles", id=post["author_id"]) if post else None
+    if not c or c["moderation_status"] != "ok" or not post or not social.can_view_post(g.user, post, author) \
+            or social.is_blocked(g.user["id"], c["author_id"]):
+        abort(404)
+    people, nxt = likers_service.page("comment_likes", "comment_id", comment_id, g.user, request.args.get("before"))
+    return render_template("partials/likers.html", people=people, next=nxt, first=not request.args.get("before"))
 
 
 @bp.post("/comments/<comment_id>/like")
