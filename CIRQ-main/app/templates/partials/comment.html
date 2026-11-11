@@ -2,7 +2,7 @@
 <div class="comment" id="c-{{ c.id }}">
   <a href="{{ url_for('profiles.view', username=c.author.username) }}">{{ m.avatar(c.author, 'xs') }}</a>
   <div class="bubble"><b>{{ c.author.username }}</b>{{ m.verified(c.author) }} <small class="dim">{{ c.created_at|ago }}</small><br>{{ c.body }}</div>
-  <button class="act clike {{ 'liked' if c.liked }}" type="button" data-clike="{{ c.id }}" aria-pressed="{{ 'true' if c.liked else 'false' }}" aria-label="Like comment">{{ m.icon('heart','i-sm') }}<span data-count>{{ c.like_count or 0 }}</span></button>
+  <button class="act clike {{ 'liked' if c.liked }}" type="button" data-clike="{{ c.id }}" aria-pressed="{{ 'true' if c.liked else 'false' }}" aria-label="Like comment">{{ m.icon('heart','i-sm') }}</button><button class="act likers-btn" type="button" data-likers="{{ url_for('feed.comment_likers', comment_id=c.id) }}" data-likers-title="Comment likes" data-clikes-of="{{ c.id }}" aria-label="See who liked this comment" {{ 'hidden' if not c.like_count }}>{{ c.like_count or '' }}</button>
   <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="Comment options">{{ m.icon('more','i-sm') }}</button>
     <div class="menu-list">{% if c.author_id == cur.id %}<form method="post" action="{{ url_for('feed.delete_comment', comment_id=c.id) }}" data-confirm="Delete this comment?">{{ m.csrf() }}<button class="danger">{{ m.icon('trash','i-sm') }} Delete</button></form>{% else %}{{ m.report_btn('comment', c.id) }}{% endif %}</div></div>
 </div>
