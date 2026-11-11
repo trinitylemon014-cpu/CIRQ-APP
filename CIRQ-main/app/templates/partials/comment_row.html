@@ -18,5 +18,6 @@
     </div>
     {% endif %}
   </div>
-  <button class="crow-like {{ 'liked' if c.liked }}" type="button" data-clike="{{ c.id }}" aria-pressed="{{ 'true' if c.liked else 'false' }}" aria-label="Like comment">{{ m.icon('heart') }}<span data-count>{{ c.like_count or '' }}</span></button>
+  <div class="crow-likecol"><button class="crow-like {{ 'liked' if c.liked }}" type="button" data-clike="{{ c.id }}" aria-pressed="{{ 'true' if c.liked else 'false' }}" aria-label="Like comment">{{ m.icon('heart') }}</button>
+    <button class="crow-likers" type="button" data-likers="{{ url_for('feed.comment_likers', comment_id=c.id) }}" data-likers-title="Comment likes" data-clikes-of="{{ c.id }}" aria-label="See who liked this comment" {{ 'hidden' if not c.like_count }}>{{ c.like_count or '' }}</button></div>
 </article>
