@@ -23,6 +23,10 @@ def target_url(n):
         return url_for("feed.detail", post_id=ref)
     if k in ("story_comment", "comment_like"):      # stories live in the tray on the home page
         return url_for("feed.home")
+    if k.startswith("loan_") and ref:
+        return url_for("lending.detail", loan_id=ref)
+    if k == "gift_received":
+        return url_for("lending.index")
     if k == "message" and ref:
         return url_for("messages.thread", cid=ref)
     if k in ("rsvp", "event_update") and ref:
