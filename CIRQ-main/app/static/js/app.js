@@ -83,6 +83,19 @@
     setInterval(refreshPresence, 60000);
   }
 
+  /* ---------- like counts live outside the like button so they can open the "who liked" list ---------- */
+  function setLikeCount(id, n, like) {
+    const own = like && $("[data-count]", like); if (own) own.textContent = n;
+    $$(`[data-likes-of="${CSS.escape(String(id))}"]`).forEach((el) => {
+      el.textContent = n;
+      const lbl = el.parentElement && $(".act-lbl", el.parentElement); if (lbl) lbl.textContent = n === 1 ? " Like" : " Likes";
+    });
+  }
+  function setCommentLikeCount(id, n, clike) {
+    const own = clike && $("[data-count]", clike); if (own) own.textContent = n || "";
+    $$(`[data-clikes-of="${CSS.escape(String(id))}"]`).forEach((el) => { el.textContent = n || ""; el.hidden = !n; });
+  }
+
   /* ---------- post captions: show "…more" only when the text is actually clamped ---------- */
   function markClampedCaptions(root) {
     $$(".post-caption:not([data-clamp-checked])", root || document).forEach((el) => {
@@ -350,7 +363,7 @@
       try {
         const r = await api(`/comments/${clike.dataset.clike}/like`);
         clike.classList.toggle("liked", r.liked); clike.setAttribute("aria-pressed", r.liked);
-        $("[data-count]", clike).textContent = clike.classList.contains("crow-like") ? (r.count || "") : r.count;
+        setCommentLikeCount(clike.dataset.clike, r.count, clike);
       } catch (err) { toast(err.message, "error"); }
       clike.disabled = false; return;
     }
@@ -361,7 +374,7 @@
       try {
         const r = await api(`/posts/${like.dataset.like}/like`);
         like.classList.toggle("liked", r.liked); like.setAttribute("aria-pressed", r.liked);
-        $("[data-count]", like).textContent = r.count; { const lbl = $(".act-lbl", like); if (lbl) lbl.textContent = r.count === 1 ? " Like" : " Likes"; }
+        setLikeCount(like.dataset.like, r.count, like);
       } catch (err) { toast(err.message, "error"); }
       like.disabled = false; return;
     }
