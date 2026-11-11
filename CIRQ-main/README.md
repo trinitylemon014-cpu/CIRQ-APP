@@ -285,6 +285,28 @@ the phone's own camera app.
 accounts and expiry are enforced exactly like story likes), the story owner can delete any comment, and comments can be reported. Comments on posts and on
 stories can be liked; the comment's author gets one "liked your comment" notification.
 
+### Coin gifts and loans between friends
+
+Students who follow each other can **gift** coins (instant, final) or **lend** them with a signed agreement. Open a friend's profile and tap the gift icon, or go to *App coins → Gifts & loans*.
+
+**How a loan works**
+
+1. The lender picks the amount, a due date and a late fee (0–20%). The borrower sees the agreement in plain words and taps **I agree**. The agreement text and its SHA-256 fingerprint are stored permanently with both people and the timestamps. Coins move only on agreement; an unanswered offer lapses after 48 hours; either side can withdraw/decline first.
+2. Reminders go to the borrower 3 days before, 1 day before and on the due day.
+3. At the end of the due day (Kampala time) the app takes what the borrower has, up to what is owed, and pays the lender. Both are notified.
+4. If the borrower is short, a **one-time late fee** (the lender's % of the *unpaid part only*, never compounded) is added and goes to the lender. From then on **50% of every coin the borrower earns** (trivia, FLIP, achievements…) goes to the lender until it is cleared. Gifts from friends and admin corrections are never taken (coins can't be bought with money in CIRQ, only earned).
+5. Borrowers can pay back early; lenders can forgive at any time; admins can freeze a loan (*Admin → Loans*).
+
+**Set it up**
+
+- Run `migrations/2026_11_10_coin_gifts_and_loans.sql` in the Supabase SQL editor (adds three tables and the atomic `cirq_transfer_coins` function).
+- Collection is done by the **`cirq-lending`** cron in `render.yaml` (every 5 minutes). Without a Render cron, call this from any scheduler: `curl -X POST -H "Authorization: Bearer $CRON_SECRET" $APP_BASE_URL/admin/internal/lending-run`. As a safety net, a student's own loans are also settled whenever they open their wallet.
+- Limits and switches are environment variables: `LENDING_ENABLED`, `GIFT_MAX_COINS`, `GIFT_DAILY_COINS`, `GIFT_DAILY_COUNT`, `LOAN_MIN_COINS`, `LOAN_MAX_COINS`, `LOAN_MIN_DAYS`, `LOAN_MAX_DAYS`, `LOAN_MAX_FEE_PCT`, `LOAN_DEFAULT_FEE_PCT`, `LOAN_OFFER_HOURS`, `LOAN_GARNISH_PCT`, `LOAN_OFFERS_PER_DAY`.
+
+**Why it can't double-charge:** every coin movement is one atomic database call keyed by a unique reference, and every loan event is keyed by `(loan_id, ref)`. A repeated cron run, a double click or a crash half-way is repaired, not repeated (see `tests/test_lending.py`).
+
+> Coins can't be bought directly, but they can be spent on account boosts (which also have a UGX price), so they carry some indirect value, and many of your students are minors. Charging a late fee on loans between students may fall under lending rules in your country, so please take legal advice before enabling loans publicly. Set `LOAN_MAX_FEE_PCT=0` for fee-free lending, or `LENDING_ENABLED=false` to turn the feature off.
+
 ## 14. Manual mobile-money payments (disabled by default)
 
 No in-app payment processor is used. Flow: student registers the number and the name that shows when they send money (+ confirms
