@@ -14,7 +14,8 @@
     <p style="margin:6px 0 0">{{ r.caption or '' }}</p></div>
   <div class="reel-progress" aria-hidden="true"><i></i></div>
   <div class="side" role="group" aria-label="Reel actions">
-    <button class="act {{ 'liked' if r.liked }}" type="button" data-like="{{ r.id }}" aria-pressed="{{ 'true' if r.liked else 'false' }}" aria-label="Like">{{ m.icon('heart') }}<span data-count>{{ r.like_count }}</span></button>
+    <button class="act {{ 'liked' if r.liked }}" type="button" data-like="{{ r.id }}" aria-pressed="{{ 'true' if r.liked else 'false' }}" aria-label="Like">{{ m.icon('heart') }}</button>
+    <button class="act likers-count" type="button" data-likers="{{ url_for('feed.post_likers', post_id=r.id) }}" aria-label="See who liked this reel"><span data-likes-of="{{ r.id }}">{{ r.like_count }}</span></button>
     <a class="act" href="{{ url_for('feed.detail', post_id=r.id) }}#comments" data-comments="{{ r.id }}" aria-label="Open comments">{{ m.icon('comment') }}<span data-comment-count-for="{{ r.id }}">{{ (r.comment_count or 0)|short }}</span></a>
     <div class="act reel-view-count" role="img" aria-label="{{ '{:,}'.format(r.views_count or 0) }} views" title="{{ '{:,}'.format(r.views_count or 0) }} views">{{ m.icon('eye') }}<span data-reel-view-count>{{ (r.views_count or 0)|short }}</span></div>
     <button class="act" type="button" data-copy="{{ url_for('feed.detail', post_id=r.id, _external=True) }}" aria-label="Copy link to share">{{ m.icon('share') }}<span>Share</span></button>
