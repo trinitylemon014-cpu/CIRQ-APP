@@ -1,0 +1,4 @@
+{% import 'partials/macros.html' as m with context %}
+{% for u in people %}<a class="person liker" href="{{ url_for('profiles.view', username=u.username) }}">{{ m.avatar(u, 44) }}<div class="grow"><b>{{ u.display_name }}{{ m.verified(u) }}</b><br><small class="dim">@{{ u.username }}</small></div>{% if u.id == cur.id %}<span class="chip">You</span>{% endif %}</a>
+{% else %}{% if first %}<div class="likers-empty">{{ m.icon('heart') }}<b>No likes yet</b><small class="muted">Be the first to like it.</small></div>{% endif %}{% endfor %}
+{% if next %}<span data-next="{{ next }}" hidden></span>{% endif %}
