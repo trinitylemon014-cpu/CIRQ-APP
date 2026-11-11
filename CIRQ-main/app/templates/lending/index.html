@@ -1,0 +1,35 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% from 'lending/_cards.html' import loan_card with context %}
+{% block title %}Gifts & loans{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('wallet.coins') }}">{{ m.icon('arrow-left','i-sm') }} App coins</a>
+<h1 class="page-title">Gifts &amp; loans</h1>
+<div class="card lime lend-balance"><div class="eyebrow">Your balance</div><div class="big">{{ me.coin_balance }} <small>coins</small></div>
+  <p>Share coins with friends: gift them, or lend them with a signed agreement. You can only send coins to people you follow who follow you back.</p></div>
+
+{% if offers_in %}<div class="section-title"><h2>Waiting for your answer</h2></div>{% for l in offers_in %}{{ loan_card(l) }}{% endfor %}{% endif %}
+
+<div class="section-title"><h2>Send coins to a friend</h2></div>
+{% if friends %}
+<div class="friend-row">{% for f in friends %}<a class="friend" href="{{ url_for('lending.send', username=f.username) }}">{{ m.avatar(f, 56) }}<span>{{ f.display_name.split(' ')[0] }}</span></a>{% endfor %}</div>
+{% else %}{% call m.empty('users', 'No friends to send coins to yet', 'Friends are people you follow who also follow you back.') %}<a class="btn sm" href="{{ url_for('discover.index') }}">Find students</a>{% endcall %}{% endif %}
+
+{% if owing %}<div class="section-title"><h2>You owe</h2></div>{% for l in owing %}{{ loan_card(l) }}{% endfor %}{% endif %}
+{% if owed %}<div class="section-title"><h2>Owed to you</h2></div>{% for l in owed %}{{ loan_card(l) }}{% endfor %}{% endif %}
+{% if offers_out %}<div class="section-title"><h2>Offers you sent</h2></div>{% for l in offers_out %}{{ loan_card(l) }}{% endfor %}{% endif %}
+{% if not (offers_in or owing or owed or offers_out) %}<div class="card flat lend-empty">{{ m.icon('file-text') }}<div><b>No loans right now</b><br><small class="muted">Open a friend's profile and tap the gift icon to send coins or offer a loan.</small></div></div>{% endif %}
+
+{% if history or gifts %}<div class="section-title"><h2>History</h2></div>
+<div class="card">
+  {% for l in history %}<a class="person" href="{{ url_for('lending.detail', loan_id=l.id) }}">{{ m.avatar(l.other, 40) }}<div class="grow"><b>{{ 'Lent to' if l.role == 'lender' else 'Borrowed from' }} {{ l.other.display_name }}</b><br><small class="dim">{{ l.amount }} coins · {{ l.created_at|ago }}</small></div><span class="chip {{ 'green' if l.status == 'repaid' }}">{{ l.status_label }}</span></a>{% endfor %}
+  {% for g in gifts %}<div class="person">{{ m.avatar(g.other, 40) }}<div class="grow"><b>{{ 'Gift to' if g.direction == 'out' else 'Gift from' }} {{ g.other.display_name }}</b><br><small class="dim">{{ g.created_at|ago }}{% if g.message %} · “{{ g.message }}”{% endif %}</small></div><b class="{{ 'coin-out' if g.direction == 'out' else 'coin-in' }}">{{ '-' if g.direction == 'out' else '+' }}{{ g.amount }}</b></div>{% endfor %}
+</div>{% endif %}
+
+<details class="card flat how-it-works"><summary>{{ m.icon('help','i-sm') }} How lending works</summary>
+  <ul>
+    <li><b>Gifts</b> are instant and final. Up to {{ cfg.GIFT_MAX_COINS }} coins at a time.</li>
+    <li><b>Loans</b> need both of you. The lender picks the amount ({{ cfg.LOAN_MIN_COINS }}–{{ cfg.LOAN_MAX_COINS }}), a due date and a late fee. The borrower reads the agreement and taps “I agree”. Coins move only then, and an unanswered offer lapses after {{ cfg.LOAN_OFFER_HOURS }} hours.</li>
+    <li><b>On the due date</b> (end of the day, Kampala time) CIRQ automatically takes the coins from the borrower and pays the lender. Reminders go out 3 days before, 1 day before and on the day.</li>
+    <li><b>If the borrower is short</b>, CIRQ takes what they have. A one-time late fee (the lender's %, up to {{ cfg.LOAN_MAX_FEE_PCT }}%) is added to the unpaid part only, and {{ cfg.LOAN_GARNISH_PCT }}% of every coin they earn goes to the lender until it is paid.</li>
+    <li>Borrowers can pay back early. Lenders can forgive a debt at any time. Never lend what you can't afford to lose, and report anyone who pressures you.</li>
+  </ul></details>
+{% endblock %}
