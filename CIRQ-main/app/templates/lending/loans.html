@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Loans{% endblock %}
+{% block content %}<h1 class="page-title">Coin loans</h1>{% include 'admin/_nav.html' %}
+<div class="grid-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:14px">
+  {% for s, n in totals.items() %}<a class="kpi" href="{{ url_for('admin.loans', status=s) }}"><b>{{ n }}</b><small>{{ s|capitalize }}</small></a>{% endfor %}</div>
+<div class="tabs" style="overflow-x:auto"><a href="{{ url_for('admin.loans') }}" class="{{ 'active' if not status }}">All</a>{% for s in statuses %}<a href="{{ url_for('admin.loans', status=s) }}" class="{{ 'active' if status == s }}">{{ s|capitalize }}</a>{% endfor %}</div>
+<div class="table-wrap"><table>
+  <thead><tr><th>Lender → Borrower</th><th>Coins</th><th>Due</th><th>Paid</th><th>Status</th><th></th></tr></thead>
+  <tbody>{% for l in loans %}<tr>
+    <td><a class="link" href="{{ url_for('profiles.view', username=l.lender.username) }}">@{{ l.lender.username }}</a> → <a class="link" href="{{ url_for('profiles.view', username=l.borrower.username) }}">@{{ l.borrower.username }}</a><br><small class="dim">{{ l.id[:8] }} · {{ l.created_at|ago }}</small></td>
+    <td>{{ l.amount }}{% if l.fee_amount %} <small class="dim">+{{ l.fee_amount }} fee</small>{% endif %}</td>
+    <td>{{ l.due_label }}</td>
+    <td>{{ l.paid }} / {{ l.total_due }}</td>
+    <td><span class="chip {{ {'active':'green','overdue':'red','offered':'violet','repaid':'green'}.get(l.status, '') }}">{{ l.status_label }}</span>{% if l.frozen %} <span class="chip warn">Frozen</span>{% endif %}</td>
+    <td>{% if l.is_open %}<form method="post" action="{{ url_for('admin.loan_freeze', loan_id=l.id) }}">{{ m.csrf() }}<input type="hidden" name="frozen" value="{{ 0 if l.frozen else 1 }}"><button class="btn sm ghost">{{ 'Unfreeze' if l.frozen else 'Freeze' }}</button></form>{% endif %}</td>
+  </tr>{% else %}<tr><td colspan="6" class="muted">No loans yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}
