@@ -61,6 +61,21 @@ class Config:
     DEV_CARD_REWARDS_PER_DAY = _int("DEV_CARD_REWARDS_PER_DAY", 1)
     COIN_BOOST_COST = _int("COIN_BOOST_COST", 1000)
     COIN_BOOST_DAYS = _int("COIN_BOOST_DAYS", 3)
+
+    # Coin gifts and loans between friends (mutual followers). See app/services/lending.py.
+    LENDING_ENABLED = _bool("LENDING_ENABLED", True)
+    GIFT_MAX_COINS = _int("GIFT_MAX_COINS", 1000)
+    GIFT_DAILY_COINS = _int("GIFT_DAILY_COINS", 2000)        # most a student can gift in any rolling 24 hours
+    GIFT_DAILY_COUNT = _int("GIFT_DAILY_COUNT", 10)
+    LOAN_MIN_COINS = _int("LOAN_MIN_COINS", 10)
+    LOAN_MAX_COINS = _int("LOAN_MAX_COINS", 1000)
+    LOAN_MIN_DAYS = _int("LOAN_MIN_DAYS", 3)                 # due date must be at least this many days away
+    LOAN_MAX_DAYS = _int("LOAN_MAX_DAYS", 90)
+    LOAN_MAX_FEE_PCT = _int("LOAN_MAX_FEE_PCT", 20)          # the late fee a lender may set is 0..this
+    LOAN_DEFAULT_FEE_PCT = _int("LOAN_DEFAULT_FEE_PCT", 20)
+    LOAN_OFFER_HOURS = _int("LOAN_OFFER_HOURS", 48)          # an unanswered offer lapses after this long
+    LOAN_GARNISH_PCT = _int("LOAN_GARNISH_PCT", 50)          # share of every coin an overdue borrower earns that goes to the lender
+    LOAN_OFFERS_PER_DAY = _int("LOAN_OFFERS_PER_DAY", 5)
     TRIVIA_ENTRY_FEE_UGX = _int("TRIVIA_ENTRY_FEE_UGX", 1000)
     TRIVIA_POINTS_PER_COIN = _int("TRIVIA_POINTS_PER_COIN", 10)
     TRIVIA_MAX_COINS = _int("TRIVIA_MAX_COINS", 100)
