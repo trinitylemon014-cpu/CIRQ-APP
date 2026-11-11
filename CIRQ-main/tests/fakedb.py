@@ -47,13 +47,16 @@ DEFAULTS = {
     "boost_ads": {},
     "email_verifications": dict(used_at=None),
     "post_media": dict(delivery_type="upload"),
+    "coin_gifts": dict(message=None),
+    "coin_loans": dict(message=None, status="offered", accepted_at=None, fee_amount=0, repaid_total=0, forgiven_amount=0, overdue_at=None, closed_at=None, frozen=False),
+    "coin_loan_events": dict(amount=0, actor_id=None, note=None),
 }
 PKS = {"likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "follows": ("follower_id", "followee_id"), "blocks": ("blocker_id", "blocked_id"),
        "community_members": ("community_id", "user_id"), "conversation_members": ("conversation_id", "user_id"),
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
        "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",),
        "school_submission_rate_limits": ("ip_hash",)}
-UNIQUES = {"profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
+UNIQUES = {"coin_loan_events": [("loan_id", "ref")], "profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
            "reel_views": [("reel_id", "viewer_id")],
            "boost_ads": [("user_id",)],
            "trivia_answers": [("attempt_id", "question_id")], "trivia_attempts": [("set_id", "user_id")],
@@ -302,6 +305,20 @@ class FakeDB:
                 rise = sorted([kv for kv in agg.items() if kv[1][1] > 0], key=lambda kv: (-kv[1][1], -kv[1][0]))[:params["p_limit"]]
                 rows = [{"profile_id": k, "followers": v[0], "recent": v[1]} for k, v in {**dict(pop), **dict(rise)}.items()]
             return SimpleNamespace(execute=lambda: SimpleNamespace(data=rows))
+        if name == "cirq_transfer_coins":
+            a, b, amt = params["p_from"], params["p_to"], params["p_amount"]
+            ref = params["p_ref"] or ""
+            res = lambda v: SimpleNamespace(execute=lambda: SimpleNamespace(data=v))
+            if not amt or amt <= 0 or a == b: return res(-3)
+            src = next(p for p in self.data["profiles"] if p["id"] == a)
+            dst = next(p for p in self.data["profiles"] if p["id"] == b)
+            if src["coin_balance"] < amt: return res(-2)
+            led = self.data.setdefault("coin_ledger", [])
+            if any(r["user_id"] == a and r["reason"] == params["p_reason_out"] and r["ref"] == ref for r in led): return res(-1)
+            led.append({"id": str(uuid.uuid4()), "user_id": a, "amount": -amt, "reason": params["p_reason_out"], "ref": ref, "created_at": NOW()})
+            led.append({"id": str(uuid.uuid4()), "user_id": b, "amount": amt, "reason": params["p_reason_in"], "ref": ref, "created_at": NOW()})
+            src["coin_balance"] -= amt; dst["coin_balance"] += amt
+            return res(src["coin_balance"])
         assert name == "cirq_apply_coins"
         u, amt, reason, ref = params["p_user"], params["p_amount"], params["p_reason"], params["p_ref"] or ""
         prof = next(p for p in self.data["profiles"] if p["id"] == u)
