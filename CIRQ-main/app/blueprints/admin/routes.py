@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from pypdf import PdfReader
 from app.decorators import admin_required, moderator_or_admin
 from app.extensions import db, csrf
-from app.services import supabase_service as sb, auth_service, cloudinary_service as cs, coin_service, social
+from app.services import supabase_service as sb, auth_service, cloudinary_service as cs, coin_service, social, lending
 from app.services.account_service import approve_account, auto_approve_stale_accounts
 from app.services.audit_service import audit
 from app.services.mail_service import send_mail, mail_configured
@@ -1078,3 +1078,41 @@ def auto_approve_pending():
     if not secret or not hmac.compare_digest(request.headers.get("Authorization", ""), f"Bearer {secret}"):
         abort(403)
     return jsonify(approved=auto_approve_stale_accounts())
+
+
+# ------------------------------------------------------------------ coin loans (oversight + the scheduled collection run)
+@bp.get("/loans")
+@admin_required
+def loans():
+    status = request.args.get("status", "")
+    rows = sb.select("coin_loans", order="created_at", limit=100, **({"status": status} if status else {}))
+    people = sb.by_id("profiles", [x for r in rows for x in (r["lender_id"], r["borrower_id"])])
+    items = [lending.decorate(r, None, people) for r in rows]
+    totals = {s: sb.count("coin_loans", status=s) for s in ("offered", "active", "overdue", "repaid")}
+    return render_template("admin/loans.html", loans=items, status=status, totals=totals, statuses=list(lending.STATUS_LABEL))
+
+
+@bp.post("/loans/<loan_id>/freeze")
+@admin_required
+def loan_freeze(loan_id):
+    frozen = request.form.get("frozen") == "1"
+    try:
+        lending.set_frozen(loan_id, frozen, g.user["id"])
+    except lending.LendingError as e:
+        flash(str(e), "error")
+        return _back("admin.loans")
+    audit(g.user["id"], "loan_frozen" if frozen else "loan_unfrozen", "coin_loan", loan_id)
+    flash("Loan frozen: nothing will be collected until you unfreeze it." if frozen else "Loan unfrozen.", "success")
+    return _back("admin.loans")
+
+
+@bp.post("/internal/lending-run")
+@csrf.exempt
+def lending_run():
+    """Called by a Render cron job every few minutes: expires old offers, sends reminders, collects loans that have fallen due.
+    `curl -X POST -H "Authorization: Bearer $CRON_SECRET" .../admin/internal/lending-run`"""
+    secret = current_app.config["CRON_SECRET"]
+    import hmac
+    if not secret or not hmac.compare_digest(request.headers.get("Authorization", ""), f"Bearer {secret}"):
+        abort(403)
+    return jsonify(result=lending.run_due())
