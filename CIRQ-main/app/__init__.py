@@ -56,11 +56,12 @@ def create_app(config_object=None, clients=None):
     from app.blueprints.schools.routes import bp as schools_bp
     from app.blueprints.admin.routes import bp as admin_bp
     from app.blueprints.wallet.routes import bp as wallet_bp
+    from app.blueprints.lending.routes import bp as lending_bp
     from app.blueprints.legal.routes import bp as legal_bp
     from app.blueprints.trivia.routes import bp as trivia_bp
     from app.blueprints.recs.routes import bp as recs_bp
     for b in (auth_bp, feed_bp, profiles_bp, discover_bp, reels_bp, stories_bp, linkup_bp, messages_bp,
-              notifications_bp, attachments_bp, games_bp, schools_bp, admin_bp, wallet_bp, trivia_bp, recs_bp, legal_bp):
+              notifications_bp, attachments_bp, games_bp, schools_bp, admin_bp, wallet_bp, lending_bp, trivia_bp, recs_bp, legal_bp):
         app.register_blueprint(b)
 
     @app.before_request
