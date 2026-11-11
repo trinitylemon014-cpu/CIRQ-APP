@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, abort, jsonify, session, current_app
 from app.decorators import login_required
 from app.extensions import limiter, db
-from app.services import supabase_service as sb, cloudinary_service as cs, social, auth_service
+from app.services import lending as lending_service,  supabase_service as sb, cloudinary_service as cs, social, auth_service
 from app.services.cloudinary_service import UploadError
 from app.services.notification_service import notify
 from app.utils import normalize_username, clean_text, iso, parse_dt, utcnow, password_problems, TIERS, tier_for
@@ -64,6 +64,7 @@ def view(username):
     return render_template("profiles/view.html", prof=prof, stats=stats, school=school, can_see=can_see, items=items, posts=items, cursor=cursor,
                            tab=tab, saved_type=saved_type, follow_state="none" if mine else social.follow_state(me["id"], prof["id"]),
                            can_message=(not mine) and social.can_message(me, prof),
+                           can_send_coins=(not mine) and lending_service.can_send_to(me, prof),
                            pending_requests=social.pending_request_count(me["id"]) if mine and prof.get("is_private") else 0,
                            achievements=[a for a in social.user_achievements(prof["id"]) if a["earned"]])
 
