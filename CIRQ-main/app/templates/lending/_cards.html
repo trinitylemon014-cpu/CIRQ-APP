@@ -1,0 +1,17 @@
+{% from "partials/macros.html" import icon, avatar %}
+{# Shared pieces for the lending pages. #}
+{% macro loan_card(l) %}
+<a class="loan-card {{ l.status }}" href="{{ url_for('lending.detail', loan_id=l.id) }}">
+  {{ avatar(l.other, 46) }}
+  <div class="grow">
+    <div class="loan-title"><b>{{ 'You lent' if l.role == 'lender' else 'You borrowed' }} {{ l.amount }} coins</b>
+      <span class="chip {{ {'active':'green','overdue':'red','offered':'violet','repaid':'green'}.get(l.status, '') }}">{{ l.status_label }}</span></div>
+    <small class="muted">{{ 'to' if l.role == 'lender' else 'from' }} {{ l.other.display_name }} · due {{ l.due_label }}</small>
+    {% if l.is_open %}
+    <div class="progress"><b style="width: {{ l.pct }}%"></b></div>
+    <small class="loan-left {{ 'late' if l.status == 'overdue' }}">{{ l.remaining }} coins {{ 'still owed' if l.role == 'borrower' else 'still to come' }}{% if l.status == 'active' %} · {% if l.days_left > 1 %}{{ l.days_left }} days left{% elif l.days_left == 1 %}due tomorrow{% elif l.days_left == 0 %}due today{% else %}collecting soon{% endif %}{% endif %}</small>
+    {% elif l.status == 'offered' %}<small class="loan-left">{{ 'Answer' if l.role == 'borrower' else 'Waiting for an answer' }} before {{ l.expires_dt|event_dt }}</small>{% endif %}
+  </div>
+  {{ icon('arrow-left', 'chev') }}
+</a>
+{% endmacro %}
