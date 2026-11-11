@@ -46,7 +46,7 @@ def test_post_card_has_inline_author_caption_and_labelled_counts(client, mk, db)
     login(client, "amina")
     html = client.get("/feed").get_data(as_text=True)
     assert '<b class="post-author">amina</b>' in html and "hello world" in html
-    assert 'data-count>0</span><span class="act-lbl"> Likes' in html
+    assert 'data-likes-of="%s">0</span><span class="act-lbl"> Likes' % p["id"] in html
     assert 'data-comment-count-for="%s">0</span><span class="act-lbl"> Comments' % p["id"] in html
 
 
@@ -54,7 +54,7 @@ def test_singular_labels_for_one_like(client, mk, db):
     me = mk("amina"); p = mkpost(db, me, "x", like_count=1)
     login(client, "amina")
     html = client.get("/feed").get_data(as_text=True)
-    assert 'data-count>1</span><span class="act-lbl"> Like<' in html
+    assert 'data-likes-of="%s">1</span><span class="act-lbl"> Like<' % p["id"] in html
 
 
 def test_bottom_nav_has_home_discover_create_reels_profile_and_messages_live_in_header(client, mk):
