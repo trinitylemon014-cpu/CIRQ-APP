@@ -1,0 +1,52 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}Send coins to {{ target.display_name }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('profiles.view', username=target.username) }}">{{ m.icon('arrow-left','i-sm') }} {{ target.display_name }}</a>
+<div class="card send-head">{{ m.avatar(target, 60) }}<div class="grow"><h1>Send coins to {{ target.display_name }}</h1><small class="muted">@{{ target.username }} · you have <b>{{ me.coin_balance }}</b> coins</small></div></div>
+
+<div class="tabs" role="tablist" aria-label="Gift or loan">
+  <a href="{{ url_for('lending.send', username=target.username, kind='gift') }}" class="{{ 'active' if kind == 'gift' }}">{{ m.icon('gift','i-sm') }} Gift</a>
+  <a href="{{ url_for('lending.send', username=target.username, kind='loan') }}" class="{{ 'active' if kind == 'loan' }}">{{ m.icon('file-text','i-sm') }} Lend</a>
+</div>
+
+{% if kind == 'gift' %}
+<form class="card stack" method="post" data-lend-form data-confirm="Send this gift? Gifts are final and can't be taken back.">
+  {{ m.csrf() }}<input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="kind" value="gift">
+  <p class="muted" style="margin:0">A gift is free and instant. {{ target.display_name }} gets a notification right away. You can't take it back.</p>
+  <label>How many coins?
+    <input class="input amount-input" type="number" inputmode="numeric" name="amount" min="1" max="{{ [cfg.GIFT_MAX_COINS, me.coin_balance]|min }}" value="{{ form.get('amount','') }}" placeholder="e.g. 50" required data-amount>
+  </label>
+  <div class="quick-amounts" aria-label="Quick amounts">{% for n in (10, 25, 50, 100, 250) %}{% if n <= me.coin_balance and n <= cfg.GIFT_MAX_COINS %}<button type="button" class="chip" data-fill="{{ n }}">{{ n }}</button>{% endif %}{% endfor %}</div>
+  <label>Add a message <span class="dim">(optional)</span>
+    <textarea class="input" name="message" maxlength="200" rows="2" placeholder="Good luck with your exams!">{{ form.get('message','') }}</textarea></label>
+  <button class="btn lg block" {{ 'disabled' if me.coin_balance < 1 }}>{{ m.icon('gift') }} Send gift</button>
+  <small class="dim">Limit: {{ cfg.GIFT_MAX_COINS }} coins per gift, {{ cfg.GIFT_DAILY_COINS }} coins a day.</small>
+</form>
+
+{% else %}
+<form class="card stack" method="post" data-lend-form data-name="{{ target.display_name }}" data-confirm="Send this loan offer to {{ target.display_name }}? No coins move until they agree.">
+  {{ m.csrf() }}<input type="hidden" name="token" value="{{ token }}"><input type="hidden" name="kind" value="loan">
+  <p class="muted" style="margin:0">You set the terms. {{ target.display_name }} reads the agreement and taps “I agree”. Your coins only move when they do.</p>
+  <label>How many coins do you want to lend?
+    <input class="input amount-input" type="number" inputmode="numeric" name="amount" min="{{ cfg.LOAN_MIN_COINS }}" max="{{ [cfg.LOAN_MAX_COINS, me.coin_balance]|min }}" value="{{ form.get('amount','') }}" placeholder="{{ cfg.LOAN_MIN_COINS }} – {{ cfg.LOAN_MAX_COINS }}" required data-amount></label>
+  <label>Pay back by the end of
+    <input class="input" type="date" name="due_date" min="{{ min_date.isoformat() }}" max="{{ max_date.isoformat() }}" value="{{ form.get('due_date', min_date.isoformat()) }}" required data-due></label>
+  <label>Late fee <span class="dim">(only if they can't pay on time)</span>
+    <div class="fee-row"><input class="input" type="number" inputmode="numeric" name="fee_pct" min="0" max="{{ cfg.LOAN_MAX_FEE_PCT }}" value="{{ form.get('fee_pct', cfg.LOAN_DEFAULT_FEE_PCT) }}" required data-fee><span class="fee-unit">%</span></div></label>
+  <label>Add a note <span class="dim">(optional)</span>
+    <textarea class="input" name="message" maxlength="200" rows="2" placeholder="For the school trip. Thanks for paying me back!">{{ form.get('message','') }}</textarea></label>
+  <div class="agreement-preview" data-summary aria-live="polite">
+    <b>{{ m.icon('shield','i-sm') }} What you are agreeing to</b>
+    <ul>
+      <li>On <span data-due-text>the due date</span>, CIRQ automatically takes <span data-amount-text>the coins</span> from {{ target.display_name }} and pays you. No chasing needed.</li>
+      <li>If they are short, CIRQ takes what they have. A <span data-fee-text>{{ cfg.LOAN_DEFAULT_FEE_PCT }}%</span> late fee is added once, to the unpaid part only<span data-fee-example></span>.</li>
+      <li>Then {{ cfg.LOAN_GARNISH_PCT }}% of every coin they earn goes to you until it is paid. You can forgive the debt at any time.</li>
+      <li>Offers lapse after {{ cfg.LOAN_OFFER_HOURS }} hours if they don't answer.</li>
+    </ul>
+  </div>
+  <button class="btn lg block" {{ 'disabled' if me.coin_balance < cfg.LOAN_MIN_COINS }}>{{ m.icon('send') }} Send loan offer</button>
+  {% if me.coin_balance < cfg.LOAN_MIN_COINS %}<small class="dim">You need at least {{ cfg.LOAN_MIN_COINS }} coins to lend.</small>{% endif %}
+</form>
+{% endif %}
+<script src="{{ url_for('static', filename='js/lending.js') }}" defer></script>
+{% endblock %}
