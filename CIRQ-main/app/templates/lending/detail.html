@@ -1,0 +1,70 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}Loan agreement{% endblock %}
+{% block content %}
+{% set L, B = loan.lender, loan.borrower %}
+{% set labels = {'offered': 'Offer sent', 'accepted': 'Agreed. Coins sent', 'declined': 'Declined', 'cancelled': 'Offer withdrawn', 'expired': 'Offer expired', 'reminder_3d': 'Reminder: due in 3 days', 'reminder_1d': 'Reminder: due tomorrow', 'reminder_due': 'Reminder: due today', 'payment': 'Payment', 'overdue': 'Due date passed with coins still owed', 'fee_applied': 'Late fee added', 'repaid': 'Paid back in full', 'forgiven': 'Debt forgiven', 'frozen': 'Paused by the CIRQ team', 'unfrozen': 'Resumed'} %}
+<a class="back-link" href="{{ url_for('lending.index') }}">{{ m.icon('arrow-left','i-sm') }} Gifts &amp; loans</a>
+{% if loan.frozen %}<div class="card flat" style="margin-bottom:12px">{{ m.icon('shield','i-sm') }} The CIRQ team has paused this loan. Nothing will be collected until they resume it.</div>{% endif %}
+
+<article class="card agreement">
+  <header class="agr-head"><span class="agr-title">{{ m.brand_tile() }}<span><small>CIRQ</small><b>Coin loan agreement</b></span></span>
+    <span class="chip {{ {'active':'green','overdue':'red','offered':'violet','repaid':'green'}.get(loan.status, '') }}">{{ loan.status_label }}</span></header>
+  <div class="agr-parties">
+    <a href="{{ url_for('profiles.view', username=L.username) }}">{{ m.avatar(L, 52) }}<small>Lender</small><b>{{ L.display_name }}</b></a>
+    <span class="agr-arrow">{{ m.icon('send') }}<b>{{ loan.amount }}</b><small>coins</small></span>
+    <a href="{{ url_for('profiles.view', username=B.username) }}">{{ m.avatar(B, 52) }}<small>Borrower</small><b>{{ B.display_name }}</b></a>
+  </div>
+  <dl class="agr-facts">
+    <div><dt>Pay back by</dt><dd>{{ loan.due_label }}</dd></div>
+    <div><dt>Late fee</dt><dd>{{ loan.fee_pct ~ '%' if loan.fee_pct else 'None' }}</dd></div>
+    <div><dt>Offered</dt><dd>{{ loan.created_at|event_dt }}</dd></div>
+    <div><dt>Agreed</dt><dd>{{ loan.accepted_at|event_dt if loan.accepted_at else 'Not yet' }}</dd></div>
+  </dl>
+  {% if loan.message %}<blockquote class="agr-note">“{{ loan.message }}”</blockquote>{% endif %}
+  <ol class="agr-clauses">{% for c in loan.terms.clauses %}<li>{{ c }}</li>{% endfor %}</ol>
+  <div class="agr-sign">
+    <div><small>Offered by</small><b class="sig">{{ L.display_name }}</b><small>{{ loan.created_at|event_dt }}</small></div>
+    <div><small>Agreed by</small>{% if loan.accepted_at %}<b class="sig">{{ B.display_name }}</b><small>{{ loan.accepted_at|event_dt }}</small>{% else %}<b class="sig pending">Waiting…</b><small>&nbsp;</small>{% endif %}</div>
+  </div>
+  <footer class="agr-ref"><span>Reference {{ loan.id[:8] }}</span><span title="{{ loan.terms_hash }}">Fingerprint {{ loan.terms_hash[:12] }}</span></footer>
+</article>
+
+{% if loan.is_open %}
+<div class="card owe-card {{ loan.status }}">
+  <div class="eyebrow">{{ 'You still owe' if loan.role == 'borrower' else 'Still owed to you' }}</div>
+  <div class="big">{{ loan.remaining }} <small>coins</small></div>
+  <div class="progress"><b style="width: {{ loan.pct }}%"></b></div>
+  <small class="muted">Paid {{ loan.paid }} of {{ loan.total_due }}{% if loan.fee_amount %} (includes a {{ loan.fee_amount }}-coin late fee){% endif %}.
+    {% if loan.status == 'overdue' %} {{ cfg.LOAN_GARNISH_PCT }}% of every coin {{ 'you earn' if loan.role == 'borrower' else B.display_name ~ ' earns' }} goes to {{ L.display_name if loan.role == 'borrower' else 'you' }} until it's paid.
+    {% else %} Collected automatically at the end of {{ loan.due_label }}.{% endif %}</small>
+</div>
+{% endif %}
+
+{# ---- actions ---- #}
+{% if loan.status == 'offered' and loan.role == 'borrower' %}
+<div class="card stack">
+  <b>Your answer</b><small class="muted">Answer before {{ loan.expires_dt|event_dt }}. By agreeing you promise to pay back {{ loan.amount }} coins by {{ loan.due_label }}.</small>
+  <form method="post" action="{{ url_for('lending.accept', loan_id=loan.id) }}" data-confirm="I agree to pay back {{ loan.amount }} coins to {{ L.display_name }} by {{ loan.due_label }}. CIRQ will collect it automatically.">{{ m.csrf() }}<button class="btn lg block">{{ m.icon('check') }} I agree</button></form>
+  <form method="post" action="{{ url_for('lending.decline', loan_id=loan.id) }}">{{ m.csrf() }}<button class="btn ghost block">Decline</button></form>
+</div>
+{% elif loan.status == 'offered' and loan.role == 'lender' %}
+<div class="card stack"><small class="muted">Waiting for {{ B.display_name }} to agree. This offer lapses on {{ loan.expires_dt|event_dt }}. Your coins only move once they agree.</small>
+  <form method="post" action="{{ url_for('lending.cancel', loan_id=loan.id) }}" data-confirm="Withdraw this offer?">{{ m.csrf() }}<button class="btn ghost block">Withdraw offer</button></form></div>
+{% elif loan.is_open and loan.role == 'borrower' %}
+<form class="card stack" method="post" action="{{ url_for('lending.repay', loan_id=loan.id) }}">
+  {{ m.csrf() }}<input type="hidden" name="token" value="{{ token }}"><b>Pay back now</b>
+  <small class="muted">Optional. Paying early keeps things friendly. Leave the box empty to pay as much as you can, up to {{ loan.remaining }}.</small>
+  <div class="fee-row"><input class="input" type="number" inputmode="numeric" name="amount" min="1" max="{{ [loan.remaining, me.coin_balance]|min }}" placeholder="{{ [loan.remaining, me.coin_balance]|min }}"><span class="fee-unit">coins</span></div>
+  <button class="btn block" {{ 'disabled' if me.coin_balance < 1 }}>Pay back</button>
+</form>
+{% elif loan.is_open and loan.role == 'lender' %}
+<form class="card stack" method="post" action="{{ url_for('lending.forgive', loan_id=loan.id) }}" data-confirm="Forgive the {{ loan.remaining }} coins {{ B.display_name }} still owes? This closes the loan and can't be undone.">
+  {{ m.csrf() }}<b>Forgive the debt</b><small class="muted">You can close this loan at any time. {{ B.display_name }} will be told they're all clear.</small><button class="btn ghost block">Forgive {{ loan.remaining }} coins</button></form>
+{% endif %}
+
+<div class="section-title"><h2>History</h2></div>
+<div class="card timeline">
+  {% for e in loan.events %}{% if e.note != 'skipped' %}<div class="tl-item {{ e.kind }}"><span class="tl-dot"></span><div><b>{{ labels.get(e.kind, e.kind) }}{% if e.kind in ('payment', 'fee_applied', 'forgiven') and e.amount %} · {{ e.amount }} coins{% endif %}</b>
+    <br><small class="dim">{{ e.created_at|event_dt }}{% if e.kind == 'payment' and e.note %} · {{ {'due date': 'collected on the due date', 'garnish': 'from earnings', 'early': 'paid by borrower'}.get(e.note, e.note) }}{% endif %}</small></div></div>{% endif %}{% endfor %}
+</div>
+{% endblock %}
