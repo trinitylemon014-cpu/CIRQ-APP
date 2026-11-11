@@ -12,7 +12,27 @@ DUPLICATE, INSUFFICIENT = -1, -2
 def apply(user_id, amount, reason, ref=""):
     """Return new balance (>=0), DUPLICATE (-1) if this reward was already granted, INSUFFICIENT (-2)."""
     res = db().rpc("cirq_apply_coins", {"p_user": user_id, "p_amount": int(amount), "p_reason": reason, "p_ref": str(ref or "")}).execute()
-    return int(res.data)
+    bal = int(res.data)
+    if bal >= 0 and int(amount) > 0 and not reason.startswith(NOT_GARNISHED_PREFIXES) and reason not in NOT_GARNISHED:
+        bal = _garnish_for_overdue_loans(user_id, int(amount), reason, ref, bal)
+    return bal
+
+
+# Coins a student EARNS are shared with a lender while they have an overdue loan. Transfers between students and
+# admin corrections are never touched.
+NOT_GARNISHED_PREFIXES = ("loan_", "gift_")
+NOT_GARNISHED = {"admin_adjust", "refund"}
+
+
+def _garnish_for_overdue_loans(user_id, amount, reason, ref, bal):
+    """Never lets a lending problem stop a reward from being granted. Returns the balance after any repayment."""
+    try:
+        from app.services import lending
+        if lending.garnish(user_id, amount, reason, ref or ""):
+            return balance(user_id)
+    except Exception:
+        current_app.logger.exception("garnishing failed for %s", user_id)
+    return bal
 
 
 def award(user_id, amount, reason, ref="", message=None):
