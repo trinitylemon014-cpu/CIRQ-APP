@@ -25,6 +25,7 @@ ADMIN_NAV = (
     ("Reports", "admin.reports", ()),
     ("Media", "admin.media", ()),
     ("Payments", "admin.payments", ()),
+    ("Loans", "admin.loans", ()),
     ("Trivia", "admin.trivia", ("admin.trivia_edit",)),
     ("Flags", "admin.flags", ()),
     ("Audit", "admin.audit_log", ()),
