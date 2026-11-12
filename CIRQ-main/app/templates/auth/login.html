@@ -7,7 +7,7 @@
     {{ m.pw_field('password', 'Password') }}
     <label class="check"><input type="checkbox" name="remember"> Keep me logged in on this device</label>
     <button class="btn block" type="submit">Log in</button>
-    <p style="text-align:center;margin:16px 0 0"><a class="link" href="{{ url_for('auth.forgot_password') }}">Forgot password?</a></p>
+    <p style="text-align:center;margin:16px 0 0"><a class="link" href="{{ url_for('auth.forgot_password') }}">Forgot password?</a> · <a class="link" href="{{ url_for('auth.recover') }}">Use recovery code</a></p>
   </form>
   <p class="muted" style="text-align:center;margin-top:18px">New to CIRQ? <a class="link" href="{{ url_for('auth.register') }}">Create an account</a></p>
 </div></div></div>
