@@ -3,7 +3,7 @@ import hmac
 import ipaddress
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, g, current_app, abort, jsonify
 from app.extensions import db, limiter, csrf
-from app.services import supabase_service as sb, auth_service
+from app.services import supabase_service as sb, auth_service, recovery_service
 from app.services.account_service import auto_approve_if_due, approve_account, send_verification_email
 from app.services.audit_service import audit
 from app.services.mail_service import send_mail
@@ -169,6 +169,7 @@ def register():
                         if not school_submission:
                             raise
                 sb.update("profiles", {"school_submission_id": school_submission["id"]}, id=uid)
+            recovery_service.issue(uid)
         except Exception:
             sb.delete("profiles", id=uid)
             auth_service.delete_auth_user(uid)
@@ -177,8 +178,9 @@ def register():
         profile = sb.get("profiles", id=uid)
         _start_session(profile, False)
         session["email_verification_sent"] = bool(verification_sent)
+        session["recovery_first_view"] = True            # the next page shows the new recovery code without asking for the password
         flash("Account created! Verify your email to enable automatic approval after five minutes. An administrator may approve it sooner.", "success")
-        return redirect(url_for("auth.pending"))
+        return redirect(url_for("auth.recovery_code"))
     return render_template("auth/register.html", schools=schools, form=form)
 
 
@@ -281,6 +283,92 @@ def verify_email(token):
 
 
 # ---------------------------------------------------------------- password recovery (admin-approved)
+@bp.route("/recover", methods=["GET", "POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+@limiter.limit("10 per hour", key_func=_login_identifier_key, methods=["POST"])
+def recover():
+    """Forgot your password? Username (or email) + your recovery code + a new password. No admin needed."""
+    if g.user:
+        return redirect(url_for("profiles.settings"))
+    if request.method == "POST":
+        f = request.form
+        identifier, code = (f.get("identifier") or "").strip(), f.get("code", "")
+        pw, pw2 = f.get("password", ""), f.get("password2", "")
+        errors = password_problems(pw) + (["Passwords don't match."] if pw != pw2 else [])
+        if errors:                                    # checked first so a typo in the new password never counts as a wrong code
+            for e in errors:
+                flash(e, "error")
+            return render_template("auth/recover.html", identifier=identifier, code=code), 400
+        profile = auth_service.profile_by_identifier(identifier)
+        if profile and profile["account_status"] not in ("approved", "pending"):
+            profile = None                            # suspended / rejected accounts go through support, never this page
+        result = recovery_service.check(profile, code)
+        if result == "locked":
+            flash(f"Too many wrong codes. Recovery is paused for {current_app.config['RECOVERY_LOCK_MINUTES']} minutes. "
+                  "You can also ask an administrator to review your account from the Forgot password page.", "error")
+            return render_template("auth/recover.html", identifier=identifier, code=""), 429
+        if result != "ok":
+            flash("That username (or email) and recovery code don't match. Check the code and try again.", "error")
+            return render_template("auth/recover.html", identifier=identifier, code=""), 401
+        old_email = auth_service.email_for(profile["id"])
+        auth_service.set_password(profile["id"], pw)
+        sb.update("profiles", {"session_epoch": profile.get("session_epoch", 0) + 1}, id=profile["id"])    # signs out every device
+        new_code = recovery_service.issue(profile["id"])                                                    # single-use: a fresh code replaces it
+        sb.update("recovery_codes", {"last_used_at": iso()}, user_id=profile["id"])
+        audit(profile["id"], "password_reset_with_recovery_code", "profile", profile["id"])
+        notify(profile["id"], "account", body="Your password was reset with your recovery code, and a new recovery code was created. "
+                                               "If this wasn't you, contact CIRQ support.", dedupe=False)
+        if old_email:
+            send_mail(old_email, "Your CIRQ password was changed",
+                      "Your CIRQ password was just reset using your recovery code. If this wasn't you, contact your school coordinator or CIRQ support right away.")
+        session.clear()
+        return render_template("auth/recovered.html", code=new_code)
+    return render_template("auth/recover.html", identifier="", code="")
+
+
+@bp.route("/recovery-code", methods=["GET", "POST"])
+@limiter.limit("15 per hour", methods=["POST"])
+def recovery_code():
+    """Your own recovery code. Shown straight after sign-up; afterwards it is revealed (or renewed) only after re-entering your password."""
+    if not g.user:
+        return redirect(url_for("auth.login", next=url_for("auth.recovery_code")))
+    uid = g.user["id"]
+    has = recovery_service.has_code(uid)
+    code, renewed = None, False
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action not in ("reveal", "renew") or not auth_service.verify_password(uid, request.form.get("password", "")):
+            flash("That password isn't right.", "error")
+            return render_template("auth/recovery_code.html", code=None, has=has, saved=bool(g.user.get("recovery_saved_at")), mask=recovery_service.mask()), 400
+        if action == "renew" or not has:
+            code, renewed = recovery_service.issue(uid), True
+            audit(uid, "recovery_code_renewed", "profile", uid)
+            notify(uid, "account", body="Your recovery code was changed. The old one no longer works.", dedupe=False)
+            g.user["recovery_saved_at"] = None
+        else:
+            code = recovery_service.reveal(uid)
+            if code is None:
+                flash("We couldn't show your old code. Please make a new one.", "error")
+    elif session.get("recovery_first_view") and has:
+        code = recovery_service.reveal(uid)
+    return render_template("auth/recovery_code.html", code=code, has=has or bool(code), renewed=renewed,
+                           saved=bool(g.user.get("recovery_saved_at")), first=bool(session.get("recovery_first_view")), mask=recovery_service.mask())
+
+
+@bp.post("/recovery-code/saved")
+@limiter.limit("30 per hour")
+def recovery_code_saved():
+    if not g.user:
+        return redirect(url_for("auth.login"))
+    if not request.form.get("saved"):
+        flash("Tick the box to confirm you've saved your code.", "error")
+        return redirect(url_for("auth.recovery_code"))
+    recovery_service.mark_saved(g.user["id"])
+    session.pop("recovery_first_view", None)
+    flash("Great. Keep your recovery code somewhere safe.", "success")
+    return redirect(url_for("feed.home") if g.user["account_status"] == "approved" else url_for("auth.pending"))
+
+
 @bp.route("/forgot-password", methods=["GET", "POST"])
 @limiter.limit("5 per hour", methods=["POST"])
 @limiter.limit("5 per hour", key_func=_login_identifier_key, methods=["POST"])
