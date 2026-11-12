@@ -48,15 +48,16 @@ DEFAULTS = {
     "email_verifications": dict(used_at=None),
     "post_media": dict(delivery_type="upload"),
     "coin_gifts": dict(message=None),
+    "recovery_codes": dict(last_used_at=None, failed_attempts=0, locked_until=None),
     "coin_loans": dict(message=None, status="offered", accepted_at=None, fee_amount=0, repaid_total=0, forgiven_amount=0, overdue_at=None, closed_at=None, frozen=False),
     "coin_loan_events": dict(amount=0, actor_id=None, note=None),
 }
-PKS = {"likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "follows": ("follower_id", "followee_id"), "blocks": ("blocker_id", "blocked_id"),
+PKS = {"recovery_codes": ("user_id",), "likes": ("post_id", "user_id"), "saved_posts": ("post_id", "user_id"), "follows": ("follower_id", "followee_id"), "blocks": ("blocker_id", "blocked_id"),
        "community_members": ("community_id", "user_id"), "conversation_members": ("conversation_id", "user_id"),
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
        "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",),
        "school_submission_rate_limits": ("ip_hash",)}
-UNIQUES = {"coin_loan_events": [("loan_id", "ref")], "profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
+UNIQUES = {"recovery_codes": [("code_hash",)], "coin_loan_events": [("loan_id", "ref")], "profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
            "reel_views": [("reel_id", "viewer_id")],
            "boost_ads": [("user_id",)],
            "trivia_answers": [("attempt_id", "question_id")], "trivia_attempts": [("set_id", "user_id")],
