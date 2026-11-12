@@ -117,7 +117,9 @@ def create_app(config_object=None, clients=None):
             if not g.get("user"):
                 return []
             return admin_navigation(g.user, request.endpoint)
-        return {"cur": g.get("user"), "unread_notifs": unread_notifs, "unread_msgs": unread_msgs,
+        theme = request.cookies.get("cirq_theme")
+        theme = theme if theme in ("dark", "light") else "dark"      # dark is the default look; light is the original
+        return {"theme": theme, "cur": g.get("user"), "unread_notifs": unread_notifs, "unread_msgs": unread_msgs,
                 "avatar_src": cs.avatar_src, "media_src": cs.media_src, "audio_src": cs.audio_src,
                 "school_logo_src": cs.school_logo_src, "is_boosted": is_boosted,
                 "paid_enabled": app.config["PAID_COMPETITIONS_ENABLED"], "tier_for": tier_for,
