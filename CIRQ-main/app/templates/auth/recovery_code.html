@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Your recovery code{% endblock %}
+{% block content %}<a class="back-link" href="{{ url_for('profiles.settings') }}">{{ m.icon('arrow-left','i-sm') }} Settings</a>
+{% include 'auth/_recovery_code_body.html' %}{% endblock %}
+{% block public %}<div class="auth-shell"><div class="auth-card" style="max-width:480px;width:100%">
+  <div class="auth-logo">{{ m.brand_tile('xl') }}</div>
+  {% include 'auth/_recovery_code_body.html' %}
+</div></div>{% endblock %}
