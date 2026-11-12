@@ -62,6 +62,13 @@ class Config:
     COIN_BOOST_COST = _int("COIN_BOOST_COST", 1000)
     COIN_BOOST_DAYS = _int("COIN_BOOST_DAYS", 3)
 
+    # Account recovery code (app/services/recovery_service.py). Set RECOVERY_CODE_KEY to a long random string and NEVER change it:
+    # it protects every stored code, and changing it makes existing codes unusable (students would need to make new ones).
+    # If unset, a key is derived from SECRET_KEY.
+    RECOVERY_CODE_KEY = os.environ.get("RECOVERY_CODE_KEY", "")
+    RECOVERY_MAX_ATTEMPTS = _int("RECOVERY_MAX_ATTEMPTS", 5)       # wrong codes in a row before the account is locked for a while
+    RECOVERY_LOCK_MINUTES = _int("RECOVERY_LOCK_MINUTES", 30)
+
     # Coin gifts and loans between friends (mutual followers). See app/services/lending.py.
     LENDING_ENABLED = _bool("LENDING_ENABLED", True)
     GIFT_MAX_COINS = _int("GIFT_MAX_COINS", 1000)
