@@ -50,6 +50,7 @@
         <button class="round-btn mobile-menu-trigger" type="button" data-mobile-menu-trigger aria-expanded="false" aria-controls="mobile-page-menu" aria-label="Open all pages menu">{{ m.icon('more') }}</button>
       </div>
     </header>
+    {% if not cur.recovery_saved_at and ep not in ('auth',) %}<a class="recovery-banner" href="{{ url_for('auth.recovery_code') }}">{{ m.icon('shield') }}<span><b>Save your recovery code.</b> It lets you back in if you ever forget your password.</span><span class="rb-go">Open</span></a>{% endif %}
     {% block content %}{% endblock %}
   </main>
 
