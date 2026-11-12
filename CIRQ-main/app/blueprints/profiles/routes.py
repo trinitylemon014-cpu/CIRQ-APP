@@ -186,6 +186,20 @@ def block(username):
     return redirect(url_for("feed.home"))
 
 
+@bp.post("/theme")
+@limiter.limit("60 per hour")
+def set_theme():
+    """Switch between the dark look (new) and the light look (the original). Stored in a cookie for a year, so it needs no database
+    change, applies before the page paints (no flash) and also works on the landing and login pages."""
+    choice = request.form.get("theme")
+    target = request.form.get("next") or ""
+    safe = target.startswith("/") and not target.startswith("//") and "\\" not in target      # same-site paths only: never an open redirect
+    resp = redirect(target if safe else url_for("feed.home"))
+    if choice in ("dark", "light"):
+        resp.set_cookie("cirq_theme", choice, max_age=60 * 60 * 24 * 365, samesite="Lax", secure=request.is_secure, httponly=True, path="/")
+    return resp
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
