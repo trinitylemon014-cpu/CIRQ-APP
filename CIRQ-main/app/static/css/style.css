@@ -1562,6 +1562,16 @@ dialog.likers[open] { display: flex}
 .recover-promo { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--text); background: rgba(247, 181, 0, .22); box-shadow: inset 0 0 0 1.5px rgba(217, 154, 0, .6)}
 .recover-promo > .i { width: 26px; height: 26px; flex: none} .recover-promo > div { flex: 1}
 
+/* ---------- 19.25 Theme switch (profile + settings) ---------- */
+.theme-switch { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--r-pill); background: var(--surface-2); max-width: 100%}
+.theme-switch form { margin: 0; display: contents}
+.theme-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 18px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--text-2); font: 800 .9rem var(--font); cursor: pointer; transition: background .15s, color .15s}
+.theme-switch button:hover { color: var(--text)}
+.theme-switch button[aria-pressed="true"] { background: var(--text); color: var(--bg); cursor: default}
+.theme-switch .i { width: 18px; height: 18px}
+.theme-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px}
+.theme-row b { font-weight: 900} .theme-row small { display: block; color: var(--muted); font-weight: 600}
+
 
 /* ==========================================================================
    20. Flat black & gold
@@ -1836,3 +1846,13 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 /* a friend's profile now has Following + message + gift + menu: keep them on one row */
 .profile-cta { gap: 6px; } .profile-cta .btn { padding: 0 16px; min-height: 42px; }
 .round-ghost { width: 42px; height: 42px; } .profile-cta .menu .icon-btn { width: 34px; height: 34px; }
+
+/* ---------- theme switch (profile + settings) ---------- */
+.theme-switch { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--r-pill); background: var(--surface-2); max-width: 100%; }
+.theme-switch form { margin: 0; display: contents; }
+.theme-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 18px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--text-2); font: 800 .9rem var(--font); cursor: pointer; transition: background .15s, color .15s; }
+.theme-switch button:hover { color: var(--text); }
+.theme-switch button[aria-pressed="true"] { background: var(--brand); color: var(--on-lime); cursor: default; }
+.theme-switch .i { width: 18px; height: 18px; }
+.theme-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.theme-row b { font-weight: 900; } .theme-row small { display: block; color: var(--muted); font-weight: 600; }
