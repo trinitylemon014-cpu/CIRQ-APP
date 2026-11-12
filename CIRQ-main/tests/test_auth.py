@@ -19,7 +19,7 @@ def test_landing_and_pages_render(client):
 
 def test_register_creates_pending_account_and_normalizes_username(client, db, school):
     r = reg(client, school, username="  NewKid  ")
-    assert r.status_code == 302 and r.headers["Location"].endswith("/pending")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/recovery-code")   # sign-up shows the recovery code first, then the pending page
     p = db.data["profiles"][0]
     assert p["username"] == "newkid" and p["account_status"] == "pending"
     assert db.data.get("coin_ledger") is None       # coins only after approval
