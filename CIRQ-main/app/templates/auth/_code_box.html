@@ -1,0 +1,11 @@
+{# The recovery code on screen, with Copy and Download. The text itself is the only place the code is rendered. #}
+{% macro code_box(code, username='') %}
+<div class="code-box" data-code-box>
+  <div class="eyebrow">Your recovery code</div>
+  <div class="code-chars" data-code-text aria-label="Your recovery code: {{ code.replace('-', ' ') }}" translate="no">{{ code }}</div>
+  <div class="code-actions">
+    <button class="btn sm" type="button" data-code-copy>Copy</button>
+    <button class="btn sm ghost" type="button" data-code-download data-username="{{ username }}">Download</button>
+  </div>
+</div>
+{% endmacro %}
