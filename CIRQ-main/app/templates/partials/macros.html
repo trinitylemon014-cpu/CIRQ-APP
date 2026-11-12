@@ -3,6 +3,16 @@
 {# The CIRQ brand tile: flat gold rounded square with the "C." mark, the same idea as the reference design's logo tile. #}
 {% macro brand_tile(cls='') %}<span class="brand-tile {{ cls }}" aria-hidden="true">C.</span>{% endmacro %}
 
+{# Dark (the new look) / Light (the original look). Each button is a tiny form that posts to /theme and returns to the same page. #}
+{% macro theme_switch() %}
+<div class="theme-switch" role="group" aria-label="Theme">
+  {% for key, label, ic in (('dark', 'Dark', 'moon'), ('light', 'Light', 'sun')) %}
+  <form method="post" action="{{ url_for('profiles.set_theme') }}">{{ csrf() }}<input type="hidden" name="theme" value="{{ key }}"><input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+    <button type="submit" aria-pressed="{{ 'true' if theme == key else 'false' }}" title="{{ label }} theme">{{ icon(ic) }} {{ label }}</button></form>
+  {% endfor %}
+</div>
+{% endmacro %}
+
 {% macro avatar(p, size=44, ring=False) %}
 {% set named_sizes = {'xs': 28, 'sm': 36, 'md': 44, 'lg': 56, 'xl': 96} %}
 {% set variant = size if size is string and size in named_sizes else '' %}
