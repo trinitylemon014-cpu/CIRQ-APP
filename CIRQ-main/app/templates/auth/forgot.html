@@ -3,6 +3,7 @@
 <div class="auth-shell"><div class="auth-card">
   <div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:12px;font-size:1.8rem">Recover your account</h1>
   <p class="muted" style="text-align:center">Tell us who you are. An administrator will review your request, then you'll get a one-time link to choose a new password.</p></div>
+  <a class="card recover-promo" href="{{ url_for('auth.recover') }}">{{ m.icon('shield') }}<div><b>Have your recovery code?</b><br><small class="muted">Reset your password right now, no waiting for an administrator.</small></div><span class="btn sm">Use code</span></a>
   <form class="card" method="post" novalidate>{{ m.csrf() }}
     {{ m.field('identifier', 'Username or email', placeholder='your.username or you@example.com', autocomplete='username') }}
     <label for="f-school">Registered school</label>
