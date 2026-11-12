@@ -32,6 +32,7 @@
     </div>
     <div class="stats"><div class="stat"><b>{{ items|length }}{{ '+' if cursor }}</b><small>{{ 'Saved' if tab == 'saved' else ('Reels' if tab == 'reels' else 'Posts') }}</small></div><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='followers') }}"><b data-followers>{{ stats.followers|short }}</b><small>Followers</small></a><a class="stat" href="{{ url_for('profiles.connections', username=prof.username, kind='following') }}"><b>{{ stats.following|short }}</b><small>Following</small></a></div>
     {% if mine %}<div class="profile-actions"><a class="btn ghost sm" href="{{ url_for('profiles.status') }}">CIRQ STATUS</a><a class="btn ghost sm" href="{{ url_for('auth.recovery_code') }}">{{ m.icon('shield','i-sm') }} Recovery code</a>{% if prof.is_private %}<a class="btn ghost sm" href="{{ url_for('profiles.follow_requests') }}">Follow requests{% if pending_requests %} <span class="chip lime">{{ pending_requests }}</span>{% endif %}</a>{% endif %}</div>{% endif %}
+    {% if mine %}<div class="theme-row"><div><b>Theme</b><small>Dark is the new look. Light is the original.</small></div>{{ m.theme_switch() }}</div>{% endif %}
   </div>
 </section>
 {% if achievements %}<div class="tray" style="margin-top:12px">{% for a in achievements %}<span class="chip lime" title="{{ a.description }}">{{ m.icon(a.icon,'i-sm') }} {{ a.name }}</span>{% endfor %}</div>{% endif %}
