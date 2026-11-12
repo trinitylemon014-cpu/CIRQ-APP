@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Reset with recovery code{% endblock %}
+{% block public %}
+<div class="auth-shell"><div class="auth-card">
+  <div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:12px;font-size:1.8rem">Use your recovery code</h1>
+  <p class="muted" style="text-align:center">Enter your username (or email), the recovery code you saved when you joined, and choose a new password.</p></div>
+  <form class="card" method="post" novalidate>{{ m.csrf() }}
+    {{ m.field('identifier', 'Username or email', value=identifier, placeholder='your.username or you@example.com', autocomplete='username') }}
+    <label for="f-code">Recovery code</label>
+    <input class="input code-input" id="f-code" name="code" value="{{ code }}" placeholder="XXXX-XXXX-XXXX" required autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24">
+    {{ m.pw_field('password', 'New password', 'new-password') }}
+    {{ m.pw_field('password2', 'Confirm new password', 'new-password') }}
+    <button class="btn block lg" type="submit" style="margin-top:14px">Reset my password</button>
+  </form>
+  <p class="hint" style="text-align:center;margin-top:14px">You'll get a new recovery code afterwards, because each code works only once.</p>
+  <p style="text-align:center;margin-top:10px"><a class="link" href="{{ url_for('auth.forgot_password') }}">I don't have my code</a> · <a class="link" href="{{ url_for('auth.login') }}">Back to log in</a></p>
+</div></div>
+{% endblock %}
