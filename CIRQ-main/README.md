@@ -285,6 +285,17 @@ the phone's own camera app.
 accounts and expiry are enforced exactly like story likes), the story owner can delete any comment, and comments can be reported. Comments on posts and on
 stories can be liked; the comment's author gets one "liked your comment" notification.
 
+### Account recovery code
+
+Every new student gets a simple personal code (like `K7M2-9QXD-4TFH`: 12 letters and numbers, no look-alike characters) straight after signing up, and must tick "I've saved my recovery code". Students who joined before this feature see a reminder banner until they create theirs.
+
+- **Using it:** *Forgot password → Use code* (or `/recover`). Username (or email) + code + new password. No admin needed. Any case, with or without dashes, is accepted.
+- **Finding it later:** *Settings → Account recovery* (or the *Recovery code* button on your own profile). The code stays hidden until the student re-enters their password, so a borrowed unlocked phone can't reveal it. They can also make a new code there (the old one stops working).
+- **After it is used** the password changes, every device is signed out, the student is emailed and notified, and a **new code replaces the used one** (each code works once).
+- **Safety:** a code alone is useless: recovery needs the username/email too. Five wrong tries in a row lock recovery for 30 minutes (`RECOVERY_MAX_ATTEMPTS`, `RECOVERY_LOCK_MINUTES`). The plaintext is never stored: the table keeps an HMAC (to check codes) and an encrypted copy (so the student can view their own), in a table the public database key cannot read. The existing admin-reviewed reset still works for students who lost their code.
+
+**Set it up:** run `migrations/2026_11_11_account_recovery_code.sql`, install the new dependency (`pip install -r requirements.txt`, adds `cryptography`), and set **`RECOVERY_CODE_KEY`** to a long random string (e.g. `python -c "import secrets; print(secrets.token_urlsafe(48))"`). **Never change it afterwards**: it protects every stored code, and changing it makes existing codes unusable (students would need to make new ones). If you don't set it, a key is derived from `SECRET_KEY`, so rotating `SECRET_KEY` would have the same effect.
+
 ### Coin gifts and loans between friends
 
 Students who follow each other can **gift** coins (instant, final) or **lend** them with a signed agreement. Open a friend's profile and tap the gift icon, or go to *App coins → Gifts & loans*.
