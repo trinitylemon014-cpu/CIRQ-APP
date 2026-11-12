@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% from 'auth/_code_box.html' import code_box %}{% block title %}Password reset{% endblock %}
+{% block public %}
+<div class="auth-shell"><div class="auth-card" style="max-width:480px;width:100%">
+  <div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:12px;font-size:1.8rem">Password updated</h1>
+  <p class="muted" style="text-align:center">You were signed out everywhere. Log in with your new password.</p></div>
+  <div class="card flat rc-warn" style="margin-bottom:12px"><b>{{ m.icon('shield','i-sm') }} Save your new recovery code</b>
+    <p style="margin:6px 0 0">The code you just used no longer works. This is the new one. You can also find it later in <b>Settings → Account recovery</b>.</p></div>
+  {{ code_box(code) }}
+  <a class="btn lg block" href="{{ url_for('auth.login') }}" style="margin-top:14px">Log in</a>
+</div></div>
+<script src="{{ url_for('static', filename='js/recovery.js') }}" defer></script>
+{% endblock %}
