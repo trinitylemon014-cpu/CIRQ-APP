@@ -3,7 +3,7 @@ import os
 import click
 import httpx
 from urllib.parse import urlparse
-from flask import Flask, g, session, render_template, request, jsonify, url_for
+from flask import Flask, Response, g, session, render_template, request, jsonify, url_for, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config, DevConfig, TestConfig, validate_config
 from app.extensions import csrf, limiter
@@ -67,7 +67,7 @@ def create_app(config_object=None, clients=None):
     @app.before_request
     def load_user():
         g.user = None
-        if request.endpoint in (None, "static", "health"):
+        if request.endpoint in (None, "static", "health", "favicon", "robots"):
             return
         uid = session.get("uid")
         if not uid or "cirq_db" not in app.extensions:
@@ -130,6 +130,18 @@ def create_app(config_object=None, clients=None):
     app.jinja_env.filters["ago"] = time_ago
     app.jinja_env.filters["event_dt"] = fmt_event_dt
     app.jinja_env.filters["short"] = short_count
+
+    @app.get("/favicon.ico")
+    def favicon():
+        # Served from the site root so Google and browsers always find it.
+        resp = send_from_directory(app.static_folder, "favicon.ico", mimetype="image/vnd.microsoft.icon")
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        return resp
+
+    @app.get("/robots.txt")
+    def robots():
+        body = "User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /messages/\nDisallow: /api/\n"
+        return Response(body, mimetype="text/plain")
 
     @app.get("/health")
     def health():
