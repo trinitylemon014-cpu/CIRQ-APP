@@ -1856,3 +1856,8 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 .theme-switch .i { width: 18px; height: 18px; }
 .theme-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 .theme-row b { font-weight: 900; } .theme-row small { display: block; color: var(--muted); font-weight: 600; }
+
+/* Reel owner's tappable view count ("who viewed") */
+.reel .side .reel-view-count.viewers-btn, .post-actions .reel-view-count.viewers-btn { cursor: pointer}
+.reel .side .reel-view-count.viewers-btn:hover { background: rgba(255, 255, 255, .12)}
+.post-actions .reel-view-count.viewers-btn:hover span { text-decoration: underline; text-underline-offset: 3px}
