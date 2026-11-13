@@ -13,7 +13,7 @@ def theme_cookie(resp):
 def test_dark_is_the_default_everywhere(client):
     html = client.get("/").get_data(as_text=True)
     assert 'data-theme="dark"' in html and "css/style.css" in html and "style-light.css" not in html
-    assert 'content="#0b0b0c"' in html and "images/favicon.png" in html
+    assert 'content="#0b0b0c"' in html and "favicon-96.png" in html
 
 
 def test_choosing_light_sets_a_year_long_cookie_and_swaps_the_stylesheet(client, mk):
@@ -24,7 +24,7 @@ def test_choosing_light_sets_a_year_long_cookie_and_swaps_the_stylesheet(client,
     assert cookie and "cirq_theme=light" in cookie and "Max-Age=31536000" in cookie and "SameSite=Lax" in cookie and "HttpOnly" in cookie
     html = client.get("/settings").get_data(as_text=True)
     assert 'data-theme="light"' in html and "css/style-light.css" in html and "css/style.css" not in html.replace("style-light.css", "")
-    assert 'content="#f6f6f1"' in html and "favicon-light.png" in html and "icon-192-light.png" in html
+    assert 'content="#f6f6f1"' in html and "favicon-96.png" in html and "apple-touch-icon.png" in html
 
 
 def test_switching_back_to_dark(client, mk):
@@ -68,7 +68,7 @@ def test_the_switch_is_on_your_own_profile_and_in_settings_with_the_active_side_
 
 
 def test_both_stylesheets_ship_with_the_icons_they_need(app):
-    for name in ("css/style.css", "css/style-light.css", "images/favicon.png", "images/favicon-light.png", "images/icon-192.png", "images/icon-192-light.png"):
+    for name in ("css/style.css", "css/style-light.css", "favicon-48.png", "favicon-96.png", "favicon-192.png", "apple-touch-icon.png", "favicon.ico"):
         assert (STATIC / name).stat().st_size > 1000, name
     dark, light = (STATIC / "css/style.css").read_text(), (STATIC / "css/style-light.css").read_text()
     assert "--brand: #f7b500" in dark and "--lime: #c9f900" in light                       # gold on black vs the original lime
@@ -79,3 +79,10 @@ def test_switch_buttons_post_back_to_the_same_page(client, mk):
     mk("zoe"); login(client, "zoe")
     page = client.get("/u/zoe?tab=reels").get_data(as_text=True)
     assert 'name="next" value="/u/zoe?tab=reels"' in page
+
+
+def test_favicon_and_robots_served_from_site_root(client):
+    r = client.get("/favicon.ico")
+    assert r.status_code == 200 and r.mimetype == "image/vnd.microsoft.icon"
+    r = client.get("/robots.txt")
+    assert r.status_code == 200 and "Allow: /" in r.get_data(as_text=True)
