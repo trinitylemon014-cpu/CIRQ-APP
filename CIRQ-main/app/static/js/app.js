@@ -197,6 +197,35 @@
   window.addEventListener("popstate", () => closePageMenu(false));
   window.addEventListener("pagehide", () => closePageMenu(false));
 
+  /* Register page: live username checklist. Mirrors the server rules in app/utils.py (valid_username); the server stays the authority. */
+  const unameInput = $("[data-username-input]"), unameRules = $("[data-username-rules]");
+  if (unameInput && unameRules) {
+    const count = $("[data-username-count]", unameRules);
+    const setRule = (key, state) => {
+      const li = $(`[data-rule="${key}"]`, unameRules);
+      if (li) li.dataset.state = state;                       // idle | ok | bad | pending
+    };
+    const checkUsername = () => {
+      const raw = unameInput.value.trim();
+      const v = raw.toLowerCase().replace(/^@/, "");           // same normalising the server does
+      const n = v.length;
+      if (count) count.textContent = `${n}/24`;
+      if (!n) { ["length", "chars", "edges", "repeat"].forEach((k) => setRule(k, "idle")); unameRules.dataset.valid = "0"; return; }
+      const lengthOk = n >= 3 && n <= 24;
+      const charsOk = /^[a-z0-9._]+$/.test(v);
+      const edgesOk = /^[a-z0-9]/.test(v) && /[a-z0-9]$/.test(v);
+      const repeatOk = !/\.\.|__/.test(v);
+      setRule("length", lengthOk ? "ok" : (n < 3 ? "pending" : "bad"));   // too short = still typing, not an error
+      setRule("chars", charsOk ? "ok" : "bad");
+      setRule("edges", edgesOk ? "ok" : "bad");
+      setRule("repeat", repeatOk ? "ok" : "bad");
+      unameRules.dataset.valid = (lengthOk && charsOk && edgesOk && repeatOk) ? "1" : "0";
+    };
+    unameInput.addEventListener("input", checkUsername);
+    unameInput.addEventListener("change", checkUsername);
+    checkUsername();
+  }
+
   const schoolChoice = $("#f-school-choice"), customSchool = $("[data-new-school]");
   if (schoolChoice && customSchool) {
     const schoolName = $("#f-new-school");
