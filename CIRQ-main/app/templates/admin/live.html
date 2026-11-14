@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Live admin{% endblock %}
 {% block content %}<h1 class="page-title">Live</h1>{% include 'admin/_nav.html' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
-<div class="lv-note {{ '' if provider_ready else 'warn' }}">{{ m.icon('radio') }}<span>Streaming provider (LiveKit): <b>{{ 'connected (credentials present)' if provider_ready else 'NOT configured, nobody can go live' }}</b>. Who may host: <b>{{ eligibility }}</b> {{ '(verified badge or granted access)' if eligibility == 'verified' else '(any approved student, testing mode)' }}.</span></div>
+<div class="lv-note {{ '' if provider_ready else 'warn' }}">{{ m.icon('radio') }}<span>Streaming provider (LiveKit): <b>{{ 'connected (credentials present)' if provider_ready else 'NOT configured, nobody can go live' }}</b>. Who may host: <b>{{ eligibility }}</b> {{ {'verified': '(verified email + verified badge or granted access)', 'approved': '(any approved student with a verified email)', 'anyone': '(every approved account)'}.get(eligibility, '') }}.</span></div>
 <div class="section-title"><h2>Live hosting access</h2></div>
 <form class="card" method="post" action="{{ url_for('live.admin_live_grant') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">{{ m.csrf() }}
   <input type="text" name="username" placeholder="username" aria-label="Username" required style="flex:1;min-width:160px;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);color:var(--text)">
