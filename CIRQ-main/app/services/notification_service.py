@@ -15,6 +15,7 @@ COPY = {
     "event_update": "updated an event you're attending",
     "community": "posted in your school community",
     "gift_received": "sent you coins",
+    "live_started": "is live now",
     "loan_offer": "offered you a loan",
     "loan_accepted": "agreed to your loan",
     "loan_declined": "declined your loan offer",
