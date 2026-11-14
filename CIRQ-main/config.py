@@ -33,6 +33,17 @@ class Config:
     CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
     CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
 
+    # Cloudflare R2 (optional). When all of these are set, new VIDEOS (reels, post and story videos) are stored in R2 instead
+    # of Cloudinary; images, avatars and music stay on Cloudinary and private chat files stay in the Supabase bucket.
+    # R2_PUBLIC_BASE_URL is the public address of the bucket (a custom domain such as https://media.example.com, or the
+    # bucket's r2.dev URL). Leave these empty to keep everything on Cloudinary exactly as before.
+    R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
+    R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
+    R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+    R2_BUCKET = os.environ.get("R2_BUCKET", "")
+    R2_PUBLIC_BASE_URL = os.environ.get("R2_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "")      # optional; defaults to https://<account id>.r2.cloudflarestorage.com
+
     # Mail (password recovery, email verification)
     MAIL_SERVER = os.environ.get("MAIL_SERVER", "")
     MAIL_PORT = _int("MAIL_PORT", 587)
