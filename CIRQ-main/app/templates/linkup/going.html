@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Who's going · {{ e.title }}{% endblock %}
+{% block content %}
+<a class="link small" href="{{ url_for('linkup.detail', event_id=e.id) }}">&larr; {{ e.title }}</a>
+<h1 class="page-title" style="margin-top:6px">Who's going</h1>
+<p class="muted">{{ people|length + hidden }} going{% if e.capacity %} · capacity {{ e.capacity }}{% endif %}. Everyone going joins the event group chat, which closes after the event day.</p>
+{% if e.status == 'scheduled' and not (rsvp and rsvp.status == 'going') %}
+<form method="post" action="{{ url_for('linkup.rsvp', event_id=e.id) }}" style="margin:12px 0">{{ m.csrf() }}<button class="btn" name="status" value="going">{{ m.icon('check','i-sm') }} Join this event</button></form>{% endif %}
+<div class="card going-all">
+{% for p in people %}<a class="person going-row" href="{{ url_for('profiles.view', username=p.username) }}">{{ m.avatar(p, 44) }}
+  <div class="grow"><b>{{ p.display_name }}{{ m.verified(p) }}</b>{% if p.id == e.host_id %} <span class="chip">Host</span>{% endif %}<br><small class="dim">@{{ p.username }}{% if p.school_id and schools.get(p.school_id) %} · {{ schools[p.school_id].name }}{% endif %}</small></div></a>
+{% else %}<p class="muted" style="padding:16px">Nobody has joined yet. Be the first!</p>{% endfor %}
+{% if hidden %}<p class="muted small" style="padding:12px 16px">+ {{ hidden }} more {{ 'person' if hidden == 1 else 'people' }} with private accounts.</p>{% endif %}
+</div>
+{% endblock %}
