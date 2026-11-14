@@ -91,9 +91,9 @@ class Viewer:
 
     def __init__(self, me):
         self.me = me
-        self.hidden = social.blocked_between(me["id"])
-        self.following = set(social.following_ids(me["id"]))
-        self.asked = social.requested_ids(me["id"])
+        hidden, following, asked = sb.parallel(lambda: social.blocked_between(me["id"]), lambda: social.following_ids(me["id"]),
+                                               lambda: social.requested_ids(me["id"]))
+        self.hidden, self.following, self.asked = hidden, set(following), asked
 
     def ok(self, p):
         return bool(p) and p.get("account_status") == "approved" and p["id"] != self.me["id"] and p["id"] not in self.hidden
@@ -267,14 +267,13 @@ def search(v, q, cat, school_id, limit=RESULT_CAP):
 def _decorate(items, v):
     """Add the display-only fields every account card needs. Counts come from one fresh query for exactly the cards shown."""
     ids = [p["id"] for p in items]
-    counts = follower_counts(ids, budget=max(40, len(ids)))        # the status badge is derived from this number, so it must be exact for every card
-    schools = sb.by_id("schools", [p.get("school_id") for p in items])
+    counts, schools = sb.parallel(lambda: follower_counts(ids), lambda: sb.by_id("schools", [p.get("school_id") for p in items]))
     for p in items:
         p["_state"] = v.state(p["id"])
         p["_followers"] = counts.get(p["id"])
         p["_school"] = schools.get(p.get("school_id"))
-        tier = tier_for(p["_followers"] or 0)                           # same function the profile page uses, so the two always agree
-        p["_tier"], p["_tier_idx"] = tier["name"], tier["index"]       # CIRQ STATUS: Rookie ... Hall of Fame, shown for every account
+        tier = tier_for(p["_followers"] or 0)
+        p["_tier"] = tier["name"] if tier["index"] >= 1 else None      # "Rookie" is everyone's starting point, so it isn't worth a badge
     return items
 
 
@@ -321,11 +320,13 @@ def accounts_page(user, args):
                         {"popular": "Popular accounts", "recommended": "Recommended for you", "trending": "Trending creators"}.get(view, "Accounts"))
         return out
 
-    pop = popular(v, HOME_POPULAR)
+    # the three lists are independent, so they are built at the same time; only the "don't repeat" step waits for all of them
+    pop, rec_all, trend_all = sb.parallel(lambda: popular(v, HOME_POPULAR), lambda: recommended(v, user, HOME_RECOMMENDED * 2),
+                                          lambda: trending(v, HOME_TRENDING * 2))
     seen = {p["id"] for p in pop}
-    rec = _fresh(recommended(v, user, HOME_RECOMMENDED * 2), seen)[:HOME_RECOMMENDED]
+    rec = _fresh(rec_all, seen)[:HOME_RECOMMENDED]
     seen |= {p["id"] for p in rec}
-    trend = _fresh(trending(v, HOME_TRENDING * 2), seen, want=3)[:HOME_TRENDING]
+    trend = _fresh(trend_all, seen, want=3)[:HOME_TRENDING]
     _decorate(pop + rec + trend, v)            # one counts query covers every card on the page
     out["sections"] = {"popular": pop, "recommended": rec, "trending": trend}
     return out
