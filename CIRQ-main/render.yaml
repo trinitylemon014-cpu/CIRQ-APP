@@ -29,16 +29,6 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
-      - key: R2_ACCOUNT_ID
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET
-        sync: false
-      - key: R2_PUBLIC_BASE_URL
-        sync: false
       - key: MAIL_SERVER
         sync: false
       - key: MAIL_PORT
@@ -55,6 +45,16 @@ services:
         generateValue: true
       - key: PAID_COMPETITIONS_ENABLED
         value: false          # keep false until legal / payment / child-safety review is complete
+      - key: LIVE_ENABLED
+        value: true
+      - key: LIVE_ELIGIBILITY        # verified = verified-badge or admin-granted hosts only (safe default); approved = any approved student (testing)
+        value: verified
+      - key: LIVEKIT_URL             # e.g. wss://your-project.livekit.cloud  (from your LiveKit project; leave empty until you have one)
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
   # Hourly cleanup of expired stories (rows + Cloudinary files) and stale reset links.
   # If you don't want a second paid Render service, call the same URL from any free scheduler instead (see README).
   - type: cron
