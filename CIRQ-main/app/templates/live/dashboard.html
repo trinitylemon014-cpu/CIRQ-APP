@@ -1,0 +1,44 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}Creator earnings{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+{% set s = d.summary %}{% set lv = d.level %}
+<a class="back-link" href="{{ url_for('live.index') }}">{{ m.icon('arrow-left','i-sm') }} Live</a>
+<h1 class="page-title">Creator earnings</h1>
+<div class="card lime lend-balance"><div class="eyebrow">Your wallet</div><div class="big">{{ d.wallet_balance }} <small>coins</small></div>
+  <p>Creator level <b>{{ lv.level }}</b>{% if lv.next_at %} · {{ lv.to_next }} more coins earned to reach level {{ lv.level + 1 }}{% else %} · top level{% endif %}</p>
+  {% if lv.next_at %}<div class="lv-bar" role="progressbar" aria-valuemin="0" aria-valuemax="{{ lv.next_at }}" aria-valuenow="{{ lv.earned }}"><i style="width:{{ [100, (lv.earned * 100 // lv.next_at)]|min }}%"></i></div>{% endif %}</div>
+<div class="lv-tiles">
+  <div class="lv-tile"><small>Coins earned</small><b>{{ s.host_earnings or 0 }}</b></div>
+  <div class="lv-tile"><small>Gifts received</small><b>{{ s.gifts_received or 0 }}</b></div>
+  <div class="lv-tile"><small>Lives</small><b>{{ s.sessions or 0 }}</b></div>
+  <div class="lv-tile"><small>Fan club members</small><b>{{ d.fan_club_members }}</b></div>
+</div>
+<div class="section-title"><h2>How gifts are counted</h2></div>
+<div class="card">
+  <div class="lv-split">
+    <div><small>Gift value (viewers paid)</small><b>{{ s.gross_value or 0 }}</b></div>
+    <div><small>CIRQ's share (50%)</small><b>{{ s.platform_share or 0 }}</b></div>
+    <div class="mine"><small>Your earnings (50%)</small><b>{{ s.host_earnings or 0 }}</b></div>
+  </div>
+  <p class="lv-explain">Only <b>Your earnings</b> are added to your coins. Gift value is what the viewer spent; CIRQ keeps half.</p>
+  <hr style="border:0;border-top:1px solid var(--border-soft);margin:14px 0">
+  <div><b>{{ s.diamonds_displayed or 0 }}</b> diamonds shown in animations</div>
+  <p class="lv-explain"><b>Display only.</b> Diamonds are part of an animation (for example, a Treasure Chest shows 10). They are never added to your coins. Only the coins in <b>Your earnings</b> are credited.</p>
+</div>
+<div class="section-title"><h2>Recent gifts</h2></div>
+{% if d.history %}<div class="card lv-scroll"><table class="lv-table"><thead><tr><th>When</th><th>Gift</th><th>From</th><th class="lv-num">Gift value</th><th class="lv-num">You earned</th><th class="lv-num">CIRQ share</th><th class="lv-num">Diamonds shown</th></tr></thead><tbody>
+{% for h in d.history %}<tr><td>{{ h.when|ago }}</td><td>{{ h.gift }}</td><td>@{{ h.from }}</td><td class="lv-num">{{ h.gross }}</td><td class="lv-num"><b>{{ h.earned }}</b></td><td class="lv-num">{{ h.platform }}</td><td class="lv-num">{{ (h.diamonds ~ ' × ' ~ h.diamond_value) if h.diamonds else '·' }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}{% call m.empty('coin', 'No gifts yet', 'When viewers send you gifts during a live, they appear here.') %}{% endcall %}{% endif %}
+<div class="section-title"><h2>Top supporters</h2></div>
+{% if d.supporters %}<div class="card">{% for p in d.supporters %}<div class="lv-rank"><span class="n">{{ loop.index }}</span><div class="grow"><b>{{ p.display_name }}</b><small class="muted">@{{ p.username }} · {{ p.gifts }} gift{{ '' if p.gifts == 1 else 's' }}</small></div>{% if p.tier %}<span class="lv-tier {{ p.tier|lower }}">{{ p.tier }}</span>{% endif %}<b>{{ p.total }}</b></div>{% endfor %}</div>
+{% else %}<div class="card flat"><p class="muted" style="margin:0">Your supporters will show up here.</p></div>{% endif %}
+<div class="section-title"><h2>Earnings by live</h2></div>
+{% if d.sessions %}<div class="card lv-scroll"><table class="lv-table"><thead><tr><th>Live</th><th>When</th><th class="lv-num">Peak viewers</th><th class="lv-num">Gifts</th><th class="lv-num">Gift value</th><th class="lv-num">You earned</th><th class="lv-num">CIRQ share</th></tr></thead><tbody>
+{% for x in d.sessions %}<tr><td>{{ x.title }}{% if x.status == 'live' %} <span class="chip red">LIVE</span>{% endif %}</td><td>{{ x.started_at|ago }}</td><td class="lv-num">{{ x.peak_viewers }}</td><td class="lv-num">{{ x.gifts_count }}</td><td class="lv-num">{{ x.gift_gross }}</td><td class="lv-num"><b>{{ x.host_earned }}</b></td><td class="lv-num">{{ x.platform_share }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="card flat"><p class="muted" style="margin:0">Your lives will be listed here.</p></div>{% endif %}
+{% if clubs %}<div class="section-title"><h2>Fan clubs you're in</h2></div><div class="card" id="lv-clubs">
+{% for c in clubs %}<div class="lv-rank" data-club="{{ c.username }}"><div class="grow"><b>{{ c.display_name }}</b><small class="muted">@{{ c.username }}</small></div><button class="btn sm ghost" type="button" data-leave="{{ c.username }}">Leave</button></div>{% endfor %}</div>{% endif %}
+<p class="lv-explain" style="margin-top:18px">Coins are in-app currency. They can be used inside CIRQ and cannot be cashed out.</p>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/live-clubs.js') }}" defer></script>{% endblock %}
