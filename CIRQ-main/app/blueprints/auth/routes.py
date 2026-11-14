@@ -114,7 +114,8 @@ def register():
         pw, pw2 = f.get("password", ""), f.get("password2", "")
         errors = []
         if "@" in raw_username or not valid_username(username):
-            errors.append("Username: 3-24 characters; letters, numbers, dots or underscores only (no @).")
+            errors.append("Username: 3-24 characters, using only letters, numbers, dots or underscores (no spaces or @). "
+                          "It must start and end with a letter or number, with no \"..\" or \"__\" in a row.")
         elif sb.get("profiles", "id", username=username):
             errors.append("That username is taken.")
         if len(display) < 2:
