@@ -10,6 +10,7 @@ from app.services import supabase_service as sb, cloudinary_service as cs, socia
 from app.services.cloudinary_service import UploadError
 from app.services import chat_attachments as ca
 from app.services.chat_attachments import AttachmentError
+from app.services import messaging
 from app.services.messaging import dm_key, find_dm, get_or_create_dm   # dm_key re-exported for older imports
 from app.services.moderation_service import check_text
 from app.services.notification_service import notify
@@ -38,7 +39,37 @@ def _conv_or_404(cid):
     return conv
 
 
+def _tick_read_at(cid):
+    """DMs only: when the other person last opened the chat. None for groups (no ticks there)."""
+    conv = sb.get("conversations", id=cid)
+    if not conv or conv["kind"] != "dm":
+        return False
+    for m in sb.select("conversation_members", conversation_id=cid):
+        if m["user_id"] != g.user["id"]:
+            return parse_dt(m["last_read_at"])
+    return False
+
+
+def _set_ticks(msgs, cid):
+    read_at = _tick_read_at(cid)
+    if read_at is False:
+        return
+    for m in msgs:
+        if m["sender_id"] == g.user["id"]:
+            m["tick"] = messaging.tick_state(m, read_at)
+
+
+def _drop_hidden(rows):
+    """Messages that have already disappeared for me."""
+    if not rows:
+        return rows
+    gone = messaging.hidden_ids(g.user["id"], [r["id"] for r in rows])
+    return [r for r in rows if r["id"] not in gone]
+
+
 def _decorate(msgs):
+    if msgs:
+        _set_ticks(msgs, msgs[0]["conversation_id"])
     senders = sb.by_id("profiles", [m["sender_id"] for m in msgs])
     stories = sb.by_id("stories", [m.get("story_id") for m in msgs])
     attachments = {}
@@ -82,7 +113,10 @@ def inbox():
     recent = db().table("messages").select("*").in_("conversation_id", list(mem) or ["00000000-0000-0000-0000-000000000000"]) \
         .eq("moderation_status", "ok").order("created_at", desc=True).limit(400).execute().data or []
     last, unread = {}, {}
+    gone = messaging.hidden_ids(me)
     for m in recent:
+        if m["id"] in gone:
+            continue
         last.setdefault(m["conversation_id"], m)
         if m["sender_id"] != me and m["created_at"] > mem[m["conversation_id"]]["last_read_at"]:
             unread[m["conversation_id"]] = unread.get(m["conversation_id"], 0) + 1
@@ -131,12 +165,17 @@ def start(username):
 def thread(cid):
     conv = _conv_or_404(cid)
     me = g.user["id"]
+    try:
+        messaging.purge_conversation(cid)          # delete what has disappeared for everyone in this chat
+    except Exception:
+        current_app.logger.exception("purging disappeared messages failed")
     q = db().table("messages").select("*").eq("conversation_id", cid).eq("moderation_status", "ok").order("created_at", desc=True).limit(PAGE + 1)
     if request.args.get("before"):
         q = q.lt("created_at", request.args["before"])
     rows = q.execute().data or []
     more = rows[PAGE - 1]["created_at"] if len(rows) > PAGE else None
-    msgs = _decorate(list(reversed(rows[:PAGE])))
+    msgs = _decorate(_drop_hidden(list(reversed(rows[:PAGE]))))
+    messaging.mark_delivered(me, [cid])
     sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=me)
     db().table("notifications").update({"read_at": iso()}).eq("user_id", me).eq("kind", "message").eq("ref_id", cid).is_("read_at", "null").execute()
     other, members, can_send = None, [], True
@@ -147,8 +186,11 @@ def thread(cid):
         members = list(sb.by_id("profiles", [m["user_id"] for m in sb.select("conversation_members", conversation_id=cid)]).values())
     if request.args.get("partial"):
         return render_template("messages/_bubbles.html", msgs=msgs)
+    mine = _membership(cid, me) or {}
     return render_template("messages/thread.html", conv=conv, msgs=msgs, other=other, members=members, more=more,
-                           last_ts=msgs[-1]["created_at"] if msgs else "", can_send=can_send)
+                           last_ts=msgs[-1]["created_at"] if msgs else "", can_send=can_send,
+                           disappear_after=mine.get("disappear_after") or 0, disappear_options=messaging.DISAPPEAR_OPTIONS,
+                           disappear_label=messaging.DISAPPEAR_LABELS.get(mine.get("disappear_after") or 0, "Off"))
 
 
 @bp.post("/<cid>/send")
@@ -180,11 +222,13 @@ def send(cid):
             return jsonify(error=str(e)), 400
         row.update(media_type=info["media_type"], media_url=info["url"], media_public_id=info["public_id"])
     msg = sb.insert("messages", row)
+    messaging.after_send(msg, conv, me)
     for m in members:
         if m["user_id"] != me:
             notify(m["user_id"], "message", me, "conversation", cid, body=(conv.get("title") or ""))
     sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=me)
     msg["sender"] = g.user
+    _set_ticks([msg], cid)
     if msg.get("media_public_id"):
         msg["media_row"] = {"url": msg["media_url"], "public_id": msg["media_public_id"], "media_type": msg["media_type"], "delivery_type": "authenticated"}
     return jsonify(html=render_template("messages/_bubbles.html", msgs=[msg]), ts=msg["created_at"])
@@ -287,12 +331,14 @@ def send_with_attachments(cid):
         sb.delete("messages", id=message_id)
         return jsonify(error="The upload failed. Your message wasn't sent; please retry."), 502
 
+    messaging.after_send(message, conv, me)
     for member in members:
         if member["user_id"] != me:
             notify(member["user_id"], "message", me, "conversation", cid, body=(conv.get("title") or ""))
     sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=me)
     message["sender"] = g.user
     message["attachments"] = saved
+    _set_ticks([message], cid)
     return jsonify(html=render_template("messages/_bubbles.html", msgs=[message]), ts=message["created_at"])
 
 
@@ -306,11 +352,51 @@ def poll(cid):
     q = db().table("messages").select("*").eq("conversation_id", cid).eq("moderation_status", "ok").neq("sender_id", g.user["id"]).order("created_at")
     if after:
         q = q.gt("created_at", after)
-    rows = _decorate(q.limit(50).execute().data or [])
+    rows = _decorate(_drop_hidden(q.limit(50).execute().data or []))
     if rows:
         sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=g.user["id"])
+        messaging.mark_delivered(g.user["id"], [cid])
         db().table("notifications").update({"read_at": iso()}).eq("user_id", g.user["id"]).eq("kind", "message").eq("ref_id", cid).is_("read_at", "null").execute()
-    return jsonify(html=render_template("messages/_bubbles.html", msgs=rows) if rows else "", ts=rows[-1]["created_at"] if rows else after)
+    # live tick updates for the messages I sent that aren't "seen" yet (the browser sends their ids)
+    ticks = {}
+    ids = [i for i in request.args.get("ids", "").split(",") if i][:60]
+    read_at = _tick_read_at(cid) if ids else False
+    if ids and read_at is not False:
+        mine = db().table("messages").select("id,created_at,delivered_at").eq("conversation_id", cid) \
+            .eq("sender_id", g.user["id"]).in_("id", ids).execute().data or []
+        ticks = {m["id"]: messaging.tick_state(m, read_at) for m in mine}
+    return jsonify(html=render_template("messages/_bubbles.html", msgs=rows) if rows else "",
+                   ts=rows[-1]["created_at"] if rows else after, ticks=ticks)
+
+
+@bp.post("/delivered")
+@login_required
+@limiter.limit("30 per minute", key_func=lambda: g.user["id"])
+def delivered():
+    """The browser checks in (every ~30s while the app is open): whatever was sent to me has now reached me,
+    so the sender's single tick becomes a double tick. Works even if I hide my active status."""
+    try:
+        messaging.mark_delivered(g.user["id"])
+    except (APIError, httpx.HTTPError):
+        current_app.logger.exception("marking messages delivered failed")
+        return jsonify(ok=False), 503
+    return jsonify(ok=True)
+
+
+@bp.post("/<cid>/disappearing")
+@login_required
+@limiter.limit("30 per hour", key_func=lambda: g.user["id"])
+def set_disappearing(cid):
+    """My own timer for this chat. It only applies to new messages and only hides them for me."""
+    _conv_or_404(cid)
+    try:
+        seconds = int(request.form.get("seconds") or (request.get_json(silent=True) or {}).get("seconds") or 0)
+    except (TypeError, ValueError):
+        return jsonify(error="Pick one of the options."), 400
+    if seconds not in messaging.DISAPPEAR_LABELS:
+        return jsonify(error="Pick one of the options."), 400
+    sb.update("conversation_members", {"disappear_after": seconds or None}, conversation_id=cid, user_id=g.user["id"])
+    return jsonify(ok=True, seconds=seconds, label=messaging.DISAPPEAR_LABELS[seconds])
 
 
 def _attachment_or_404(attachment_id):
