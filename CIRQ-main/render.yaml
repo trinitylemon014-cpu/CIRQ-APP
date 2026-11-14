@@ -29,6 +29,16 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_BASE_URL
+        sync: false
       - key: MAIL_SERVER
         sync: false
       - key: MAIL_PORT
