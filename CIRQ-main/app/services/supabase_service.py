@@ -4,9 +4,12 @@ All queries run server-side with the service-role key, so every route must do it
 authorization. Row Level Security in schema.sql is a second layer that protects data if the
 anon key is ever used directly.
 """
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
+from flask import current_app, g, has_request_context, request
 from supabase import create_client
 from supabase.lib.client_options import SyncClientOptions
 from app.extensions import db
@@ -32,6 +35,61 @@ def make_client(url, key):
     http_client = RetryingHttpxClient(http2=False, timeout=100)
     options = SyncClientOptions(storage_client_timeout=100, httpx_client=http_client)
     return create_client(url, key, options=options)
+
+
+# ---------------------------------------------------------------- speed helpers
+# Every Supabase call is a network trip, so a page that makes 40 of them one after another is slow. Two fixes live here:
+#   request_cache(): a per-request memory (GET requests only) so the same lookup is never repeated within one page.
+#   parallel(): runs independent lookups at the same time, so the page waits for the slowest one, not the sum.
+_tls = threading.local()
+_pools = (ThreadPoolExecutor(max_workers=24, thread_name_prefix="cirq-par1"),     # level 1: called from a request thread
+          ThreadPoolExecutor(max_workers=24, thread_name_prefix="cirq-par2"))     # level 2: called from inside a level-1 task
+
+
+def request_cache():
+    """A dict that lives as long as this GET request (shared with parallel tasks), or None when caching is unsafe (POST etc.)."""
+    shared = getattr(_tls, "cache", None)
+    if shared is not None:
+        return shared
+    if has_request_context() and request.method in ("GET", "HEAD"):
+        return request.environ.setdefault("cirq.cache", {})
+    return None
+
+
+def parallel(*fns):
+    """Run independent callables at the same time; returns their results in the same order. Exceptions propagate.
+    Each callable runs with the app context and the logged-in user, and shares this request's cache.
+    Only call it for lookups that don't depend on each other."""
+    if len(fns) < 2:
+        return [fn() for fn in fns]
+    depth = getattr(_tls, "depth", 0)
+    if depth >= 2:                                   # already two levels deep: just run them in turn
+        return [fn() for fn in fns]
+    app, cache, user = current_app._get_current_object(), request_cache(), g.get("user")
+
+    def run(fn):
+        _tls.cache, _tls.depth = cache, depth + 1
+        try:
+            with app.app_context():
+                g.user = user
+                return fn()
+        finally:
+            _tls.cache, _tls.depth = None, 0
+
+    futures = [_pools[depth].submit(run, fn) for fn in fns[1:]]
+    try:
+        first = fns[0]()                             # one task runs right here, in the request thread
+    finally:
+        results = []
+        for f in futures:
+            try:
+                results.append(f.result())
+            except Exception as exc:                 # keep waiting for the rest, raise the first error afterwards
+                results.append(exc)
+    for r in results:
+        if isinstance(r, Exception):
+            raise r
+    return [first] + results
 
 
 def _filter(q, eq):
