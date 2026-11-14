@@ -24,3 +24,20 @@ def page(table, key, key_id, viewer, before=None):
     out = [people[r["user_id"]] for r in rows
            if r["user_id"] in people and people[r["user_id"]].get("account_status") == "approved" and r["user_id"] not in hidden]
     return out, (rows[-1]["created_at"] if more else None)
+
+
+def viewers_page(reel_id, viewer, before=None):
+    """One page of people who watched a reel (newest first): [(profile, viewed_at)], plus the next-page cursor.
+    Same filters as likers: blocked either way and non-approved accounts are left out."""
+    q = sb.db().table("reel_views").select("viewer_id,created_at").eq("reel_id", reel_id)
+    cutoff = parse_dt(before) if before else None
+    if cutoff:
+        q = q.lt("created_at", iso(cutoff))
+    rows = q.order("created_at", desc=True).limit(PAGE + 1).execute().data or []
+    more = len(rows) > PAGE
+    rows = rows[:PAGE]
+    people = sb.by_id("profiles", [r["viewer_id"] for r in rows])
+    hidden = social.blocked_between(viewer["id"])
+    out = [(people[r["viewer_id"]], r["created_at"]) for r in rows
+           if r["viewer_id"] in people and people[r["viewer_id"]].get("account_status") == "approved" and r["viewer_id"] not in hidden]
+    return out, (rows[-1]["created_at"] if more else None)
