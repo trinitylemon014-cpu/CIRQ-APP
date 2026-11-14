@@ -16,11 +16,21 @@ DEFAULTS = {
                      last_seen_at=None, session_epoch=0, coin_balance=0,
                      boosted_until=None, personalized_recs=True, email_verified_at=None, bio=None, avatar_url=None, avatar_public_id=None, school_id=None, status_note=None,
                      school_verified=False, submitted_school_name=None, school_submission_id=None, auto_approval_blocked=False,
-                     approval_source=None, approved_by=None, approved_at=None),
+                     approval_source=None, approved_by=None, approved_at=None,
+                     live_host_granted=False, live_notify_enabled=True, live_show_in_viewer_list=True),
     "posts": dict(kind="post", visibility="public", moderation_status="ok", like_count=0, comment_count=0, views_count=0, is_announcement=False,
                   community_id=None, edited_at=None, caption=None,
                   audio_url=None, audio_public_id=None, audio_title=None, audio_duration=None),
     "comments": dict(moderation_status="ok"),
+    "live_sessions": dict(category="chat", mode="video", visibility="public", status="live", chat_enabled=True, slow_mode_seconds=0, guests_enabled=True,
+                          pinned_event_id=None, ended_at=None, end_reason=None, peak_viewers=0, gifts_count=0, gift_gross=0, host_earned=0, platform_share=0, diamonds_displayed=0),
+    "live_viewers": dict(role="viewer", left_at=None, muted_until=None, removed=False),
+    "live_events": dict(actor_id=None, body=None, payload={}, deleted_at=None),
+    "live_guest_invites": dict(status="invited", media="video", can_publish_audio=True, can_publish_video=True, consent_at=None, accepted_at=None, ended_at=None),
+    "live_battles": dict(status="invited", countdown_seconds=5, accepted_at=None, starts_at=None, ends_at=None, ended_at=None, outcome=None, winner_host_id=None),
+    "live_battle_participants": dict(score=0, active=False),
+    "live_reports": dict(status="open", target_user_id=None, event_id=None, details=None, resolved_by=None, resolved_at=None),
+    "live_moderation_actions": dict(actor_id=None, target_id=None, reason=None, expires_at=None),
     "stories": dict(moderation_status="ok", delivery_type="upload", caption=None,
                     audio_url=None, audio_public_id=None, audio_title=None, audio_duration=None),
     "story_comments": dict(moderation_status="ok"),
@@ -56,13 +66,21 @@ PKS = {"recovery_codes": ("user_id",), "likes": ("post_id", "user_id"), "saved_p
        "community_members": ("community_id", "user_id"), "conversation_members": ("conversation_id", "user_id"),
        "event_rsvps": ("event_id", "user_id"), "user_interests": ("user_id", "dim", "key"), "story_views": ("story_id", "viewer_id"), "story_likes": ("story_id", "user_id"), "comment_likes": ("comment_id", "user_id"), "story_comment_likes": ("comment_id", "user_id"), "follow_requests": ("requester_id", "target_id"), "user_achievements": ("user_id", "code"),
        "feature_flags": ("key",), "developer_card_settings": ("id",), "achievements": ("code",),
-       "school_submission_rate_limits": ("ip_hash",)}
+       "school_submission_rate_limits": ("ip_hash",),
+       "live_gifts": ("code",), "live_viewers": ("session_id", "user_id"), "live_host_blocks": ("host_id", "user_id"), "live_supporters": ("host_id", "user_id"),
+       "live_fan_club_members": ("host_id", "user_id"), "live_battle_participants": ("battle_id", "host_id")}
 UNIQUES = {"recovery_codes": [("code_hash",)], "coin_loan_events": [("loan_id", "ref")], "profiles": [("username",)], "schools": [("slug",), ("name",)], "game_guesses": [("round_id", "card_index")],
            "reel_views": [("reel_id", "viewer_id")],
            "boost_ads": [("user_id",)],
            "trivia_answers": [("attempt_id", "question_id")], "trivia_attempts": [("set_id", "user_id")],
            "payments": [("provider_reference",)], "conversations": [("dm_key",)], "reports": [("reporter_id", "target_type", "target_id")],
-           "trivia_questions": [("set_id", "position")], "communities": [("school_id",)]}
+           "trivia_questions": [("set_id", "position")], "communities": [("school_id",)],
+           "live_guest_invites": [("session_id", "guest_id")], "live_gift_transactions": [("sender_id", "request_id")],
+           "live_reports": [("reporter_id", "session_id", "target_user_id", "event_id")], "live_creator_earnings": [("transaction_id",)]}
+
+
+LIVE_NOW_DEFAULTS = {"live_sessions": ("started_at", "last_heartbeat_at"), "live_viewers": ("joined_at", "last_seen_at"), "live_supporters": ("last_gift_at",),
+                     "live_fan_club_members": ("joined_at",), "live_battles": ("invited_at",)}
 
 
 def _match(row, filters):
@@ -209,6 +227,8 @@ class FakeDB:
         if table not in PKS and table not in ("achievements",):
             row.setdefault("id", str(uuid.uuid4()))
         row.setdefault("created_at", NOW())
+        for col in LIVE_NOW_DEFAULTS.get(table, ()):     # columns the real schema fills with now()
+            row.setdefault(col, NOW())
         if table == "conversation_members" and row.get("last_read_at") is None: row["last_read_at"] = NOW()
         rows = self.data.setdefault(table, [])
         if table in PKS:
@@ -224,6 +244,12 @@ class FakeDB:
             raise Exception("one active round per user")
         if table == "payer_numbers" and any(r["phone"] == row["phone"] and r["status"] in ("pending", "approved") for r in rows):
             raise Exception("phone already registered")
+        if table == "live_events":                      # bigint identity column
+            row["id"] = 1 + max([r["id"] for r in rows] or [0])
+        if table == "live_sessions" and row["status"] == "live" and any(r["host_id"] == row["host_id"] and r["status"] == "live" for r in rows):
+            raise Exception("one live session per host")
+        if table == "live_battle_participants" and row["active"] and any(r["host_id"] == row["host_id"] and r["active"] for r in rows):
+            raise Exception("host already in an active battle")
         rows.append(row)
         post = {"likes": ("posts", "like_count", 1), "comments": ("posts", "comment_count", 1)}.get(table)
         if post:                                        # mirrors cirq_bump_post_counters()
@@ -240,6 +266,12 @@ class FakeDB:
                 self.data[t] = [r for r in self.data.get(t, []) if r.get("post_id") != row["id"]]
 
     def rpc(self, name, params):
+        if name.startswith("cirq_live_"):
+            try:
+                from tests import fakedb_live
+            except ImportError:
+                import fakedb_live
+            return fakedb_live.handle(self, name, params)
         if name == "cirq_profile_id_for_email":
             email = params["p_email"].strip().lower()
             row = next((p for uid, user in self.users.items()
@@ -341,6 +373,11 @@ def seed_from_schema(db, path="schema.sql"):
     for key, en in re.findall(r"\('(\w+)',\s*(true|false),", text.split("insert into feature_flags")[1].split("on conflict")[0]):
         db.table("feature_flags").insert({"key": key, "enabled": en == "true"}).execute()
     db.table("developer_card_settings").insert({"id": "developer"}).execute()
+    try:
+        from tests import fakedb_live
+    except ImportError:
+        import fakedb_live
+    fakedb_live.seed_gifts(db, os.path.join(os.path.dirname(__file__), "..", "migrations", "2026_11_14_live_streaming.sql"))
 
 
 class FakeAnon:
