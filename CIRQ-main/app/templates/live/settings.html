@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}Live settings{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<a class="back-link" href="{{ url_for('live.index') }}">{{ m.icon('arrow-left','i-sm') }} Live</a>
+<h1 class="page-title">Live settings</h1>
+<form method="post" class="card" style="max-width:560px">{{ m.csrf() }}
+  <label class="lv-switch"><input type="checkbox" name="notify" {{ 'checked' if me.live_notify_enabled }}><span><b>Tell me when creators I follow go live</b><br><small class="muted">You'll get a notification when someone you follow starts a live.</small></span></label>
+  <label class="lv-switch"><input type="checkbox" name="show_in_list" {{ 'checked' if me.live_show_in_viewer_list }}><span><b>Show me in viewer lists</b><br><small class="muted">If off, you still count toward the viewer total but your name isn't listed.</small></span></label>
+  <button class="btn" type="submit" style="margin-top:14px">Save</button>
+</form>
+<div class="section-title"><h2>Fan clubs</h2></div>
+{% if clubs %}<div class="card" id="lv-clubs">{% for c in clubs %}<div class="lv-rank" data-club="{{ c.username }}"><div class="grow"><b>{{ c.display_name }}</b><small class="muted">@{{ c.username }}</small></div><button class="btn sm ghost" type="button" data-leave="{{ c.username }}">Leave</button></div>{% endfor %}</div>
+<p class="lv-explain">You join a creator's fan club by sending them a gift. You can leave any time.</p>
+{% else %}<div class="card flat"><p class="muted" style="margin:0">You join a creator's fan club when you send them a gift. You can leave any time.</p></div>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/live-clubs.js') }}" defer></script>{% endblock %}
