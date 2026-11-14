@@ -11,6 +11,7 @@
         {% if block_state == 'i_blocked' %}<form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}">{{ m.csrf() }}<input type="hidden" name="action" value="unblock"><button>{{ m.icon('check','i-sm') }} Unblock @{{ other.username }}</button></form>
         {% else %}<form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}" data-confirm="Block @{{ other.username }}? They won't be able to message you or see when you're online. You can unblock them any time from this chat.">{{ m.csrf() }}<input type="hidden" name="action" value="block"><button class="danger">{{ m.icon('x','i-sm') }} Block @{{ other.username }}</button></form>{% endif %}
       </div></div>{% endif %}</div></div>
+  {% if conv.expires_at %}<div class="disappear-note">{{ m.icon('calendar','i-sm') }} <span>Event chat: closes after {{ conv.expires_at|event_dt }} and everything in it is deleted.</span></div>{% endif %}
   <div class="disappear-note" data-disappear-note {{ 'hidden' if not disappear_after }}>{{ m.icon('clock','i-sm') }} <span>Disappearing messages for you: <b data-disappear-label>{{ disappear_label }}</b></span></div>
   <div class="bubbles" id="bubbles" aria-live="polite">
     {% if more %}<a class="btn sm ghost" style="align-self:center" href="?before={{ more }}">Older messages</a>{% endif %}
