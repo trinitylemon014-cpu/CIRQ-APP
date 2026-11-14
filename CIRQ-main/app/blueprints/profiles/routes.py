@@ -28,11 +28,10 @@ def saved_shortcut():
 def view(username):
     prof = _profile_or_404(username)
     me = g.user
+    sb.parallel(lambda: social.blocked_between(me["id"]), lambda: social.following_ids(me["id"]))   # looked up once for the whole page
     if social.is_blocked(me["id"], prof["id"]) and prof["id"] != me["id"]:
         abort(404)
     mine = prof["id"] == me["id"]
-    stats = social.profile_stats(prof)
-    school = sb.get("schools", id=prof["school_id"]) if prof.get("school_id") else None
     can_see = social.can_see_profile_content(me, prof)
     tab = request.args.get("tab", "posts")
     if tab not in ("posts", "reels", "saved") or (tab == "saved" and not mine):
@@ -43,10 +42,12 @@ def view(username):
     before = request.args.get("before")
     if before and not parse_dt(before):
         abort(400, description="Invalid cursor.")
-    items, cursor = [], None
-    if can_see and tab == "saved":
-        items, cursor = social.saved_page(me, {"posts": "post", "reels": "reel"}.get(saved_type), before)
-    elif can_see:
+
+    def load_items():
+        if can_see and tab == "saved":
+            return social.saved_page(me, {"posts": "post", "reels": "reel"}.get(saved_type), before)
+        if not can_see:
+            return [], None
         n = current_app.config["PAGE_SIZE"]
         q = db().table("posts").select("*").eq("author_id", prof["id"]).eq("moderation_status", "ok") \
             .eq("kind", "reel" if tab == "reels" else "post").is_("community_id", "null").order("created_at", desc=True).limit(n + 1)
@@ -55,18 +56,26 @@ def view(username):
         rows = q.execute().data or []
         if not mine and not social.is_following(me["id"], prof["id"]):
             rows = [r for r in rows if r["visibility"] == "public"]
-        cursor = rows[n - 1]["created_at"] if len(rows) > n else None
-        items = social.hydrate_posts(rows[:n], me["id"])
+        return social.hydrate_posts(rows[:n], me["id"]), (rows[n - 1]["created_at"] if len(rows) > n else None)
+
     if request.args.get("partial"):
+        items, cursor = load_items()
         if tab == "saved":
             return render_template("partials/saved_tiles.html", posts=items, cursor=cursor)
         return render_template("partials/post_list.html", posts=items, cursor=cursor)
+    # everything the profile shows is independent of the rest, so it loads at the same time
+    (items, cursor), stats, school, follow_state, can_message, can_send_coins, pending_requests, achievements = sb.parallel(
+        load_items,
+        lambda: social.profile_stats(prof),
+        lambda: sb.get("schools", id=prof["school_id"]) if prof.get("school_id") else None,
+        lambda: "none" if mine else social.follow_state(me["id"], prof["id"]),
+        lambda: (not mine) and social.can_message(me, prof),
+        lambda: (not mine) and lending_service.can_send_to(me, prof),
+        lambda: social.pending_request_count(me["id"]) if mine and prof.get("is_private") else 0,
+        lambda: [a for a in social.user_achievements(prof["id"]) if a["earned"]])
     return render_template("profiles/view.html", prof=prof, stats=stats, school=school, can_see=can_see, items=items, posts=items, cursor=cursor,
-                           tab=tab, saved_type=saved_type, follow_state="none" if mine else social.follow_state(me["id"], prof["id"]),
-                           can_message=(not mine) and social.can_message(me, prof),
-                           can_send_coins=(not mine) and lending_service.can_send_to(me, prof),
-                           pending_requests=social.pending_request_count(me["id"]) if mine and prof.get("is_private") else 0,
-                           achievements=[a for a in social.user_achievements(prof["id"]) if a["earned"]])
+                           tab=tab, saved_type=saved_type, follow_state=follow_state, can_message=can_message,
+                           can_send_coins=can_send_coins, pending_requests=pending_requests, achievements=achievements)
 
 
 @bp.get("/u/<username>/<kind>")
