@@ -853,8 +853,8 @@ html.cpanel-lock, html.cpanel-lock body { overflow: hidden; overscroll-behavior:
 .saved-grid[hidden], .saved-empty[hidden] { display: none}
 .saved-tile { position: relative; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 10px; background: var(--surface); transition: opacity .25s, transform .25s}
 .saved-link { position: absolute; inset: 0; display: block; color: var(--text)}
-.saved-link img, .saved-link video { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .35s var(--ease)}
-.saved-link:hover img, .saved-link:hover video { transform: scale(1.04)}
+.saved-link img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .35s var(--ease)}
+.saved-link:hover img { transform: scale(1.04)}
 .saved-text { display: grid; place-items: center; height: 100%; padding: 14px; overflow: hidden; text-align: center; font-size: .82rem; font-weight: 600; color: var(--text-2); background: linear-gradient(160deg, rgba(139, 44, 255, .35), rgba(0, 217, 255, .12)); }
 .saved-shade { position: absolute; inset: auto 0 0 0; height: 46%; background: linear-gradient(transparent, rgba(2, 8, 23, .85)); pointer-events: none; }
 .saved-meta { position: absolute; left: 8px; right: 8px; bottom: 7px; display: flex; justify-content: space-between; gap: 6px; font: 700 .72rem var(--font); text-shadow: 0 1px 4px #000; }
@@ -1574,90 +1574,14 @@ dialog.likers[open] { display: flex; }
 .theme-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 .theme-row b { font-weight: 900; } .theme-row small { display: block; color: var(--muted); font-weight: 600; }
 
-/* ---------- 20. Reels: fit every screen, show every video in full ---------- */
-/* The player height is set by app.js (--reel-h) from the space really left on screen; the dvh fallback covers no-JS. */
-.reel-wrap { width: min(100%, 440px, calc((var(--reel-h, 70dvh)) * 9 / 16 + 2px)); min-width: min(100%, 260px) }
-.reel-wrap > .reels, .reels { width: 100%; height: var(--reel-h, calc(100dvh - 250px)); min-height: 0; max-height: none }
-.reel { height: 100% }
-.reel video { object-fit: contain; background: #000 }               /* whole video visible, any shape, black bars if needed */
-.sponsored-reel-image { object-fit: contain; background: #000 }
-.reel .info { max-height: 40%; right: 76px }
-.reel .info > p { -webkit-line-clamp: 2 }
-.reel .side .act { min-width: 46px }
-.reel .side .reel-view-count { min-width: 46px }
-/* shorter players: drop the text labels, then the view count, so every action button still fits */
-@container reel (max-height: 560px) { .reel .side .act > span:not([data-likes-of]):not([data-comment-count-for]):not([data-reel-view-count]) { display: none } }
-@container reel (max-height: 430px) { .reel .side .reel-view-count { display: none } .reel .info > p { -webkit-line-clamp: 1 } }
-@container reel (max-width: 300px) { .reel .info { right: 64px; left: 10px } .reel .side { right: 2px } }
-/* short screens (landscape phones): free up room above the player */
-@media (max-height: 520px) { .reel-head p { display: none } .reel-head { margin-bottom: 6px !important } }
+/* Reel owner's tappable view count ("who viewed") */
+.reel .side .reel-view-count.viewers-btn, .post-actions .reel-view-count.viewers-btn { cursor: pointer}
+.reel .side .reel-view-count.viewers-btn:hover { background: rgba(255, 255, 255, .12)}
+.post-actions .reel-view-count.viewers-btn:hover span { text-decoration: underline; text-underline-offset: 3px}
 
-/* ---------- 21. Feed posts: show the whole photo/video on every screen ---------- */
-.post-media { display: grid; place-items: center; width: calc(100% + 8px); max-width: calc(100% + 8px) }
-.post-media img, .post-media video { display: block; width: 100%; height: auto; max-width: 100%;
-  max-height: min(82vh, 760px); max-height: min(82dvh, 760px);            /* never taller than the screen, so nothing is cut off */
-  object-fit: contain; background: transparent }
-.post-media video { background: #000 }
-.sponsored-post-image { width: 100%; height: auto; aspect-ratio: auto; max-height: min(70dvh, 560px); object-fit: contain; background: var(--surface-2) }
-@media (max-height: 520px) { .post-media img, .post-media video { max-height: 92dvh } }
-
-/* ---------- 22. Reels: owner can open the viewers list from the view count ---------- */
-.reel .side button.reel-view-count, .post-actions button.reel-view-count { cursor: pointer }
-.reel .side button.reel-view-count:hover { background: rgba(255, 255, 255, .12) }
-
-/* ---------- 23. Chat: delivery ticks + disappearing messages ---------- */
-.msg .meta { display: flex; align-items: center; gap: 6px }
-.msg.mine .meta { justify-content: flex-end; opacity: 1 }
-.msg.mine .meta-time { opacity: .7 }
-.ticks { display: inline-flex; align-items: center; line-height: 0; color: currentColor }
-.ticks svg { width: 18px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .65 }
-.ticks.sent .t2 { display: none }                                       /* single tick: the other person is offline */
-.ticks.delivered svg { opacity: .65 }                                   /* grey double tick: delivered / they are online */
-.ticks.read svg { stroke: #0a7cff; opacity: 1; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .7)) }   /* blue double tick: seen */
-.disappear-note { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 0; padding: 6px 12px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-2); font-size: .8rem; align-self: center }
-.disappear-note[hidden] { display: none }
-.disappear-dialog { width: min(92vw, 400px) }
-.disappear-opt { display: flex; align-items: center; gap: 12px; padding: 12px 6px; border-bottom: 1px solid var(--border-soft); cursor: pointer; font-weight: 600 }
-.disappear-opt:last-child { border-bottom: 0 }
-.disappear-opt input { width: 20px; height: 20px; accent-color: var(--accent, #f7b500); flex: none }
-
-/* ---------- 24. CIRQ STATUS badge on Discover cards (Rookie -> Hall of Fame), light theme ----------
-   Same structure as the dark theme badge (pill, 14px trophy, bold label, centred under the @username), re-coloured for a white card:
-   Rookie is quiet ink-navy on a soft grey tint; every tier after it carries more gold, and Hall of Fame is solid gold. */
-.dsc-status { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; margin-top: 7px; padding: 3px 11px 3px 9px;
-  border: 1px solid var(--st-b); border-radius: var(--r-pill); background: var(--st-bg); color: var(--st-c);
-  font-size: .72rem; font-weight: 800; line-height: 1.3; letter-spacing: .02em; white-space: nowrap; vertical-align: middle; }
-.dsc-status .i { flex: none; width: 14px; height: 14px; stroke-width: 2; }
-.dsc-status.t0 { --st-c: var(--text-2);  --st-b: rgba(27, 31, 59, .14);  --st-bg: rgba(27, 31, 59, .05); }                          /* Rookie */
-.dsc-status.t1 { --st-c: var(--gold-ink); --st-b: rgba(232, 156, 12, .40); --st-bg: rgba(255, 197, 66, .10); }                       /* Elite */
-.dsc-status.t2 { --st-c: var(--gold-ink); --st-b: rgba(232, 156, 12, .55); --st-bg: rgba(255, 197, 66, .18); }                       /* Legendary */
-.dsc-status.t3 { --st-c: #7f5200;         --st-b: rgba(232, 156, 12, .70); --st-bg: rgba(255, 197, 66, .30); }                       /* Icon */
-.dsc-status.t4 { --st-c: #7f5200;         --st-b: rgba(232, 156, 12, .85); --st-bg: rgba(255, 197, 66, .44); }                       /* Superstar */
-.dsc-status.t5 { --st-c: #5f3d00;         --st-b: var(--gold-600);         --st-bg: rgba(255, 197, 66, .64); }                       /* Royalty */
-.dsc-status.t6 { --st-c: var(--on-lime);  --st-b: var(--gold-600);         --st-bg: var(--grad-gold); font-weight: 900; box-shadow: 0 4px 10px rgba(232, 156, 12, .28); }   /* Hall of Fame */
-
-/* ---------- Register: username rules checklist (live, driven by app.js) ---------- */
-.uname-rules { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: var(--r-md); background: var(--surface-2); font-size: .82rem; color: var(--text-2); }
-.uname-title { margin: 0 0 8px; font-weight: 800; color: var(--text); font-size: .84rem; }
-.uname-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
-.uname-list li { display: flex; align-items: flex-start; gap: 9px; line-height: 1.35; transition: color .15s; }
-.uname-list li > span:not(.mark) { flex: 1; min-width: 0; }
-.uname-list b { color: var(--text); font-weight: 800; }
-.uname-list .count { flex: none; margin-left: auto; font-style: normal; font-size: .74rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
-.uname-rules .mark { position: relative; flex: none; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid var(--dim); border-radius: 50%; transition: background .15s, border-color .15s; }
-.uname-rules .mark::after { content: ""; position: absolute; opacity: 0; transition: opacity .15s; }
-.uname-list li[data-state="ok"] { color: var(--text); }
-.uname-list li[data-state="ok"] .mark { background: var(--green); border-color: var(--green); }
-.uname-list li[data-state="ok"] .mark::after { opacity: 1; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.uname-list li[data-state="bad"] { color: var(--danger-ink); }
-.uname-list li[data-state="bad"] b { color: inherit; }
-.uname-list li[data-state="bad"] .mark { background: var(--danger-ink); border-color: var(--danger-ink); }
-.uname-list li[data-state="bad"] .mark::after { opacity: 1; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; box-shadow: none; transform: rotate(45deg); }
-.uname-list li[data-state="bad"] .mark::before { content: ""; position: absolute; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; transform: rotate(-45deg); }
-.uname-list li[data-state="pending"] .mark { border-color: var(--warn); }
-.uname-rules code { padding: 1px 6px; border-radius: 6px; background: var(--card-flat); border: 1px solid var(--border-soft); color: var(--text); font: 700 .78rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.uname-eg { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); line-height: 1.9; }
-.uname-eg b { color: var(--text); }
-.uname-note { margin: 8px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
-.uname-rules[data-valid="1"] { border-color: var(--green); }
-@media (prefers-reduced-motion: reduce) { .uname-rules *, .uname-rules .mark { transition: none; } }
+/* Story viewer sits on a dark photo/scrim in both themes: its text must always be light (was inheriting dark ink in the light theme) */
+.story-box, .story-head, .story-cap, .story-head b, .story-head a, .story-head small { color: #fff; }
+.story-cap { text-shadow: 0 1px 3px rgba(0, 0, 0, .95), 0 2px 14px rgba(0, 0, 0, .9); }
+.story-cap:not(:empty) { padding: 8px 12px; border-radius: 14px; background: rgba(0, 0, 0, .45); }
+.story-head .muted, .story-head small { color: rgba(255, 255, 255, .8); }
+.story-head .icon-btn { color: #fff; }
