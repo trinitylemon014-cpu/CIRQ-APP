@@ -201,8 +201,9 @@ def reply(story_id):
     if not social.can_message(me, author):
         return jsonify(error=f"@{author['username']} has a private account. You can reply once they approve your follow request."), 403
     conv = messaging.get_or_create_dm(me["id"], author["id"])
-    sb.insert("messages", {"conversation_id": conv["id"], "sender_id": me["id"], "body": body,
-                           "story_id": s["id"], "story_reply": True})
+    msg = sb.insert("messages", {"conversation_id": conv["id"], "sender_id": me["id"], "body": body,
+                                 "story_id": s["id"], "story_reply": True})
+    messaging.after_send(msg, conv, me["id"])
     notify(author["id"], "message", me["id"], "conversation", conv["id"], body="replied to your story")
     sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=conv["id"], user_id=me["id"])
     return jsonify(ok=True, conversation=url_for("messages.thread", cid=conv["id"]))
