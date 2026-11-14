@@ -1,13 +1,34 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, abort, jsonify
 from app.decorators import login_required
 from app.extensions import limiter, db
-from app.services import supabase_service as sb, cloudinary_service as cs, social
+from app.services import supabase_service as sb, cloudinary_service as cs, social, event_chat
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
 from app.services.notification_service import notify
 from app.utils import clean_text, iso, parse_local_eat, utcnow, parse_dt
 
 bp = Blueprint("linkup", __name__, url_prefix="/linkup")
+
+
+def _going_people(e, viewer):
+    """Everyone who is going, host first, then in the order they joined. Blocked people are left out, and a private
+    account is only listed for people who follow it (they are counted in `hidden`)."""
+    rows = sb.select("event_rsvps", event_id=e["id"], status="going", order="created_at", desc=False, limit=500)
+    people = sb.by_id("profiles", [r["user_id"] for r in rows])
+    blocked = social.blocked_between(viewer["id"])
+    following = {r["followee_id"] for r in sb.select("follows", follower_id=viewer["id"])}
+    staff = viewer.get("role") in ("admin", "moderator")
+    shown, hidden = [], 0
+    for r in rows:
+        p = people.get(r["user_id"])
+        if not p or p.get("account_status") != "approved" or p["id"] in blocked:
+            continue
+        if p.get("is_private") and not (staff or p["id"] in (viewer["id"], e["host_id"]) or p["id"] in following):
+            hidden += 1
+            continue
+        shown.append(p)
+    shown.sort(key=lambda p: p["id"] != e["host_id"])             # host first (sort is stable)
+    return shown, hidden
 
 
 def _visible(e, viewer):
@@ -23,6 +44,7 @@ def _visible(e, viewer):
 def index():
     tab = request.args.get("tab", "upcoming")
     me = g.user
+    event_chat.expire_due()
     q = db().table("events").select("*").eq("moderation_status", "ok")
     if tab == "mine":
         going = [r["event_id"] for r in sb.select("event_rsvps", user_id=me["id"])]
@@ -81,9 +103,7 @@ def new():
                                   "venue": venue, "starts_at": iso(starts), "capacity": capacity,
                                   "visibility": "school" if f.get("visibility") == "school" else "public",
                                   "cover_url": info and info["url"], "cover_public_id": info and info["public_id"]})
-        conv = sb.insert("conversations", {"kind": "group", "title": title[:60], "event_id": ev["id"], "created_by": g.user["id"]})
-        sb.insert("conversation_members", {"conversation_id": conv["id"], "user_id": g.user["id"]})
-        sb.update("events", {"conversation_id": conv["id"]}, id=ev["id"])
+        event_chat.ensure_chat(ev)                     # every event gets its group chat straight away
         sb.insert("event_rsvps", {"event_id": ev["id"], "user_id": g.user["id"], "status": "going"})
         social.grant_achievement(g.user["id"], "event_host")
         flash("Event created!", "success")
@@ -98,13 +118,33 @@ def detail(event_id):
     if not e or not _visible(e, g.user):
         abort(404)
     me = g.user["id"]
+    event_chat.expire_due()
+    if e.get("conversation_id") and event_chat.is_over(e):         # the date has gone: the chat goes with it
+        event_chat.close_event_chat(e)
     rsvp = sb.get("event_rsvps", event_id=event_id, user_id=me)
-    rsvps = sb.select("event_rsvps", event_id=event_id, limit=200)
+    rsvps = sb.select("event_rsvps", event_id=event_id, limit=500)
     going = [r for r in rsvps if r["status"] == "going"]
-    attendees = list(sb.by_id("profiles", [r["user_id"] for r in going][:12]).values())
+    people, hidden_going = _going_people(e, g.user)
+    chat_members = sb.count("conversation_members", conversation_id=e["conversation_id"]) if e.get("conversation_id") else 0
     return render_template("linkup/detail.html", e=e, host=sb.get("profiles", id=e["host_id"]), school=sb.get("schools", id=e["school_id"]) if e.get("school_id") else None,
-                           rsvp=rsvp, going_count=len(going), interested_count=len(rsvps) - len(going), attendees=attendees,
+                           rsvp=rsvp, going_count=len(going), interested_count=len(rsvps) - len(going), people=people[:12],
+                           more_going=max(0, len(people) + hidden_going - 12), chat_members=chat_members,
+                           chat_closes=event_chat.expires_at_for(e),
                            is_host=e["host_id"] == me, share_url=request.url_root.rstrip("/") + url_for("linkup.detail", event_id=event_id))
+
+
+@bp.get("/<event_id>/going")
+@login_required
+def going(event_id):
+    """Full list of who is going. Anyone who can see the event can see this, so you know who you'd be joining."""
+    e = sb.get("events", id=event_id)
+    if not e or not _visible(e, g.user):
+        abort(404)
+    people, hidden = _going_people(e, g.user)
+    rsvp = sb.get("event_rsvps", event_id=event_id, user_id=g.user["id"])
+    school_ids = [p.get("school_id") for p in people]
+    return render_template("linkup/going.html", e=e, people=people, hidden=hidden, rsvp=rsvp, schools=sb.by_id("schools", school_ids),
+                           is_host=e["host_id"] == g.user["id"])
 
 
 @bp.post("/<event_id>/rsvp")
@@ -114,7 +154,7 @@ def rsvp(event_id):
     e = sb.get("events", id=event_id)
     if not e or not _visible(e, g.user):
         abort(404)
-    if e["status"] != "scheduled":
+    if e["status"] != "scheduled" or event_chat.is_over(e):
         flash("This event is no longer open for RSVPs.", "error")
         return redirect(url_for("linkup.detail", event_id=event_id))
     choice = request.form.get("status")
@@ -131,13 +171,15 @@ def rsvp(event_id):
             flash("This event is full.", "error")
             return redirect(url_for("linkup.detail", event_id=event_id))
         sb.upsert("event_rsvps", {"event_id": event_id, "user_id": me, "status": choice}, on_conflict="event_id,user_id")
-        if choice == "going" and e.get("conversation_id") and not sb.get("conversation_members", conversation_id=e["conversation_id"], user_id=me):
-            sb.insert("conversation_members", {"conversation_id": e["conversation_id"], "user_id": me})
+        if choice == "going":
+            cid = event_chat.ensure_chat(e)                # older events without a chat get one now
+            if cid and not sb.get("conversation_members", conversation_id=cid, user_id=me):
+                sb.insert("conversation_members", {"conversation_id": cid, "user_id": me})
         if choice == "interested" and e.get("conversation_id") and e["host_id"] != me:
             sb.delete("conversation_members", conversation_id=e["conversation_id"], user_id=me)
         notify(e["host_id"], "rsvp", me, "event", event_id)
         social.grant_achievement(me, "joiner")
-        flash("You're going!" if choice == "going" else "Marked as interested.", "success")
+        flash("You're going! You've joined the event chat." if choice == "going" else "Marked as interested.", "success")
     return redirect(url_for("linkup.detail", event_id=event_id))
 
 
@@ -156,5 +198,6 @@ def host_action(event_id, action):
     for r in sb.select("event_rsvps", event_id=event_id):
         notify(r["user_id"], "event_update", g.user["id"], "event", event_id,
                body=f"“{e['title']}” was {status}.", dedupe=False)
+    event_chat.close_event_chat(e)                         # no event, no chat
     flash(f"Event {status}.", "info")
     return redirect(url_for("linkup.detail", event_id=event_id))
