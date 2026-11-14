@@ -791,6 +791,34 @@
   /* ---------- reels feed: Instagram-style playback ---------- */
   const reels = $("#reels");
   if (reels) {
+    /* size the player to the space really left on this screen so a whole reel is always visible */
+    const reelWrap = reels.closest(".reel-wrap") || reels;
+    let fitFrame = 0, fitDone = false;
+    function fitReels() {
+      const vv = window.visualViewport, vh = Math.round(vv ? vv.height : window.innerHeight);
+      const nav = document.querySelector(".bottom-nav");
+      const navStyle = nav && getComputedStyle(nav);
+      const navTop = nav && navStyle.display !== "none" ? nav.getBoundingClientRect().top : vh;
+      const covered = Math.max(0, vh - Math.min(vh, navTop)) || 0;                    // bottom bar (phones/tablets), 0 on desktop
+      const top = reelWrap.getBoundingClientRect().top;
+      let room = vh - top - covered - 14;
+      if (room < 300) {                                                                 // very short screen: let the page scroll the player into view
+        room = Math.max(280, vh - covered - 20);
+        if (!fitDone) { fitDone = true; reelWrap.scrollIntoView({ block: "start" }); }
+      }
+      const next = Math.round(Math.min(room, 920));
+      const old = reels.clientHeight || next, idx = old ? Math.round(reels.scrollTop / old) : 0;
+      if (Math.abs(next - old) < 2 && reels.style.getPropertyValue("--reel-h")) return;
+      reels.style.setProperty("--reel-h", next + "px");
+      reelWrap.style.setProperty("--reel-h", next + "px");
+      reels.scrollTop = idx * next;                                                     // stay on the same reel after a resize/rotate
+    }
+    const queueFit = () => { cancelAnimationFrame(fitFrame); fitFrame = requestAnimationFrame(fitReels); };
+    fitReels();
+    window.addEventListener("resize", queueFit);
+    window.addEventListener("orientationchange", () => setTimeout(queueFit, 250));
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", queueFit);
+    window.addEventListener("load", queueFit);
     let muted = true;
     const reportedReelViews = new Set();
     const VIEW_MIN_SECONDS = Number($("[data-reel]", reels)?.dataset.viewMinSeconds || 3);
