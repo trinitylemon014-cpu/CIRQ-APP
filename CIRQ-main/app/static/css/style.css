@@ -1874,3 +1874,12 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 @container reel (max-width: 300px) { .reel .info { right: 64px; left: 10px } .reel .side { right: 2px } }
 /* short screens (landscape phones): free up room above the player */
 @media (max-height: 520px) { .reel-head p { display: none } .reel-head { margin-bottom: 6px !important } }
+
+/* ---------- 21. Feed posts: show the whole photo/video on every screen ---------- */
+.post-media { display: grid; place-items: center; width: calc(100% + 8px); max-width: calc(100% + 8px) }
+.post-media img, .post-media video { display: block; width: 100%; height: auto; max-width: 100%;
+  max-height: min(82vh, 760px); max-height: min(82dvh, 760px);            /* never taller than the screen, so nothing is cut off */
+  object-fit: contain; background: transparent }
+.post-media video { background: #000 }
+.sponsored-post-image { width: 100%; height: auto; aspect-ratio: auto; max-height: min(70dvh, 560px); object-fit: contain; background: var(--surface-2) }
+@media (max-height: 520px) { .post-media img, .post-media video { max-height: 92dvh } }
