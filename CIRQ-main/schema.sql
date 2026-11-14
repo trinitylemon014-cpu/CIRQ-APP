@@ -305,6 +305,10 @@ create table if not exists conversation_members (
 );
 create index if not exists conv_members_user_idx on conversation_members(user_id);
 
+-- Event chats close after the event day (see migrations/2026_11_15_event_chats.sql)
+alter table conversations add column if not exists expires_at timestamptz;
+create index if not exists conversations_expires_idx on conversations(expires_at) where expires_at is not null;
+
 create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references conversations(id) on delete cascade,
