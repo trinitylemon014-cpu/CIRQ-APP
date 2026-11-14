@@ -1903,3 +1903,17 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 .disappear-opt { display: flex; align-items: center; gap: 12px; padding: 12px 6px; border-bottom: 1px solid var(--border-soft); cursor: pointer; font-weight: 600 }
 .disappear-opt:last-child { border-bottom: 0 }
 .disappear-opt input { width: 20px; height: 20px; accent-color: var(--accent, #f7b500); flex: none }
+
+/* ---------- 18. CIRQ STATUS badge on Discover cards (Rookie -> Hall of Fame) ----------
+   Flat black-and-gold theme: the ladder is shown by how much gold the badge carries, not by extra colours.
+   Rookie is quiet and neutral; each tier fills in a little more; Hall of Fame is solid gold. */
+.dsc-status { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 7px; padding: 3px 11px 3px 9px; border: 1px solid var(--st-b); border-radius: var(--r-pill);
+  background: var(--st-bg); color: var(--st-c); font-size: .72rem; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+.dsc-status .i { flex: none; width: 14px; height: 14px; }
+.dsc-status.t0 { --st-c: var(--text-2); --st-b: var(--border); --st-bg: rgba(255, 255, 255, .05); }                                         /* Rookie */
+.dsc-status.t1 { --st-c: var(--brand); --st-b: rgba(247, 181, 0, .35); --st-bg: transparent; }                                             /* Elite */
+.dsc-status.t2 { --st-c: var(--brand); --st-b: rgba(247, 181, 0, .5); --st-bg: rgba(247, 181, 0, .08); }                                   /* Legendary */
+.dsc-status.t3 { --st-c: var(--brand); --st-b: rgba(247, 181, 0, .65); --st-bg: rgba(247, 181, 0, .14); }                                  /* Icon */
+.dsc-status.t4 { --st-c: var(--brand-300); --st-b: rgba(247, 181, 0, .8); --st-bg: rgba(247, 181, 0, .22); }                               /* Superstar */
+.dsc-status.t5 { --st-c: var(--brand-300); --st-b: var(--brand); --st-bg: rgba(247, 181, 0, .32); }                                        /* Royalty */
+.dsc-status.t6 { --st-c: var(--on-lime); --st-b: var(--brand); --st-bg: var(--brand); font-weight: 900; }                                  /* Hall of Fame */
