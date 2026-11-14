@@ -21,7 +21,7 @@
     const opt = { method: method || (body === undefined ? "GET" : "POST"), credentials: "same-origin", headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" } };
     if (body !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
     let r;
-    try { r = await fetch(path.startsWith("/") ? path : API + path, opt); } catch (e) { return { ok: false, error: "No connection. Check your internet.", network: true }; }
+    try { r = await fetch(/^\/(live|u)\//.test(path) ? path : API + path, opt); } catch (e) { return { ok: false, error: "No connection. Check your internet.", network: true }; }
     const d = await r.json().catch(() => ({}));
     if (r.status === 401) { location.href = "/login"; return { ok: false }; }
     return { status: r.status, ...d, ok: r.ok && d.ok !== false };
