@@ -112,3 +112,39 @@ def test_failed_rpc_returns_service_unavailable_without_affecting_reel(as_user, 
     assert result.status_code == 503
     assert result.get_json()["counted"] is False
     assert not db.data.get("reel_views")
+
+
+def test_owner_sees_who_viewed_and_others_cannot(as_user, db):
+    author, profile = as_user("alice")
+    bob, _ = as_user("bob")
+    carol, _ = as_user("carol")
+    reel = create_reel(db, profile)
+    assert record_view(bob, reel["id"]).status_code == 200
+    assert record_view(carol, reel["id"]).status_code == 200
+
+    page = author.get(f"/reels/{reel['id']}/viewers", headers={"X-Requested-With": "fetch"})
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200 and "@bob" in html and "@carol" in html and "@alice" not in html
+
+    assert bob.get(f"/reels/{reel['id']}/viewers").status_code == 403      # viewers cannot see the list
+    assert author.get("/reels/not-a-reel/viewers").status_code == 404
+
+
+def test_viewers_list_hides_blocked_people_and_shows_empty_state(as_user, db):
+    author, profile = as_user("alice")
+    bob, bob_profile = as_user("bob")
+    reel = create_reel(db, profile)
+    empty = author.get(f"/reels/{reel['id']}/viewers").get_data(as_text=True)
+    assert "No viewers yet" in empty
+
+    assert record_view(bob, reel["id"]).status_code == 200
+    db.table("blocks").insert({"blocker_id": profile["id"], "blocked_id": bob_profile["id"]}).execute()
+    assert "@bob" not in author.get(f"/reels/{reel['id']}/viewers").get_data(as_text=True)
+
+
+def test_only_the_owner_gets_the_viewers_button_in_the_feed(as_user, db):
+    author, profile = as_user("alice")
+    bob, _ = as_user("bob")
+    reel = create_reel(db, profile)
+    assert f"/reels/{reel['id']}/viewers".encode() in author.get("/reels").data
+    assert f"/reels/{reel['id']}/viewers".encode() not in bob.get("/reels").data
