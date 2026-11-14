@@ -851,8 +851,8 @@ html.cpanel-lock, html.cpanel-lock body { overflow: hidden; overscroll-behavior:
 .saved-grid[hidden], .saved-empty[hidden] { display: none}
 .saved-tile { position: relative; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 10px; background: var(--surface); transition: opacity .25s, transform .25s}
 .saved-link { position: absolute; inset: 0; display: block; color: var(--text)}
-.saved-link img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .35s var(--ease)}
-.saved-link:hover img { transform: scale(1.04)}
+.saved-link img, .saved-link video { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .35s var(--ease)}
+.saved-link:hover img, .saved-link:hover video { transform: scale(1.04)}
 .saved-text { display: grid; place-items: center; height: 100%; padding: 14px; overflow: hidden; text-align: center; font-size: .82rem; font-weight: 600; color: var(--text-2); background: var(--surface-2)}
 .saved-shade { position: absolute; inset: auto 0 0 0; height: 46%; background: linear-gradient(transparent, rgba(0, 0, 0, .85)); pointer-events: none}
 .saved-meta { position: absolute; left: 8px; right: 8px; bottom: 7px; display: flex; justify-content: space-between; gap: 6px; font: 700 .72rem var(--font); text-shadow: 0 1px 4px #000}
@@ -1904,13 +1904,42 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 .disappear-opt:last-child { border-bottom: 0 }
 .disappear-opt input { width: 20px; height: 20px; accent-color: var(--accent, #f7b500); flex: none }
 
-/* ---------- 24. Link Up: who's going + event chat ---------- */
-.going-box { margin: 14px 0; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border-soft) }
-.going-list { display: flex; flex-wrap: wrap; gap: 12px 14px; margin-top: 10px }
-.going-person { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; font-size: .75rem; color: var(--text-2); text-align: center }
-.going-person span { max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.going-plus { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-3, var(--border-soft)); font-weight: 700; color: var(--text) }
-.event-chat-note { display: flex; align-items: center; gap: 6px; margin: 8px 0 0 }
-.going-all { padding: 4px 0 }
-.going-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border-soft) }
-.going-row:last-of-type { border-bottom: 0 }
+/* ---------- 18. CIRQ STATUS badge on Discover cards (Rookie -> Hall of Fame) ----------
+   Flat black-and-gold theme: the ladder is shown by how much gold the badge carries, not by extra colours.
+   Rookie is quiet and neutral; each tier fills in a little more; Hall of Fame is solid gold. */
+.dsc-status { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 7px; padding: 3px 11px 3px 9px; border: 1px solid var(--st-b); border-radius: var(--r-pill);
+  background: var(--st-bg); color: var(--st-c); font-size: .72rem; font-weight: 800; letter-spacing: .02em; white-space: nowrap; }
+.dsc-status .i { flex: none; width: 14px; height: 14px; }
+.dsc-status.t0 { --st-c: var(--text-2); --st-b: var(--border); --st-bg: rgba(255, 255, 255, .05); }                                         /* Rookie */
+.dsc-status.t1 { --st-c: var(--brand); --st-b: rgba(247, 181, 0, .35); --st-bg: transparent; }                                             /* Elite */
+.dsc-status.t2 { --st-c: var(--brand); --st-b: rgba(247, 181, 0, .5); --st-bg: rgba(247, 181, 0, .08); }                                   /* Legendary */
+.dsc-status.t3 { --st-c: var(--brand); --st-b: rgba(247, 181, 0, .65); --st-bg: rgba(247, 181, 0, .14); }                                  /* Icon */
+.dsc-status.t4 { --st-c: var(--brand-300); --st-b: rgba(247, 181, 0, .8); --st-bg: rgba(247, 181, 0, .22); }                               /* Superstar */
+.dsc-status.t5 { --st-c: var(--brand-300); --st-b: var(--brand); --st-bg: rgba(247, 181, 0, .32); }                                        /* Royalty */
+.dsc-status.t6 { --st-c: var(--on-lime); --st-b: var(--brand); --st-bg: var(--brand); font-weight: 900; }                                  /* Hall of Fame */
+
+/* ---------- Register: username rules checklist (live, driven by app.js) ---------- */
+.uname-rules { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: var(--r-md); background: var(--surface-2); font-size: .82rem; color: var(--text-2); }
+.uname-title { margin: 0 0 8px; font-weight: 800; color: var(--text); font-size: .84rem; }
+.uname-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.uname-list li { display: flex; align-items: flex-start; gap: 9px; line-height: 1.35; transition: color .15s; }
+.uname-list li > span:not(.mark) { flex: 1; min-width: 0; }
+.uname-list b { color: var(--text); font-weight: 800; }
+.uname-list .count { flex: none; margin-left: auto; font-style: normal; font-size: .74rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.uname-rules .mark { position: relative; flex: none; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid var(--dim); border-radius: 50%; transition: background .15s, border-color .15s; }
+.uname-rules .mark::after { content: ""; position: absolute; opacity: 0; transition: opacity .15s; }
+.uname-list li[data-state="ok"] { color: var(--text); }
+.uname-list li[data-state="ok"] .mark { background: var(--green); border-color: var(--green); }
+.uname-list li[data-state="ok"] .mark::after { opacity: 1; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.uname-list li[data-state="bad"] { color: var(--danger-ink); }
+.uname-list li[data-state="bad"] b { color: inherit; }
+.uname-list li[data-state="bad"] .mark { background: var(--danger-ink); border-color: var(--danger-ink); }
+.uname-list li[data-state="bad"] .mark::after { opacity: 1; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; box-shadow: none; transform: rotate(45deg); }
+.uname-list li[data-state="bad"] .mark::before { content: ""; position: absolute; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; transform: rotate(-45deg); }
+.uname-list li[data-state="pending"] .mark { border-color: var(--warn); }
+.uname-rules code { padding: 1px 6px; border-radius: 6px; background: var(--card-flat); border: 1px solid var(--border-soft); color: var(--text); font: 700 .78rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.uname-eg { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); line-height: 1.9; }
+.uname-eg b { color: var(--text); }
+.uname-note { margin: 8px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
+.uname-rules[data-valid="1"] { border-color: var(--green); }
+@media (prefers-reduced-motion: reduce) { .uname-rules *, .uname-rules .mark { transition: none; } }
