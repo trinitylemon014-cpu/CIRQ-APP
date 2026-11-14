@@ -4,7 +4,13 @@
   <div class="chat-head"><a class="icon-btn" href="{{ url_for('messages.inbox') }}" aria-label="Back">{{ m.icon('arrow-left') }}</a>
     {% if other %}<a class="row" href="{{ url_for('profiles.view', username=other.username) }}">{{ m.avatar(other, 'lg') }}<div><b>{{ other.display_name }}</b>{{ m.verified(other) }}<br><small class="muted">@{{ other.username }} · <span class="presence-text" data-presence-label data-user-id="{{ other.id }}" hidden></span></small></div></a>
     {% else %}<span class="av" style="--s:44px">{{ m.icon('users') }}</span><div><b>{{ conv.title or 'Group chat' }}</b><br><small class="muted">{{ members|length }} members</small></div>{% endif %}
-    <button class="icon-btn" type="button" style="margin-left:auto" data-open="disappear-dialog" aria-label="Disappearing messages" title="Disappearing messages">{{ m.icon('clock') }}</button></div>
+    <div class="row" style="margin-left:auto;gap:4px"><button class="icon-btn" type="button" data-open="disappear-dialog" aria-label="Disappearing messages" title="Disappearing messages">{{ m.icon('clock') }}</button>
+    {% if other %}<div class="menu"><button class="icon-btn" type="button" data-menu aria-label="Chat options" aria-haspopup="true">{{ m.icon('more') }}</button>
+      <div class="menu-list" role="menu">
+        <button type="button" data-open="chat-report-dialog">{{ m.icon('flag','i-sm') }} Report @{{ other.username }}</button>
+        {% if block_state == 'i_blocked' %}<form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}">{{ m.csrf() }}<input type="hidden" name="action" value="unblock"><button>{{ m.icon('check','i-sm') }} Unblock @{{ other.username }}</button></form>
+        {% else %}<form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}" data-confirm="Block @{{ other.username }}? They won't be able to message you or see when you're online. You can unblock them any time from this chat.">{{ m.csrf() }}<input type="hidden" name="action" value="block"><button class="danger">{{ m.icon('x','i-sm') }} Block @{{ other.username }}</button></form>{% endif %}
+      </div></div>{% endif %}</div></div>
   <div class="disappear-note" data-disappear-note {{ 'hidden' if not disappear_after }}>{{ m.icon('clock','i-sm') }} <span>Disappearing messages for you: <b data-disappear-label>{{ disappear_label }}</b></span></div>
   <div class="bubbles" id="bubbles" aria-live="polite">
     {% if more %}<a class="btn sm ghost" style="align-self:center" href="?before={{ more }}">Older messages</a>{% endif %}
@@ -30,9 +36,27 @@
     </form>
   </div>
   {% else %}
+  {% if block_state == 'i_blocked' %}
+  <div class="chat-locked">{{ m.icon('x','i-sm') }}<span>You blocked @{{ other.username }}. Unblock them to send messages.</span>
+    <form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}" style="margin-left:auto">{{ m.csrf() }}<input type="hidden" name="action" value="unblock"><button class="btn sm">Unblock</button></form></div>
+  {% elif block_state == 'blocked_me' %}
+  <div class="chat-locked">{{ m.icon('lock','i-sm') }}<span>You can't send messages in this chat.</span></div>
+  {% else %}
   <div class="chat-locked">{{ m.icon('lock','i-sm') }}<span>{% if other %}@{{ other.username }} has a private account. You can send messages once they approve your follow request.{% else %}You can't send messages in this chat.{% endif %}</span></div>
   {% endif %}
+  {% endif %}
 </div>
+{% if other %}<dialog id="chat-report-dialog" class="disappear-dialog" aria-labelledby="chat-report-title">
+  <form method="post" action="{{ url_for('messages.report_contact', cid=conv.id) }}" data-chat-report-form>{{ m.csrf() }}
+    <h2 id="chat-report-title" style="margin:0 0 6px">Report @{{ other.username }}</h2>
+    <p class="muted small" style="margin:0 0 12px">Moderators will review this person and their last few messages to you. They won't be told that you reported them.</p>
+    <label for="chat-rep-reason">Reason</label>
+    <select class="input" id="chat-rep-reason" name="reason"><option value="harassment">Harassment or bullying</option><option value="inappropriate">Inappropriate content</option><option value="spam">Spam</option><option value="impersonation">Impersonation</option><option value="unsafe">Unsafe or self-harm</option><option value="other">Something else</option></select>
+    <label for="chat-rep-details">Details (optional)</label><textarea class="input" id="chat-rep-details" name="details" maxlength="440"></textarea>
+    {% if block_state != 'i_blocked' %}<label class="disappear-opt" style="border:0"><input type="checkbox" name="also_block" value="1" checked><span>Also block @{{ other.username }}</span></label>{% endif %}
+    <div class="row" style="margin-top:12px"><button class="btn grow" type="submit">Send report</button><button class="btn ghost" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>{% endif %}
 <dialog id="disappear-dialog" class="disappear-dialog" aria-labelledby="disappear-title">
   <div class="row between" style="margin-bottom:8px"><h2 id="disappear-title" style="margin:0">Disappearing messages</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
   <p class="muted small" style="margin:0 0 12px">New messages in this chat will disappear for <b>you</b> after the time you pick. The other person's copy isn't touched, and messages already sent keep their current timer.</p>
