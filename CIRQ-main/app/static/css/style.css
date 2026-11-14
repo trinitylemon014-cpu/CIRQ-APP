@@ -1883,3 +1883,7 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 .post-media video { background: #000 }
 .sponsored-post-image { width: 100%; height: auto; aspect-ratio: auto; max-height: min(70dvh, 560px); object-fit: contain; background: var(--surface-2) }
 @media (max-height: 520px) { .post-media img, .post-media video { max-height: 92dvh } }
+
+/* ---------- 22. Reels: owner can open the viewers list from the view count ---------- */
+.reel .side button.reel-view-count, .post-actions button.reel-view-count { cursor: pointer }
+.reel .side button.reel-view-count:hover { background: rgba(255, 255, 255, .12) }
