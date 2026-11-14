@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, make_response, render_template, request, r
 from postgrest.exceptions import APIError
 from app.decorators import login_required
 from app.extensions import limiter, db
-from app.services import supabase_service as sb, cloudinary_service as cs, social, boost_ad_service, reel_viewers
+from app.services import supabase_service as sb, cloudinary_service as cs, social, boost_ad_service, likers as likers_service
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
 from app.utils import clean_text, parse_dt
@@ -161,16 +161,18 @@ def record_view(reel_id):
     return jsonify(counted=bool(row.get("counted")), views_count=row.get("views_count", post.get("views_count", 0)))
 
 
-@bp.get("/api/reels/<reel_id>/viewers")
+@bp.get("/reels/<reel_id>/viewers")
 @login_required
 @limiter.limit("120 per hour", key_func=lambda: g.user["id"])
 def viewers(reel_id):
-    """'Who viewed this reel': visible to the reel's author only. Anyone else gets the same 404 as a missing reel."""
+    """Owner-only list of the people who watched this reel (a view counts after VIEW_MIN_SECONDS, once per person)."""
     post = sb.get("posts", id=reel_id)
-    if not post or post.get("kind") != "reel" or post["author_id"] != g.user["id"]:
+    if not post or post.get("kind") != "reel":
         abort(404)
-    people, nxt = reel_viewers.page(reel_id, g.user, request.args.get("before"))
-    return render_template("partials/reel_viewers.html", viewers=people, next=nxt, first=not request.args.get("before"))
+    if post["author_id"] != g.user["id"]:
+        abort(403)
+    people, nxt = likers_service.viewers_page(reel_id, g.user, request.args.get("before"))
+    return render_template("partials/viewers.html", people=people, next=nxt, first=not request.args.get("before"))
 
 
 @bp.get("/reels/new")
