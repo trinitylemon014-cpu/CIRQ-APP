@@ -63,3 +63,18 @@ def test_static_assets_exist_and_the_room_script_uses_only_real_endpoints(app):
     for path in ("/live/api/<uuid:sid>/poll", "/live/api/<uuid:sid>/gift", "/live/api/<uuid:sid>/token", "/live/api/<uuid:sid>/guests/request",
                  "/live/api/<uuid:sid>/guests/<uuid:iid>/permissions", "/live/api/battle/<uuid:bid>/respond", "/u/<username>/follow"):
         assert path in rules, path
+
+
+def test_open_mode_lets_any_approved_account_go_live_without_email_or_grant(as_user, app, lkcalls):
+    app.config["LIVE_ELIGIBILITY"] = "anyone"
+    c, p = as_user("fresh")
+    r = c.post("/live/api/start", json={"title": "Hello world", "category": "music", "mode": "video"})
+    assert r.status_code == 200, r.get_json()
+
+
+def test_open_mode_still_blocks_pending_accounts(as_user, db, app, lkcalls):
+    app.config["LIVE_ELIGIBILITY"] = "anyone"
+    from app.services import live_service as live
+    with app.app_context():
+        ok, _ = live.can_host({"account_status": "pending"})
+    assert not ok
