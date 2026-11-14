@@ -44,6 +44,7 @@ class Config:
     # Safety / feature switches
     PAID_COMPETITIONS_ENABLED = _bool("PAID_COMPETITIONS_ENABLED", False)
     AUTO_APPROVE_AFTER_MINUTES = _int("AUTO_APPROVE_AFTER_MINUTES", 5)
+    INSTANT_APPROVAL = _bool("INSTANT_APPROVAL", True)      # new accounts go straight to the home page; no admin/email wait (blocked domains/IPs still wait for review)
     ACTIVE_WINDOW_SECONDS = _int("ACTIVE_WINDOW_SECONDS", 120)
     NEW_SCHOOL_SUBMISSIONS_PER_IP_PER_DAY = _int("NEW_SCHOOL_SUBMISSIONS_PER_IP_PER_DAY", 3)
     AUTO_APPROVAL_BLOCKED_EMAIL_DOMAINS = [
@@ -102,7 +103,7 @@ class Config:
     LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")           # server only: never rendered into a page
     # Who may host: "verified" = approved + email-verified + (admin-verified badge OR admin-granted live access);
     #               "approved" = any approved, email-verified student (use only while testing).
-    LIVE_ELIGIBILITY = os.environ.get("LIVE_ELIGIBILITY", "verified").strip().lower()
+    LIVE_ELIGIBILITY = os.environ.get("LIVE_ELIGIBILITY", "anyone").strip().lower()
     LIVE_MAX_GUESTS = min(_int("LIVE_MAX_GUESTS", 4), 4)
     LIVE_STARTS_PER_HOUR = _int("LIVE_STARTS_PER_HOUR", 6)
     LIVE_HOST_TIMEOUT_SECONDS = _int("LIVE_HOST_TIMEOUT_SECONDS", 90)        # a host silent this long is treated as gone and the live is ended
@@ -165,6 +166,8 @@ class TestConfig(Config):
     RATELIMIT_ENABLED = False
     APP_BASE_URL = "http://localhost"
     PAID_COMPETITIONS_ENABLED = False
+    INSTANT_APPROVAL = False          # existing tests cover the review flow; instant approval has its own tests
+    LIVE_ELIGIBILITY = "verified"     # existing live tests cover the strict mode; the open mode has its own tests
     LIVEKIT_URL = "wss://test.livekit.invalid"
     LIVEKIT_API_KEY = "APItestkey"
     LIVEKIT_API_SECRET = "test-livekit-secret-not-real-0123456789"
