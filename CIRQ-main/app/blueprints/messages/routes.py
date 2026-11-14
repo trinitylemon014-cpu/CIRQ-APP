@@ -10,7 +10,7 @@ from app.services import supabase_service as sb, cloudinary_service as cs, socia
 from app.services.cloudinary_service import UploadError
 from app.services import chat_attachments as ca
 from app.services.chat_attachments import AttachmentError
-from app.services import messaging
+from app.services import messaging, event_chat
 from app.services.messaging import dm_key, find_dm, get_or_create_dm   # dm_key re-exported for older imports
 from app.services.moderation_service import check_text
 from app.services.notification_service import notify
@@ -35,6 +35,9 @@ def _conv_or_404(cid):
     """Every read/write goes through this: only members may touch a conversation."""
     conv = sb.get("conversations", id=cid)
     if not conv or not _membership(cid, g.user["id"]):
+        abort(404)
+    if event_chat.is_expired(conv):                # an event chat whose date has gone
+        event_chat.close_conversation(conv)
         abort(404)
     return conv
 
@@ -109,6 +112,7 @@ def _snippet(m, me):
 @bp.get("")
 @login_required
 def inbox():
+    event_chat.expire_due()                        # event chats whose date has gone disappear from everyone's list
     me = g.user["id"]
     mem = {m["conversation_id"]: m for m in sb.select("conversation_members", user_id=me)}
     convs = sb.in_("conversations", "id", list(mem))
