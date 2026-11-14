@@ -3,7 +3,7 @@ from flask import g, redirect, url_for, request, abort, jsonify, flash
 
 
 def _wants_json():
-    return request.is_json or request.headers.get("X-Requested-With") == "fetch" or request.path.startswith("/api/")
+    return request.is_json or request.headers.get("X-Requested-With") == "fetch" or request.path.startswith(("/api/", "/live/api/"))
 
 
 def login_required(f):
