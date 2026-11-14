@@ -318,6 +318,21 @@ create table if not exists messages (
 );
 create index if not exists messages_conv_idx on messages(conversation_id, created_at desc);
 
+-- Delivery ticks and per-user disappearing messages (see migrations/2026_11_14_chat_ticks_disappearing.sql)
+alter table messages add column if not exists delivered_at timestamptz;
+alter table conversation_members add column if not exists disappear_after integer check (disappear_after is null or disappear_after > 0);
+create table if not exists message_hides (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references messages(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  hide_at timestamptz not null,
+  unique (message_id, user_id)
+);
+create index if not exists message_hides_user_idx on message_hides(user_id, hide_at);
+create index if not exists message_hides_conv_idx on message_hides(conversation_id, hide_at);
+alter table message_hides enable row level security;
+
 -- A reply to someone's story arrives as a normal direct message flagged with the story it answers.
 -- story_id becomes NULL once the story expires/deletes; story_reply stays true so the chat can still say
 -- "Replied to your story".
