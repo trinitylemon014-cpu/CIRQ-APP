@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}Live{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<div class="lv-head">
+  <h1 class="page-title">{{ m.icon('radio') }} Live</h1>
+  {% if can_host %}<a class="btn" href="{{ url_for('live.go') }}">{{ m.icon('camera','i-sm') }} Go live</a>
+  {% else %}<button class="btn" type="button" disabled aria-describedby="lv-hostmsg">{{ m.icon('camera','i-sm') }} Go live</button>{% endif %}
+</div>
+{% if not can_host and host_message %}<div class="lv-note" id="lv-hostmsg">{{ m.icon('lock') }}<span>{{ host_message }}</span></div>{% endif %}
+{% if not provider_ready and cur.role == 'admin' %}<div class="lv-note warn">{{ m.icon('bell') }}<span>Live streaming isn't connected yet: add the LiveKit credentials (see <b>LIVE_STREAMING.md</b>). Nobody can go live until then.</span></div>{% endif %}
+<div class="lv-links">
+  <a class="btn sm ghost" href="{{ url_for('live.rankings') }}">{{ m.icon('trophy','i-sm') }} Rankings</a>
+  <a class="btn sm ghost" href="{{ url_for('live.dashboard') }}">{{ m.icon('wallet','i-sm') }} Creator earnings</a>
+  <a class="btn sm ghost" href="{{ url_for('live.settings') }}">{{ m.icon('sliders','i-sm') }} Live settings</a>
+</div>
+<div class="lv-cats" role="group" aria-label="Category">
+  <button type="button" data-cat="" aria-pressed="true">All</button>
+  {% for c in categories %}<button type="button" data-cat="{{ c }}" aria-pressed="false">{{ c }}</button>{% endfor %}
+</div>
+<div id="lv-grid" class="lv-grid" data-room-url="{{ url_for('live.room', sid='SID') }}" data-go-url="{{ url_for('live.go') }}" data-can-host="{{ '1' if can_host else '0' }}" data-refresh-ms="15000" aria-live="polite" aria-busy="true">
+  <div class="skeleton lv-skel"></div><div class="skeleton lv-skel"></div><div class="skeleton lv-skel"></div>
+</div>
+<noscript><p class="muted">Turn on JavaScript to see who's live.</p></noscript>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/live-index.js') }}" defer></script>{% endblock %}
