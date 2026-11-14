@@ -1417,6 +1417,20 @@
     }, 4000);
     keepLast();
 
+    /* report the person in this chat (optionally block them in the same step) */
+    const reportForm = $("[data-chat-report-form]");
+    if (reportForm) reportForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = $("button[type=submit]", reportForm); button.disabled = true;
+      try {
+        const r = await api(reportForm.action, { body: new FormData(reportForm) });
+        toast(r.message, "success");
+        reportForm.closest("dialog").close(); reportForm.reset();
+        if (r.blocked) location.reload();                                  // show the "You blocked…" state
+      } catch (error) { toast(error.message, "error"); }
+      finally { button.disabled = false; }
+    });
+
     /* disappearing messages: saved as soon as an option is picked */
     const dform = $("[data-disappear-form]"), dnote = $("[data-disappear-note]");
     if (dform) dform.addEventListener("change", async (event) => {
