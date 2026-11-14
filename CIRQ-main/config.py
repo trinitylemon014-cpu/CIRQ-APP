@@ -33,17 +33,6 @@ class Config:
     CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
     CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
 
-    # Cloudflare R2 (optional). When all of these are set, new VIDEOS (reels, post and story videos) are stored in R2 instead
-    # of Cloudinary; images, avatars and music stay on Cloudinary and private chat files stay in the Supabase bucket.
-    # R2_PUBLIC_BASE_URL is the public address of the bucket (a custom domain such as https://media.example.com, or the
-    # bucket's r2.dev URL). Leave these empty to keep everything on Cloudinary exactly as before.
-    R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "")
-    R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
-    R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
-    R2_BUCKET = os.environ.get("R2_BUCKET", "")
-    R2_PUBLIC_BASE_URL = os.environ.get("R2_PUBLIC_BASE_URL", "").strip().rstrip("/")
-    R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "")      # optional; defaults to https://<account id>.r2.cloudflarestorage.com
-
     # Mail (password recovery, email verification)
     MAIL_SERVER = os.environ.get("MAIL_SERVER", "")
     MAIL_PORT = _int("MAIL_PORT", 587)
@@ -105,6 +94,28 @@ class Config:
     PAYMENT_NUMBER_DISPLAY = os.environ.get("PAYMENT_NUMBER_DISPLAY", "")      # admin's receiving number shown on the pay page
     PAYMENT_ACCOUNT_NAME = os.environ.get("PAYMENT_ACCOUNT_NAME", "")
 
+    # CIRQ LIVE (app/services/live_service.py). Media runs on LiveKit (WebRTC); Flask only issues short-lived tokens and keeps the
+    # records. Leave the three LIVEKIT_* values empty and the Live pages still load but nobody can go live (a clear message is shown).
+    LIVE_ENABLED = _bool("LIVE_ENABLED", True)
+    LIVEKIT_URL = os.environ.get("LIVEKIT_URL", "").rstrip("/")             # wss://your-project.livekit.cloud
+    LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY", "")
+    LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")           # server only: never rendered into a page
+    # Who may host: "verified" = approved + email-verified + (admin-verified badge OR admin-granted live access);
+    #               "approved" = any approved, email-verified student (use only while testing).
+    LIVE_ELIGIBILITY = os.environ.get("LIVE_ELIGIBILITY", "verified").strip().lower()
+    LIVE_MAX_GUESTS = min(_int("LIVE_MAX_GUESTS", 4), 4)
+    LIVE_STARTS_PER_HOUR = _int("LIVE_STARTS_PER_HOUR", 6)
+    LIVE_HOST_TIMEOUT_SECONDS = _int("LIVE_HOST_TIMEOUT_SECONDS", 90)        # a host silent this long is treated as gone and the live is ended
+    LIVE_VIEWER_TIMEOUT_SECONDS = _int("LIVE_VIEWER_TIMEOUT_SECONDS", 45)
+    LIVE_POLL_SECONDS = _int("LIVE_POLL_SECONDS", 3)
+    LIVE_CHAT_MAX_CHARS = _int("LIVE_CHAT_MAX_CHARS", 200)
+    LIVE_CHAT_PER_MINUTE = _int("LIVE_CHAT_PER_MINUTE", 20)
+    LIVE_REACTIONS_PER_MINUTE = _int("LIVE_REACTIONS_PER_MINUTE", 30)
+    LIVE_GIFT_DAILY_COINS = _int("LIVE_GIFT_DAILY_COINS", 20000)             # most one student can spend on live gifts in 24h (0 = no cap)
+    LIVE_BATTLE_COUNTDOWN_SECONDS = _int("LIVE_BATTLE_COUNTDOWN_SECONDS", 5)
+    LIVE_BATTLE_INVITE_SECONDS = _int("LIVE_BATTLE_INVITE_SECONDS", 60)
+    LIVE_NOTIFY_MAX = _int("LIVE_NOTIFY_MAX", 500)                           # followers notified when a creator goes live
+
     # Limits
     MAX_IMAGE_MB = _int("MAX_IMAGE_MB", 8)
     MAX_VIDEO_MB = _int("MAX_VIDEO_MB", 60)
@@ -154,6 +165,9 @@ class TestConfig(Config):
     RATELIMIT_ENABLED = False
     APP_BASE_URL = "http://localhost"
     PAID_COMPETITIONS_ENABLED = False
+    LIVEKIT_URL = "wss://test.livekit.invalid"
+    LIVEKIT_API_KEY = "APItestkey"
+    LIVEKIT_API_SECRET = "test-livekit-secret-not-real-0123456789"
 
 
 REQUIRED_IN_PRODUCTION = [
