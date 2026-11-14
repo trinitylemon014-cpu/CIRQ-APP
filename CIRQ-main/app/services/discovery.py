@@ -267,14 +267,14 @@ def search(v, q, cat, school_id, limit=RESULT_CAP):
 def _decorate(items, v):
     """Add the display-only fields every account card needs. Counts come from one fresh query for exactly the cards shown."""
     ids = [p["id"] for p in items]
-    counts = follower_counts(ids)
+    counts = follower_counts(ids, budget=max(40, len(ids)))        # the status badge is derived from this number, so it must be exact for every card
     schools = sb.by_id("schools", [p.get("school_id") for p in items])
     for p in items:
         p["_state"] = v.state(p["id"])
         p["_followers"] = counts.get(p["id"])
         p["_school"] = schools.get(p.get("school_id"))
-        tier = tier_for(p["_followers"] or 0)
-        p["_tier"] = tier["name"] if tier["index"] >= 1 else None      # "Rookie" is everyone's starting point, so it isn't worth a badge
+        tier = tier_for(p["_followers"] or 0)                           # same function the profile page uses, so the two always agree
+        p["_tier"], p["_tier_idx"] = tier["name"], tier["index"]       # CIRQ STATUS: Rookie ... Hall of Fame, shown for every account
     return items
 
 
