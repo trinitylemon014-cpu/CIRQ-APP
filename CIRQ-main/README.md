@@ -123,36 +123,6 @@ legitimately see in the app, and **nothing** from `password_reset_requests`, `em
 A trigger stops signed-in users editing their own `role`, `account_status`, `verified`, `coin_balance`, `boosted_until`.
 Counters (`like_count`, `comment_count`) are maintained by triggers; follower counts are computed from the `follows` table.
 
-## 6a. Cloudflare R2 (optional): where the videos live
-
-Where each kind of file goes once R2 is set up:
-
-| File | Stored in | Why |
-|---|---|---|
-| Reels, post videos, story videos (MP4 / MOV / M4V) | **Cloudflare R2** | cheap bulk storage, no download fees |
-| Photos, avatars, school logos, event covers, music | **Cloudinary** | resizing and format conversion on the fly |
-| Chat attachments | **Supabase** private bucket `chat-attachments` | private, signed links |
-
-Setup (about 10 minutes):
-
-1. Cloudflare dashboard → **R2** → **Create bucket** (e.g. `cirq-media`).
-2. Bucket → **Settings** → **Public access**: connect a custom domain (recommended, e.g. `media.yourdomain.com`) or enable the
-   `r2.dev` address. This public address is `R2_PUBLIC_BASE_URL`.
-3. R2 → **Manage API tokens** → create a token with **Object Read & Write** limited to that bucket. Copy the *Access Key ID*,
-   *Secret Access Key* and your *Account ID*.
-4. Set these in `.env` / Render, then redeploy: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`,
-   `R2_PUBLIC_BASE_URL` (no trailing slash). The site's Content-Security-Policy allows that address automatically.
-
-Good to know:
-
-- **Nothing to migrate.** Each media row records where its file lives (`delivery_type = 'r2'`), so old Cloudinary videos keep
-  playing and new videos go to R2. Leave the `R2_*` variables empty and everything stays on Cloudinary, as before.
-- **Safe fallbacks.** WebM files, MP4s whose length can't be read, and any R2 outage fall back to Cloudinary, so an upload never
-  fails because of R2. The reel length limit relies on that readable length.
-- **Videos are stored exactly as uploaded.** R2 does not convert video the way Cloudinary does, so there is no generated
-  preview frame and a phone video in an uncommon codec (e.g. HEVC) may not play in every browser.
-- Deleting a post, reel, story or account deletes its file from R2 too.
-
 ## 6. Cloudinary
 
 1. Create a free account → **Dashboard** shows *Cloud name*, *API Key*, *API Secret* → put them in `.env`.
@@ -371,6 +341,9 @@ a trivia entry or starts a 3-/5-day boost. Prices: trivia UGX 1,000; boost 3 day
 
 See `.env.example` for the full list with comments. Required in production: `SECRET_KEY` (≥ 32 chars), `APP_BASE_URL`,
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CLOUDINARY_*`. The app refuses to start in production if any is missing.
+
+### CIRQ LIVE (streaming, gifts, PK battles)
+Live streaming is documented in **[LIVE_STREAMING.md](LIVE_STREAMING.md)**: run `migrations/2026_11_14_live_streaming.sql`, set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and run `scripts/vendor_livekit.sh`. Until the provider is configured the Live pages load but nobody can go live.
 
 ## 17. Troubleshooting
 
