@@ -177,11 +177,7 @@ def block(username):
         sb.delete("blocks", blocker_id=me, blocked_id=prof["id"])
         flash(f"Unblocked @{prof['username']}.", "info")
     else:
-        sb.insert("blocks", {"blocker_id": me, "blocked_id": prof["id"]})
-        sb.delete("follows", follower_id=me, followee_id=prof["id"])
-        sb.delete("follows", follower_id=prof["id"], followee_id=me)
-        social.remove_follow_request(me, prof["id"])
-        social.remove_follow_request(prof["id"], me)
+        social.block_user(me, prof["id"])
         flash(f"Blocked @{prof['username']}. They can't see your profile or message you.", "success")
     return redirect(url_for("feed.home"))
 
