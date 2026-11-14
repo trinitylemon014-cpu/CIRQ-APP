@@ -429,6 +429,9 @@ def report_decide(rid, decision):
     if decision == "remove" and r["target_type"] != "profile":
         sb.update(table, {"moderation_status": "removed"}, id=r["target_id"])
         target = sb.get(table, id=r["target_id"])
+        if r["target_type"] == "event" and target:
+            from app.services import event_chat
+            event_chat.close_event_chat(target)
         owner = (target or {}).get("author_id") or (target or {}).get("sender_id") or (target or {}).get("host_id")
         notify(owner, "moderation", body="One of your items was removed for breaking community guidelines.", dedupe=False)
     elif decision == "suspend":
