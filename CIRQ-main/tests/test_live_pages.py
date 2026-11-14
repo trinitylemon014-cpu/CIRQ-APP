@@ -78,3 +78,11 @@ def test_open_mode_still_blocks_pending_accounts(as_user, db, app, lkcalls):
     with app.app_context():
         ok, _ = live.can_host({"account_status": "pending"})
     assert not ok
+
+
+def test_room_script_builds_room_api_urls_not_site_root_urls(app):
+    """Regression: api('/state') must resolve to /live/api/<sid>/state, not /state (that 404 made every live show 'ended')."""
+    import pathlib
+    js = (pathlib.Path(app.root_path) / "static" / "js" / "live.js").read_text()
+    assert 'path.startsWith("/") ? path : API + path' not in js
+    assert r'/^\/(live|u)\//.test(path) ? path : API + path' in js
