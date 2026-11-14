@@ -1,0 +1,39 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}Go live{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<a class="back-link" href="{{ url_for('live.index') }}">{{ m.icon('arrow-left','i-sm') }} Live</a>
+<h1 class="page-title">Go live</h1>
+{% if not can_host %}
+  <div class="lv-note">{{ m.icon('lock') }}<span>{{ host_message }}</span></div>
+{% elif not provider_ready %}
+  <div class="lv-note warn">{{ m.icon('bell') }}<span>Live streaming isn't connected yet. An admin needs to add the LiveKit credentials (see <b>LIVE_STREAMING.md</b>).</span></div>
+{% else %}
+  {% if current %}
+  <div class="card lv-note">{{ m.icon('radio') }}<div><b>You're already live: {{ current.title }}</b><br>
+    <a class="btn sm" href="{{ url_for('live.room', sid=current.id) }}">Return to your live</a></div></div>
+  {% endif %}
+  <form class="lv-form" id="lv-start" data-start-url="{{ url_for('live.api_start') }}" novalidate>
+    <div><label class="lv-l" for="lv-title">Title <span class="lv-count" id="lv-count">0/80</span></label>
+      <input id="lv-title" type="text" maxlength="80" required autocomplete="off" placeholder="What's your live about?"></div>
+    <div><label class="lv-l" for="lv-cat">Category</label>
+      <select id="lv-cat">{% for c in categories %}<option value="{{ c }}">{{ c|capitalize }}</option>{% endfor %}</select></div>
+    <fieldset class="lv-opts" style="border:0;padding:0;margin:0"><legend class="lv-l" style="grid-column:1/-1">Format</legend>
+      <label class="lv-opt"><input type="radio" name="mode" value="video" checked><b>Video</b><small>Camera + microphone, screen share</small></label>
+      <label class="lv-opt"><input type="radio" name="mode" value="audio"><b>Audio only</b><small>Just your voice</small></label></fieldset>
+    <fieldset class="lv-opts" style="border:0;padding:0;margin:0"><legend class="lv-l" style="grid-column:1/-1">Who can watch</legend>
+      <label class="lv-opt"><input type="radio" name="visibility" value="public" {{ 'disabled' if is_private else 'checked' }}><b>Everyone</b><small>Anyone on CIRQ</small></label>
+      <label class="lv-opt"><input type="radio" name="visibility" value="followers" {{ 'checked' if is_private }}><b>Followers only</b><small>{{ 'Your account is private, so lives are for followers.' if is_private else 'Only people who follow you' }}</small></label></fieldset>
+    <div class="lv-safety"><b>Stay safe on live</b><ul>
+      <li>Don't share your phone number, address or school details.</li>
+      <li>Anyone you allow in can watch. Be kind, and don't say anything you wouldn't say in class.</li>
+      <li>You can mute, remove or block anyone, and end your live at any time.</li></ul></div>
+    <div><button type="button" class="btn ghost sm" id="lv-check">{{ m.icon('camera','i-sm') }} Check camera &amp; microphone</button>
+      <video id="lv-preview" class="lv-preview" playsinline muted aria-label="Camera preview"></video>
+      <p class="lv-explain" id="lv-check-msg" role="status"></p></div>
+    <div class="lv-alert" id="lv-error" role="alert"></div>
+    <button class="btn block" type="submit" id="lv-submit">{{ m.icon('radio','i-sm') }} Start live</button>
+  </form>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/live-go.js') }}" defer></script>{% endblock %}
