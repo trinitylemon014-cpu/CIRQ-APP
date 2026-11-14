@@ -12,6 +12,7 @@ import cloudinary.uploader
 import cloudinary.utils
 from flask import current_app
 from PIL import Image, UnidentifiedImageError
+from app.services import r2_service as r2
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ AUDIO_EXT = {"mp3", "m4a", "aac", "wav", "ogg", "oga"}
 REEL_WIDTH = 540            # delivery width for reels; the eager (pre-built) version uses the same value
 UPLOAD_TIMEOUT = 100        # seconds; keep below the gunicorn timeout (120)
 IMAGE_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
+R2_VIDEO_TYPES = {"mp4": "video/mp4", "mov": "video/quicktime", "m4v": "video/x-m4v"}   # formats whose length we can read ourselves
 
 
 class UploadError(ValueError):
@@ -149,9 +151,30 @@ def _reel_transform(width=REEL_WIDTH):
     return {"width": width, "crop": "limit", "quality": "auto", "video_codec": "h264", "audio_codec": "aac", "format": "mp4"}
 
 
+def _upload_video_to_r2(data, ext, folder, owner_id):
+    """Store a public video in Cloudflare R2. Returns the media dict, or None to let Cloudinary take the file instead
+    (not an MP4/MOV/M4V, a length that can't be read, or R2 being unavailable), so an upload never fails just because of R2."""
+    content_type = R2_VIDEO_TYPES.get(ext)
+    duration = r2.mp4_duration(data) if content_type else None
+    if not duration:
+        return None
+    key = f"cirq/{folder}/{owner_id[:8]}_{uuid.uuid4().hex[:12]}.{ext}"
+    try:
+        url = r2.upload_bytes(data, key, content_type)
+    except Exception as exc:
+        log.error("r2 upload failed, falling back to cloudinary: %s: %s", type(exc).__name__, str(exc)[:300])
+        return None
+    return {"media_type": "video", "url": url, "public_id": key, "delivery_type": "r2", "bytes": len(data),
+            "width": None, "height": None, "duration": round(duration, 2)}
+
+
 def upload(file_storage, folder, owner_id, allow_video=True, allow_image=True, private=False):
     """Validate and upload. Returns a dict ready to store in Supabase."""
     kind, data, ext = validate(file_storage, allow_video, allow_image)
+    if kind == "video" and not private and r2.is_configured():
+        stored = _upload_video_to_r2(data, ext, folder, owner_id)
+        if stored:
+            return stored
     if not is_configured():
         raise UploadError("Media uploads aren't configured on this server yet.")
     delivery = "authenticated" if private else "upload"
@@ -177,7 +200,9 @@ def upload(file_storage, folder, owner_id, allow_video=True, allow_image=True, p
 
 
 def destroy(public_id, media_type="image", delivery_type="upload"):
-    """Delete an asset. Safe to call when Cloudinary isn't configured (returns False)."""
+    """Delete an asset. Safe to call when Cloudinary isn't configured (returns False). Videos stored in R2 are removed from R2."""
+    if delivery_type == "r2":
+        return r2.delete(public_id)
     if not public_id or not is_configured():
         return False
     try:
@@ -193,6 +218,8 @@ def media_src(row, width=None, thumb=False):
     """Responsive delivery URL for a media row (dict with url/public_id/media_type/delivery_type)."""
     if not row:
         return ""
+    if row.get("delivery_type") == "r2":
+        return "" if thumb else row.get("url", "")       # served as-is from R2; there is no generated still frame
     if not (is_configured() and row.get("public_id")):
         return row.get("url", "")
     kind = row.get("media_type", "image")
