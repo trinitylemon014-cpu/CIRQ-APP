@@ -1,7 +1,6 @@
 import logging
 import os
 import click
-from flask_compress import Compress
 import httpx
 from urllib.parse import urlparse
 from flask import Flask, Response, g, session, render_template, request, jsonify, url_for, send_from_directory
@@ -11,7 +10,6 @@ from app.extensions import csrf, limiter
 from app.services import supabase_service as sb, cloudinary_service as cs
 from app.services.coin_service import is_boosted
 from app.services.notification_service import unread_count
-from app.services import supabase_service as sb_service
 from app.navigation import admin_navigation, main_navigation
 from app.utils import time_ago, fmt_event_dt, short_count, utcnow, iso, tier_for
 
@@ -62,28 +60,10 @@ def create_app(config_object=None, clients=None):
     from app.blueprints.legal.routes import bp as legal_bp
     from app.blueprints.trivia.routes import bp as trivia_bp
     from app.blueprints.recs.routes import bp as recs_bp
+    from app.blueprints.live.routes import bp as live_bp
     for b in (auth_bp, feed_bp, profiles_bp, discover_bp, reels_bp, stories_bp, linkup_bp, messages_bp,
-              notifications_bp, attachments_bp, games_bp, schools_bp, admin_bp, wallet_bp, lending_bp, trivia_bp, recs_bp, legal_bp):
+              notifications_bp, attachments_bp, games_bp, schools_bp, admin_bp, wallet_bp, lending_bp, trivia_bp, recs_bp, live_bp, legal_bp):
         app.register_blueprint(b)
-
-    # ---- speed: gzip text responses, and let browsers keep CSS/JS/images instead of re-downloading them each visit
-    app.config.setdefault("COMPRESS_MIN_SIZE", 500)
-    Compress(app)
-    _static_version = {}
-
-    @app.url_defaults
-    def version_static_urls(endpoint, values):
-        """/static/css/style.css becomes /static/css/style.css?v=<file time>: a deploy changes the number, so a long cache is safe."""
-        filename = values.get("filename") if endpoint == "static" else None
-        if not filename or "v" in values:
-            return
-        if app.debug or filename not in _static_version:
-            try:
-                _static_version[filename] = int(os.path.getmtime(os.path.join(app.static_folder, filename)))
-            except OSError:
-                _static_version[filename] = 0
-        if _static_version[filename]:
-            values["v"] = _static_version[filename]
 
     @app.before_request
     def load_user():
@@ -104,36 +84,35 @@ def create_app(config_object=None, clients=None):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)")
+        resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self), display-capture=(self)")
+        # CIRQ LIVE: the browser may open a WebSocket/HTTPS connection to the configured LiveKit project and to nothing else new.
+        lk_ws = app.config.get("LIVEKIT_URL", "")
+        lk_origins = f"{lk_ws} https://{lk_ws.split('://', 1)[1]}" if lk_ws.startswith("wss://") else ""
         parsed_storage_url = urlparse(app.config.get("SUPABASE_URL", ""))
         storage_origin = f"{parsed_storage_url.scheme}://{parsed_storage_url.netloc}" if parsed_storage_url.netloc else ""
         resp.headers.setdefault("Content-Security-Policy",
             f"default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com {storage_origin}; "
             f"media-src 'self' blob: https://res.cloudinary.com {storage_origin}; frame-src 'self' {storage_origin}; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
-        if request.endpoint == "static" and resp.status_code == 200:
-            # versioned URLs (?v=...) never change content, so keep them for a year; unversioned ones for an hour
-            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable" if "v" in request.args else "public, max-age=3600"
-        elif g.get("user"):
+            f"font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self' {lk_origins}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+        if g.get("user"):
             resp.headers["Cache-Control"] = "no-store"
         return resp
 
     @app.context_processor
     def inject():
-        def _badges():
-            """Both nav badges in one go: the two counts are fetched at the same time, once per page."""
-            if "_badges" not in g.__dict__:
-                from app.blueprints.messages.routes import unread_total
-                uid = g.user["id"]
-                g._badges = tuple(sb_service.parallel(lambda: unread_count(uid), lambda: unread_total(uid)))
-            return g._badges
-
         def unread_notifs():
-            return _badges()[0] if g.get("user") else 0
+            if not g.get("user"):
+                return 0
+            if "_unread" not in g.__dict__:
+                g._unread = unread_count(g.user["id"])
+            return g._unread
 
         def unread_msgs():
-            return _badges()[1] if g.get("user") else 0
+            if not g.get("user"):
+                return 0
+            from app.blueprints.messages.routes import unread_total
+            return unread_total(g.user["id"])
         def nav_items():
             if not g.get("user"):
                 return []
@@ -251,10 +230,4 @@ def run_cleanup():
         old_signals = recommender.cleanup_old_signals()
     except Exception:
         old_signals = 0
-    try:
-        from app.services import event_chat
-        closed_chats = event_chat.expire_due(force=True)
-    except Exception:
-        closed_chats = 0
-    return (f"removed {len(expired)} expired stories; expired {len(stale)} reset tokens; pruned {old_signals} old viewing signals; "
-            f"closed {closed_chats} finished event chats")
+    return f"removed {len(expired)} expired stories; expired {len(stale)} reset tokens; pruned {old_signals} old viewing signals"
