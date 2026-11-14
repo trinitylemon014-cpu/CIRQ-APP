@@ -25,6 +25,8 @@ def target_url(n):
         return url_for("feed.home")
     if k.startswith("loan_") and ref:
         return url_for("lending.detail", loan_id=ref)
+    if k == "live_started" and ref:
+        return url_for("live.room", sid=ref)
     if k == "gift_received":
         return url_for("lending.index")
     if k == "message" and ref:
