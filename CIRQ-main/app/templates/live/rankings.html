@@ -1,0 +1,13 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}Live rankings{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+{% macro host_list(rows) %}{% if rows %}<div class="card">{% for p in rows %}<a class="lv-rank" href="{{ url_for('profiles.view', username=p.username) }}" style="text-decoration:none;color:inherit"><span class="n">{{ loop.index }}</span><span class="lv-av">{% if p.avatar %}<img src="{{ p.avatar }}" alt="" loading="lazy">{% else %}{{ p.username[:1]|upper }}{% endif %}</span><div class="grow"><b>{{ p.display_name }}</b><small class="muted">@{{ p.username }} · {{ p.gifts }} gifts</small></div><span class="lv-lvl">Lv {{ p.level }}</span><b>{{ p.coins }}</b></a>{% endfor %}</div>{% else %}<div class="card flat"><p class="muted" style="margin:0">No gifts yet. Rankings fill in as creators receive gifts.</p></div>{% endif %}{% endmacro %}
+<a class="back-link" href="{{ url_for('live.index') }}">{{ m.icon('arrow-left','i-sm') }} Live</a>
+<h1 class="page-title">{{ m.icon('trophy') }} Live rankings</h1>
+<p class="muted">The week starts every Monday. Rankings are just for fun and recognition: there are no prizes or extra coins.</p>
+<div class="section-title"><h2>Top creators this week</h2></div>{{ host_list(r.hosts_week) }}
+<div class="section-title"><h2>Top supporters this week</h2></div>
+{% if r.gifters_week %}<div class="card">{% for p in r.gifters_week %}<div class="lv-rank"><span class="n">{{ loop.index }}</span><span class="lv-av">{% if p.avatar %}<img src="{{ p.avatar }}" alt="" loading="lazy">{% else %}{{ p.username[:1]|upper }}{% endif %}</span><div class="grow"><b>{{ p.display_name }}</b><small class="muted">@{{ p.username }} · {{ p.gifts }} gifts</small></div><b>{{ p.coins }}</b></div>{% endfor %}</div>{% else %}<div class="card flat"><p class="muted" style="margin:0">No gifts sent yet this week.</p></div>{% endif %}
+<div class="section-title"><h2>Top creators of all time</h2></div>{{ host_list(r.hosts_all) }}
+{% endblock %}
