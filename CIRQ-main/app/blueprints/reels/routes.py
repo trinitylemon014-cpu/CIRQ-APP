@@ -1,4 +1,7 @@
+import base64
+import binascii
 import math
+import uuid
 
 import httpx
 from flask import Blueprint, jsonify, make_response, render_template, request, redirect, url_for, flash, g, current_app, abort
@@ -6,17 +9,39 @@ from postgrest.exceptions import APIError
 from app.decorators import login_required
 from app.extensions import limiter, db
 from app.services import supabase_service as sb, cloudinary_service as cs, social, boost_ad_service, likers as likers_service
-from app.services import reel_shuffle as shuffle
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
-from app.utils import clean_text, iso, utcnow
+from app.utils import clean_text, parse_dt
 
 bp = Blueprint("reels", __name__)
 PER_PAGE = 5   # only a handful of videos are ever loaded at once
-SCAN_SIZE = 12  # candidates checked (hydrated) at a time while filling a page
+SCAN_SIZE = 25
 MAX_REEL_SECONDS = 90
 VIEW_MIN_SECONDS = 3
-SHUFFLE_MARKER = "shuffle"   # placeholder for data-newest: a shuffled feed has no "newer reels" cursor
+
+
+def _cursor_values(cursor):
+    if not cursor:
+        return None
+    try:
+        decoded = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
+        created_at, post_id = decoded.split("|", 1)
+        if not parse_dt(created_at):
+            raise ValueError
+        uuid.UUID(post_id)
+        return created_at, post_id
+    except (binascii.Error, UnicodeDecodeError, ValueError, TypeError):
+        abort(400, description="Invalid reel cursor.")
+
+
+def _cursor_for(post):
+    return base64.urlsafe_b64encode(f"{post['created_at']}|{post['id']}".encode()).decode().rstrip("=")
+
+
+def _cursor_filter(cursor, direction):
+    created_at, post_id = cursor
+    op = "lt" if direction == "before" else "gt"
+    return f"and(created_at.{op}.{created_at}),and(created_at.eq.{created_at},id.{op}.{post_id})"
 
 
 def _visible_reels(rows, viewer, following, blocked):
@@ -36,86 +61,64 @@ def _visible_reels(rows, viewer, following, blocked):
     return out
 
 
-def _candidate_pool(viewer, following, blocked):
-    """(id, author_id) of the newest reels this viewer is allowed to see; the shuffle is done over this pool."""
-    eligible_authors = sorted(following | {viewer["id"]})
-    rows = (db().table("posts").select("id,author_id").eq("kind", "reel")
-            .eq("moderation_status", "ok").is_("community_id", "null")
-            .or_(f"visibility.eq.public,author_id.in.({','.join(eligible_authors)})")
-            .order("created_at", desc=True).order("id", desc=True).limit(shuffle.POOL_SIZE).execute().data or [])
-    return [r for r in rows if r["author_id"] not in blocked]
-
-
-def _already_watched(viewer_id, reel_ids, before):
-    """Reels in `reel_ids` this viewer had a counted view on before `before` (when this visit started).
-
-    If the lookup fails the feed still works, it just can't push watched reels to the back."""
-    watched = set()
-    try:
-        for i in range(0, len(reel_ids), shuffle.SEEN_CHUNK):
-            chunk = reel_ids[i:i + shuffle.SEEN_CHUNK]
-            rows = (db().table("reel_views").select("reel_id").eq("viewer_id", viewer_id)
-                    .lt("created_at", before).in_("reel_id", chunk).execute().data or [])
-            watched.update(r["reel_id"] for r in rows)
-    except Exception:
-        current_app.logger.exception("reel view history lookup failed; shuffling without it")
-    return watched
-
-
-def _empty_newer_response():
-    """Old browser tabs still poll for 'newer' reels. A shuffled feed has none, so answer with an empty page."""
-    resp = make_response("")
-    resp.headers["X-Next-Cursor"] = ""
-    resp.headers["X-After-Cursor"] = request.args.get("after", "")
-    resp.headers["X-More-Newer"] = "0"
-    return resp
-
-
 @bp.get("/reels")
 @login_required
 def index():
-    """A fresh shuffle on every visit. Reels you already watched (and your own) come after everything you haven't seen."""
     me = g.user
     if request.args.get("before") and request.args.get("after"):
         abort(400, description="Use either the older or newer reel cursor, not both.")
-    if request.args.get("after"):
-        return _empty_newer_response()
+    direction = "after" if request.args.get("after") else "before"
+    initial_cursor = _cursor_values(request.args.get(direction))
+    following_list, hidden = sb.parallel(lambda: social.following_ids(me["id"]), lambda: social.blocked_between(me["id"]))
+    following = set(following_list)
+    eligible_authors = sorted(following | {me["id"]})
 
-    cursor = None
-    if request.args.get("before"):
-        try:
-            cursor = shuffle.decode_cursor(request.args["before"])
-        except shuffle.BadCursor:
-            abort(400, description="Invalid reel cursor.")
-    seed = cursor["seed"] if cursor else shuffle.new_seed()
-    t0 = cursor["t0"] if cursor else iso(utcnow())
+    def scan():
+        scan_cursor, scanned_ids, visible, exhausted = initial_cursor, set(), [], False
+        while len(visible) <= PER_PAGE and not exhausted:
+            q = (db().table("posts").select("*").eq("kind", "reel")
+                 .eq("moderation_status", "ok").is_("community_id", "null")
+                 .or_(f"visibility.eq.public,author_id.in.({','.join(eligible_authors)})"))
+            if scan_cursor:
+                q = q.or_(_cursor_filter(scan_cursor, direction))
+            rows = (q.order("created_at", desc=direction != "after")
+                    .order("id", desc=direction != "after").limit(SCAN_SIZE).execute().data or [])
+            if not rows:
+                break
+            for reel in _visible_reels(rows, me, following, hidden):
+                if reel["id"] not in scanned_ids:
+                    scanned_ids.add(reel["id"])
+                    visible.append(reel)
+            exhausted = len(rows) < SCAN_SIZE
+            scan_cursor = (rows[-1]["created_at"], rows[-1]["id"])
+        return visible, scan_cursor
 
-    following = set(social.following_ids(me["id"]))
-    hidden = social.blocked_between(me["id"])
-    pool = _candidate_pool(me, following, hidden)
-    pool_ids = [r["id"] for r in pool]
-    # watched before this visit began + my own reels are served last; both sets are fixed for the whole visit,
-    # so the order never changes while the user scrolls.
-    back_of_queue = _already_watched(me["id"], pool_ids, t0) | {r["id"] for r in pool if r["author_id"] == me["id"]}
-    queue = shuffle.remaining(shuffle.order(pool_ids, seed, back_of_queue), seed, back_of_queue,
-                              cursor["position"] if cursor else None)
-
-    visible, i = [], 0
-    while len(visible) <= PER_PAGE and i < len(queue):
-        batch, i = queue[i:i + SCAN_SIZE], i + SCAN_SIZE
-        rows = {r["id"]: r for r in (db().table("posts").select("*").in_("id", batch).execute().data or [])}
-        visible.extend(_visible_reels([rows[rid] for rid in batch if rid in rows], me, following, hidden))
+    ad_cursor = request.args.get(direction, "")
+    (visible, scan_cursor), sponsored_ad = sb.parallel(scan, lambda: boost_ad_service.for_viewer(me["id"], ad_cursor))   # the ad loads while the reels do
 
     has_more = len(visible) > PER_PAGE
     page = visible[:PER_PAGE]
-    next_cursor = shuffle.encode_cursor(seed, t0, page[-1]["id"], page[-1]["id"] in back_of_queue) if has_more and page else None
-    sponsored_ad = boost_ad_service.for_viewer(me["id"], request.args.get("before", ""))
+    if direction == "after":
+        page.reverse()
+        cursor = _cursor_for(visible[PER_PAGE - 1]) if has_more else None
+        after_cursor = (_cursor_for(visible[PER_PAGE - 1]) if has_more else
+                        _cursor_for({"created_at": scan_cursor[0], "id": scan_cursor[1]}) if scan_cursor else None)
+    else:
+        cursor = _cursor_for(page[-1]) if has_more and page else None
+        after_cursor = None
     if request.args.get("partial"):
-        resp = make_response(render_template("reels/_items.html", reels=page, cursor=next_cursor, following=following,
+        rendered_page = page if direction == "before" else sorted(
+            page, key=lambda r: (parse_dt(r["created_at"]), r["id"]), reverse=True)
+        resp = make_response(render_template("reels/_items.html", reels=rendered_page, cursor=cursor, following=following,
                                              sponsored_ad=sponsored_ad, view_min_seconds=VIEW_MIN_SECONDS))
-        resp.headers["X-Next-Cursor"] = next_cursor or ""
+        resp.headers["X-Next-Cursor"] = cursor or ""
+        if direction == "after":
+            resp.headers["X-After-Cursor"] = after_cursor or ""
+            resp.headers["X-More-Newer"] = "1" if has_more else "0"
+        elif page:
+            resp.headers["X-Newest-Cursor"] = _cursor_for(page[0])
         return resp
-    return render_template("reels/index.html", reels=page, cursor=next_cursor, newest=SHUFFLE_MARKER if page else "",
+    return render_template("reels/index.html", reels=page, cursor=cursor, newest=(_cursor_for(page[0]) if page else ""),
                            following=following, sponsored_ad=sponsored_ad, view_min_seconds=VIEW_MIN_SECONDS)
 
 
@@ -224,7 +227,7 @@ def create():
     if _wants_json():
         rendered = social.hydrate_posts([post], g.user["id"])
         rendered[0]["saved"] = False
-        newest = SHUFFLE_MARKER
+        newest = _cursor_for(post)
         html = render_template("reels/_items.html", reels=rendered, cursor=None,
                                following=set(social.following_ids(g.user["id"])), view_min_seconds=VIEW_MIN_SECONDS)
         return jsonify(ok=True, redirect=url_for("reels.index"), html=html, newest=newest)
