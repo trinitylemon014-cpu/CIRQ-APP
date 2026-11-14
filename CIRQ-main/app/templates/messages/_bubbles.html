@@ -1,5 +1,5 @@
 {% import 'partials/macros.html' as m with context %}
-{% for msg in msgs %}<div class="msg {{ 'mine' if msg.sender_id == cur.id }}" data-ts="{{ msg.created_at }}">
+{% for msg in msgs %}<div class="msg {{ 'mine' if msg.sender_id == cur.id }}" data-ts="{{ msg.created_at }}" data-id="{{ msg.id }}">
   {% if msg.sender_id != cur.id and conv_is_group is not defined %}<span class="sender">{{ msg.sender.username if msg.sender }}</span>{% endif %}
   {% if msg.story_reply %}<div class="story-ref">{% if msg.story and msg.story.src %}<img src="{{ msg.story.src }}" alt="" loading="lazy">{% elif msg.story %}<span class="ph story-mini bg-{{ msg.story.bg }}" aria-hidden="true">Aa</span>{% else %}<span class="ph">{{ m.icon('circle','i-sm') }}</span>{% endif %}<span>{{ 'You replied to their story' if msg.sender_id == cur.id else 'Replied to your story' }}{% if not msg.story %}<small> · no longer available</small>{% endif %}</span></div>{% endif %}
   {% if msg.media_row %}{% if msg.media_type == 'video' %}<video src="{{ media_src(msg.media_row, 480) }}" controls preload="none" playsinline></video>{% else %}<img src="{{ media_src(msg.media_row, 480) }}" alt="Attachment" loading="lazy">{% endif %}{% endif %}
@@ -33,4 +33,4 @@
       {% endif %}
     {% endfor %}
   {% endif %}
-  {% if msg.body %}{{ msg.body }}{% endif %}<span class="meta">{{ msg.created_at|ago }}{% if msg.sender_id != cur.id %} · <a href="#" data-report="message:{{ msg.id }}" style="text-decoration:underline">report</a>{% endif %}</span></div>{% endfor %}
+  {% if msg.body %}{{ msg.body }}{% endif %}<span class="meta"><span class="meta-time">{{ msg.created_at|ago }}{% if msg.sender_id != cur.id %} · <a href="#" data-report="message:{{ msg.id }}" style="text-decoration:underline">report</a>{% endif %}</span>{% if msg.sender_id == cur.id and msg.tick %}<span class="ticks {{ msg.tick }}" data-tick-id="{{ msg.id }}" role="img" aria-label="{{ {'sent': 'Sent', 'delivered': 'Delivered', 'read': 'Seen'}[msg.tick] }}" title="{{ {'sent': 'Sent', 'delivered': 'Delivered', 'read': 'Seen'}[msg.tick] }}"><svg viewBox="0 0 22 14" aria-hidden="true"><path class="t1" d="M2 7.5l3.8 3.8L13 3"/><path class="t2" d="M9.2 10.8L10 11.4 19 3"/></svg></span>{% endif %}</span></div>{% endfor %}
