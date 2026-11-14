@@ -1621,43 +1621,13 @@ dialog.likers[open] { display: flex; }
 .disappear-opt:last-child { border-bottom: 0 }
 .disappear-opt input { width: 20px; height: 20px; accent-color: var(--accent, #f7b500); flex: none }
 
-/* ---------- 24. CIRQ STATUS badge on Discover cards (Rookie -> Hall of Fame), light theme ----------
-   Same structure as the dark theme badge (pill, 14px trophy, bold label, centred under the @username), re-coloured for a white card:
-   Rookie is quiet ink-navy on a soft grey tint; every tier after it carries more gold, and Hall of Fame is solid gold. */
-.dsc-status { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; margin-top: 7px; padding: 3px 11px 3px 9px;
-  border: 1px solid var(--st-b); border-radius: var(--r-pill); background: var(--st-bg); color: var(--st-c);
-  font-size: .72rem; font-weight: 800; line-height: 1.3; letter-spacing: .02em; white-space: nowrap; vertical-align: middle; }
-.dsc-status .i { flex: none; width: 14px; height: 14px; stroke-width: 2; }
-.dsc-status.t0 { --st-c: var(--text-2);  --st-b: rgba(27, 31, 59, .14);  --st-bg: rgba(27, 31, 59, .05); }                          /* Rookie */
-.dsc-status.t1 { --st-c: var(--gold-ink); --st-b: rgba(232, 156, 12, .40); --st-bg: rgba(255, 197, 66, .10); }                       /* Elite */
-.dsc-status.t2 { --st-c: var(--gold-ink); --st-b: rgba(232, 156, 12, .55); --st-bg: rgba(255, 197, 66, .18); }                       /* Legendary */
-.dsc-status.t3 { --st-c: #7f5200;         --st-b: rgba(232, 156, 12, .70); --st-bg: rgba(255, 197, 66, .30); }                       /* Icon */
-.dsc-status.t4 { --st-c: #7f5200;         --st-b: rgba(232, 156, 12, .85); --st-bg: rgba(255, 197, 66, .44); }                       /* Superstar */
-.dsc-status.t5 { --st-c: #5f3d00;         --st-b: var(--gold-600);         --st-bg: rgba(255, 197, 66, .64); }                       /* Royalty */
-.dsc-status.t6 { --st-c: var(--on-lime);  --st-b: var(--gold-600);         --st-bg: var(--grad-gold); font-weight: 900; box-shadow: 0 4px 10px rgba(232, 156, 12, .28); }   /* Hall of Fame */
-
-/* ---------- Register: username rules checklist (live, driven by app.js) ---------- */
-.uname-rules { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: var(--r-md); background: var(--surface-2); font-size: .82rem; color: var(--text-2); }
-.uname-title { margin: 0 0 8px; font-weight: 800; color: var(--text); font-size: .84rem; }
-.uname-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
-.uname-list li { display: flex; align-items: flex-start; gap: 9px; line-height: 1.35; transition: color .15s; }
-.uname-list li > span:not(.mark) { flex: 1; min-width: 0; }
-.uname-list b { color: var(--text); font-weight: 800; }
-.uname-list .count { flex: none; margin-left: auto; font-style: normal; font-size: .74rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
-.uname-rules .mark { position: relative; flex: none; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid var(--dim); border-radius: 50%; transition: background .15s, border-color .15s; }
-.uname-rules .mark::after { content: ""; position: absolute; opacity: 0; transition: opacity .15s; }
-.uname-list li[data-state="ok"] { color: var(--text); }
-.uname-list li[data-state="ok"] .mark { background: var(--green); border-color: var(--green); }
-.uname-list li[data-state="ok"] .mark::after { opacity: 1; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.uname-list li[data-state="bad"] { color: var(--danger-ink); }
-.uname-list li[data-state="bad"] b { color: inherit; }
-.uname-list li[data-state="bad"] .mark { background: var(--danger-ink); border-color: var(--danger-ink); }
-.uname-list li[data-state="bad"] .mark::after { opacity: 1; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; box-shadow: none; transform: rotate(45deg); }
-.uname-list li[data-state="bad"] .mark::before { content: ""; position: absolute; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; transform: rotate(-45deg); }
-.uname-list li[data-state="pending"] .mark { border-color: var(--warn); }
-.uname-rules code { padding: 1px 6px; border-radius: 6px; background: var(--card-flat); border: 1px solid var(--border-soft); color: var(--text); font: 700 .78rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.uname-eg { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); line-height: 1.9; }
-.uname-eg b { color: var(--text); }
-.uname-note { margin: 8px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
-.uname-rules[data-valid="1"] { border-color: var(--green); }
-@media (prefers-reduced-motion: reduce) { .uname-rules *, .uname-rules .mark { transition: none; } }
+/* ---------- 24. Link Up: who's going + event chat ---------- */
+.going-box { margin: 14px 0; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border-soft) }
+.going-list { display: flex; flex-wrap: wrap; gap: 12px 14px; margin-top: 10px }
+.going-person { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; font-size: .75rem; color: var(--text-2); text-align: center }
+.going-person span { max-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.going-plus { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-3, var(--border-soft)); font-weight: 700; color: var(--text) }
+.event-chat-note { display: flex; align-items: center; gap: 6px; margin: 8px 0 0 }
+.going-all { padding: 4px 0 }
+.going-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border-soft) }
+.going-row:last-of-type { border-bottom: 0 }
