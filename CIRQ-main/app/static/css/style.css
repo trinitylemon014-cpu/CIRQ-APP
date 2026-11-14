@@ -1887,3 +1887,19 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 /* ---------- 22. Reels: owner can open the viewers list from the view count ---------- */
 .reel .side button.reel-view-count, .post-actions button.reel-view-count { cursor: pointer }
 .reel .side button.reel-view-count:hover { background: rgba(255, 255, 255, .12) }
+
+/* ---------- 23. Chat: delivery ticks + disappearing messages ---------- */
+.msg .meta { display: flex; align-items: center; gap: 6px }
+.msg.mine .meta { justify-content: flex-end; opacity: 1 }
+.msg.mine .meta-time { opacity: .7 }
+.ticks { display: inline-flex; align-items: center; line-height: 0; color: currentColor }
+.ticks svg { width: 18px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .65 }
+.ticks.sent .t2 { display: none }                                       /* single tick: the other person is offline */
+.ticks.delivered svg { opacity: .65 }                                   /* grey double tick: delivered / they are online */
+.ticks.read svg { stroke: #0a7cff; opacity: 1; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .7)) }   /* blue double tick: seen */
+.disappear-note { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 0; padding: 6px 12px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-2); font-size: .8rem; align-self: center }
+.disappear-note[hidden] { display: none }
+.disappear-dialog { width: min(92vw, 400px) }
+.disappear-opt { display: flex; align-items: center; gap: 12px; padding: 12px 6px; border-bottom: 1px solid var(--border-soft); cursor: pointer; font-weight: 600 }
+.disappear-opt:last-child { border-bottom: 0 }
+.disappear-opt input { width: 20px; height: 20px; accent-color: var(--accent, #f7b500); flex: none }
