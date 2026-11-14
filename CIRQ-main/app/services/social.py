@@ -1,16 +1,27 @@
 """Shared social helpers: visibility rules, hydration of posts, counters, achievements."""
-from flask import current_app
+from flask import current_app, g, has_app_context
 from app.extensions import db
 from app.services import supabase_service as sb, coin_service
 from app.services.notification_service import notify
 from app.utils import tier_for, iso
 
 
+def _viewer_id():
+    user = g.get("user") if has_app_context() else None        # parallel tasks have the app context (and g.user) but no request
+    return user["id"] if user else None
+
+
 def blocked_between(uid):
-    """IDs the viewer blocked plus IDs that blocked the viewer."""
-    mine = {r["blocked_id"] for r in sb.select("blocks", blocker_id=uid)}
-    theirs = {r["blocker_id"] for r in sb.select("blocks", blocked_id=uid)}
-    return mine | theirs
+    """IDs the viewer blocked plus IDs that blocked the viewer. Looked up once per page."""
+    cache = sb.request_cache()
+    if cache is not None and ("blocked", uid) in cache:
+        return set(cache[("blocked", uid)])
+    mine, theirs = sb.parallel(lambda: {r["blocked_id"] for r in sb.select("blocks", blocker_id=uid)},
+                               lambda: {r["blocker_id"] for r in sb.select("blocks", blocked_id=uid)})
+    found = mine | theirs
+    if cache is not None:
+        cache[("blocked", uid)] = frozenset(found)
+    return found
 
 
 def block_user(me, other_id):
@@ -28,6 +39,9 @@ def unblock_user(me, other_id):
 
 
 def is_blocked(a, b):
+    viewer = _viewer_id()
+    if viewer and viewer in (a, b) and sb.request_cache() is not None:       # reuse the page's block list instead of 2 queries
+        return (b if a == viewer else a) in blocked_between(viewer)
     return bool(sb.get("blocks", blocker_id=a, blocked_id=b) or sb.get("blocks", blocker_id=b, blocked_id=a))
 
 
@@ -40,11 +54,21 @@ def following_count(uid):
 
 
 def is_following(a, b):
+    if a == _viewer_id() and sb.request_cache() is not None:
+        ids = following_ids(a)
+        if len(ids) < 1000:                                  # a full list: answer from it (no query); huge lists fall back
+            return b in set(ids)
     return bool(sb.get("follows", follower_id=a, followee_id=b))
 
 
 def following_ids(uid):
-    return [r["followee_id"] for r in sb.select("follows", "followee_id", follower_id=uid)]
+    cache = sb.request_cache()
+    if cache is not None and ("following", uid) in cache:
+        return list(cache[("following", uid)])
+    found = [r["followee_id"] for r in sb.select("follows", "followee_id", follower_id=uid)]
+    if cache is not None:
+        cache[("following", uid)] = tuple(found)
+    return found
 
 
 def has_requested(requester_id, target_id):
@@ -140,12 +164,14 @@ def hydrate_posts(posts, viewer_id):
     if not posts:
         return []
     ids = [p["id"] for p in posts]
-    authors = sb.by_id("profiles", [p["author_id"] for p in posts])
+    authors, media_rows, liked, saved = sb.parallel(                      # four independent lookups at once
+        lambda: sb.by_id("profiles", [p["author_id"] for p in posts]),
+        lambda: sb.in_("post_media", "post_id", ids),
+        lambda: _mine("likes", "post_id", ids, viewer_id),
+        lambda: _mine("saved_posts", "post_id", ids, viewer_id))
     media = {}
-    for m in sb.in_("post_media", "post_id", ids):
+    for m in media_rows:
         media.setdefault(m["post_id"], []).append(m)
-    liked = _mine("likes", "post_id", ids, viewer_id)
-    saved = _mine("saved_posts", "post_id", ids, viewer_id)
     schools = sb.by_id("schools", [a.get("school_id") for a in authors.values()])
     out = []
     for p in posts:
@@ -206,8 +232,8 @@ def saved_page(viewer, kind=None, before=None, n=18):
 
 
 def profile_stats(profile):
-    n = follower_count(profile["id"])
-    return {"followers": n, "following": following_count(profile["id"]), "tier": tier_for(n)}
+    n, following = sb.parallel(lambda: follower_count(profile["id"]), lambda: following_count(profile["id"]))
+    return {"followers": n, "following": following, "tier": tier_for(n)}
 
 
 def grant_achievement(user_id, code):
@@ -224,8 +250,8 @@ def grant_achievement(user_id, code):
 
 
 def user_achievements(user_id):
-    mine = {r["code"]: r for r in sb.select("user_achievements", user_id=user_id)}
-    allach = sb.select("achievements")
+    mine_rows, allach = sb.parallel(lambda: sb.select("user_achievements", user_id=user_id), lambda: sb.select("achievements"))
+    mine = {r["code"]: r for r in mine_rows}
     return [{**a, "earned": a["code"] in mine, "awarded_at": mine.get(a["code"], {}).get("awarded_at")} for a in allach]
 
 
