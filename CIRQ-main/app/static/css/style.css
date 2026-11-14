@@ -1917,3 +1917,29 @@ a.kpi:hover { border-color: rgba(247, 181, 0, .45); box-shadow: none; }
 .dsc-status.t4 { --st-c: var(--brand-300); --st-b: rgba(247, 181, 0, .8); --st-bg: rgba(247, 181, 0, .22); }                               /* Superstar */
 .dsc-status.t5 { --st-c: var(--brand-300); --st-b: var(--brand); --st-bg: rgba(247, 181, 0, .32); }                                        /* Royalty */
 .dsc-status.t6 { --st-c: var(--on-lime); --st-b: var(--brand); --st-bg: var(--brand); font-weight: 900; }                                  /* Hall of Fame */
+
+/* ---------- Register: username rules checklist (live, driven by app.js) ---------- */
+.uname-rules { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: var(--r-md); background: var(--surface-2); font-size: .82rem; color: var(--text-2); }
+.uname-title { margin: 0 0 8px; font-weight: 800; color: var(--text); font-size: .84rem; }
+.uname-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.uname-list li { display: flex; align-items: flex-start; gap: 9px; line-height: 1.35; transition: color .15s; }
+.uname-list li > span:not(.mark) { flex: 1; min-width: 0; }
+.uname-list b { color: var(--text); font-weight: 800; }
+.uname-list .count { flex: none; margin-left: auto; font-style: normal; font-size: .74rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.uname-rules .mark { position: relative; flex: none; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid var(--dim); border-radius: 50%; transition: background .15s, border-color .15s; }
+.uname-rules .mark::after { content: ""; position: absolute; opacity: 0; transition: opacity .15s; }
+.uname-list li[data-state="ok"] { color: var(--text); }
+.uname-list li[data-state="ok"] .mark { background: var(--green); border-color: var(--green); }
+.uname-list li[data-state="ok"] .mark::after { opacity: 1; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.uname-list li[data-state="bad"] { color: var(--danger-ink); }
+.uname-list li[data-state="bad"] b { color: inherit; }
+.uname-list li[data-state="bad"] .mark { background: var(--danger-ink); border-color: var(--danger-ink); }
+.uname-list li[data-state="bad"] .mark::after { opacity: 1; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; box-shadow: none; transform: rotate(45deg); }
+.uname-list li[data-state="bad"] .mark::before { content: ""; position: absolute; left: 6px; top: 2.5px; width: 2px; height: 9px; background: #fff; border-radius: 2px; transform: rotate(-45deg); }
+.uname-list li[data-state="pending"] .mark { border-color: var(--warn); }
+.uname-rules code { padding: 1px 6px; border-radius: 6px; background: var(--card-flat); border: 1px solid var(--border-soft); color: var(--text); font: 700 .78rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.uname-eg { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--border); line-height: 1.9; }
+.uname-eg b { color: var(--text); }
+.uname-note { margin: 8px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
+.uname-rules[data-valid="1"] { border-color: var(--green); }
+@media (prefers-reduced-motion: reduce) { .uname-rules *, .uname-rules .mark { transition: none; } }
