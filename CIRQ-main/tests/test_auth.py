@@ -195,3 +195,21 @@ def test_auto_approval_cron_endpoint_requires_secret_and_runs_job(app, db, mk):
     assert client.post("/admin/internal/auto-approve-pending").status_code == 403
     response = client.post("/admin/internal/auto-approve-pending", headers={"Authorization": "Bearer cron-secret"})
     assert response.status_code == 200 and response.get_json() == {"approved": 1}
+
+
+def test_instant_approval_sends_new_accounts_straight_to_the_app(client, db, school, app):
+    app.config["INSTANT_APPROVAL"] = True
+    r = reg(client, school)
+    assert r.status_code == 302
+    p = db.data["profiles"][0]
+    assert p["account_status"] == "approved" and p["approval_source"] == "system"
+    assert any(row["reason"] == "welcome" for row in db.data["coin_ledger"])          # welcome coins granted exactly once
+    assert client.get("/recovery-code").status_code == 200                              # recovery code is still shown first
+    assert client.get("/home", follow_redirects=False).status_code != 302 or "/pending" not in client.get("/home").headers.get("Location", "")
+
+
+def test_instant_approval_skips_flagged_domains(client, db, school, app):
+    app.config["INSTANT_APPROVAL"] = True
+    app.config["AUTO_APPROVAL_BLOCKED_EMAIL_DOMAINS"] = ["example.com"]
+    reg(client, school)
+    assert db.data["profiles"][0]["account_status"] == "pending"
