@@ -1094,6 +1094,7 @@
     }
     let refreshBusy = false;
     async function refreshNewReels(retry = false) {
+      if (reels.dataset.shuffle === "1") return;                              // shuffled feed: there is no "newer reels" list to poll
       if (refreshBusy || busy || (document.hidden && !retry)) return;
       refreshBusy = true; if (refreshError) refreshError.hidden = true;
       try {
@@ -1131,7 +1132,7 @@
     reels.addEventListener("click", (e) => {
       if (e.target.closest("[data-reels-refresh-retry]")) refreshNewReels(true);
     });
-    window.setInterval(() => refreshNewReels(), 30000);
+    if (reels.dataset.shuffle !== "1") window.setInterval(() => refreshNewReels(), 30000);
   }
 
   /* ---------- reel composer: preview, validation, real upload progress ---------- */
