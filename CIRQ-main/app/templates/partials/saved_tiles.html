@@ -3,7 +3,8 @@
 {% for p in posts %}{% set md = (p.media|first) if p.media else none %}
 <div class="saved-tile {{ 'is-reel' if p.kind == 'reel' }}" data-saved-tile>
   <a class="saved-link" href="{{ url_for('feed.detail', post_id=p.id) }}" aria-label="{{ 'Reel' if p.kind == 'reel' else 'Post' }} by {{ p.author.username }}{% if p.caption %}: {{ p.caption|truncate(70) }}{% endif %}">
-    {% if md and md.media_type == 'video' %}<img src="{{ media_src(md, 420, thumb=True) }}" alt="" loading="lazy">
+    {% if md and md.media_type == 'video' and md.delivery_type == 'r2' %}<video src="{{ media_src(md) }}#t=0.1" preload="metadata" muted playsinline tabindex="-1" aria-hidden="true"></video>
+    {% elif md and md.media_type == 'video' %}<img src="{{ media_src(md, 420, thumb=True) }}" alt="" loading="lazy">
     {% elif md %}<img src="{{ media_src(md, 420) }}" alt="" loading="lazy">
     {% else %}<span class="saved-text">{{ (p.caption or '')|truncate(120) }}</span>{% endif %}
     <span class="saved-shade" aria-hidden="true"></span>
