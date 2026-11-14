@@ -251,4 +251,10 @@ def run_cleanup():
         old_signals = recommender.cleanup_old_signals()
     except Exception:
         old_signals = 0
-    return f"removed {len(expired)} expired stories; expired {len(stale)} reset tokens; pruned {old_signals} old viewing signals"
+    try:
+        from app.services import event_chat
+        closed_chats = event_chat.expire_due(force=True)
+    except Exception:
+        closed_chats = 0
+    return (f"removed {len(expired)} expired stories; expired {len(stale)} reset tokens; pruned {old_signals} old viewing signals; "
+            f"closed {closed_chats} finished event chats")
