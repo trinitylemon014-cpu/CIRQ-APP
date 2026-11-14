@@ -1,0 +1,4 @@
+{% import 'partials/macros.html' as m with context %}
+{% for u, at in people %}<a class="person liker" href="{{ url_for('profiles.view', username=u.username) }}">{{ m.avatar(u, 44) }}<div class="grow"><b>{{ u.display_name }}{{ m.verified(u) }}</b><br><small class="dim">@{{ u.username }} · {{ at|ago }}</small></div></a>
+{% else %}{% if first %}<div class="likers-empty">{{ m.icon('eye') }}<b>No viewers yet</b><small class="muted">People show up here after they watch your reel for a few seconds.</small></div>{% endif %}{% endfor %}
+{% if next %}<span data-next="{{ next }}" hidden></span>{% endif %}
