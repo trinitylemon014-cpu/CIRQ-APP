@@ -47,8 +47,10 @@ services:
         value: false          # keep false until legal / payment / child-safety review is complete
       - key: LIVE_ENABLED
         value: true
-      - key: LIVE_ELIGIBILITY        # verified = verified-badge or admin-granted hosts only (safe default); approved = any approved student (testing)
-        value: verified
+      - key: LIVE_ELIGIBILITY        # anyone = every approved account may go live; approved = also needs verified email; verified = verified badge or admin grant
+        value: anyone
+      - key: INSTANT_APPROVAL        # true = new accounts reach the home page immediately (no admin wait); false = old review flow
+        value: true
       - key: LIVEKIT_URL             # e.g. wss://your-project.livekit.cloud  (from your LiveKit project; leave empty until you have one)
         sync: false
       - key: LIVEKIT_API_KEY
