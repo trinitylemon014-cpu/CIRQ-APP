@@ -1,3 +1,5 @@
+import time
+
 from flask import Blueprint, render_template, request, g, current_app
 from app.decorators import login_required
 from app.extensions import db
@@ -5,6 +7,18 @@ from app.services import supabase_service as sb, social, discovery
 from app.utils import iso, normalize_username
 
 bp = Blueprint("discover", __name__)
+_schools_cache = {"at": 0.0, "rows": None}
+
+
+def _all_schools():
+    """The school list for the filter dropdown. It almost never changes, so each worker keeps it for 2 minutes."""
+    ttl = 0 if current_app.testing else 120
+    if ttl and _schools_cache["rows"] is not None and time.monotonic() - _schools_cache["at"] < ttl:
+        return _schools_cache["rows"]
+    rows = sb.select("schools", order="name", desc=False)
+    if ttl:
+        _schools_cache.update(at=time.monotonic(), rows=rows)
+    return rows
 
 
 def _escape_like(q):
@@ -24,7 +38,7 @@ def index():
         if request.args.get("more") and acct["mode"] == "results":     # "Load more": just the next batch of cards
             return render_template("discover/_cards.html", acct=acct)
         if request.args.get("partial"):                                 # live search / chips: swap the body without a page load
-            return render_template("discover/_accounts.html", acct=acct, all_schools=sb.select("schools", order="name", desc=False))
+            return render_template("discover/_accounts.html", acct=acct, all_schools=_all_schools())
     elif tab == "schools":
         query = db().table("schools").select("*").order("name").limit(60)
         if q:
@@ -42,6 +56,6 @@ def index():
         if q:
             query = query.ilike("title", f"%{_escape_like(q)}%")
         events = [e for e in (query.execute().data or []) if e["visibility"] == "public" or e.get("school_id") == me.get("school_id")]
-    all_schools = sb.select("schools", order="name", desc=False)
+    all_schools = _all_schools()
     return render_template("discover/index.html", tab=tab, q=q, acct=acct, people=people, schools=schools, posts=posts, events=events,
                            all_schools=all_schools, sel_school=request.args.get("school", ""))
