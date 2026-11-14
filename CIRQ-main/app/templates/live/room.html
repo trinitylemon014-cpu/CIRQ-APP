@@ -1,0 +1,51 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<div class="lr" id="lr" data-sid="{{ sid }}" data-host="{{ host.username }}" data-is-host="{{ '1' if is_host else '0' }}" data-index="{{ url_for('live.index') }}" data-dashboard="{{ url_for('live.dashboard') }}">
+  <section class="lr-stage" aria-label="Live video">
+    <div class="lr-top">
+      <span class="lv-av" id="lr-hav"></span>
+      <div class="grow"><b id="lr-title">{{ title }}</b><small id="lr-sub">@{{ host.username }}</small></div>
+      <button class="lr-ib" type="button" id="lr-follow" hidden>Follow</button>
+      <span class="lv-pill" id="lr-count" aria-live="polite">0 watching</span>
+      <button class="lr-ib" type="button" id="lr-viewers" aria-label="Who's watching">{{ m.icon('users','i-sm') }}</button>
+      <button class="lr-ib" type="button" id="lr-close" aria-label="Leave live">{{ m.icon('x','i-sm') }}</button>
+    </div>
+    <div class="lr-pk" id="lr-pk"><div class="lr-pkbar"><span class="a" id="lr-pka">0</span><span class="b" id="lr-pkb">0</span></div>
+      <div class="lr-pkmeta"><span id="lr-pkna"></span><b id="lr-pktime"></b><span id="lr-pknb"></span></div></div>
+    <div class="lr-media" id="lr-media"><div class="lr-tile" id="lr-main"><div class="lr-ph" id="lr-ph"><div><span class="lv-av" id="lr-phav"></span><p id="lr-phtxt">Connecting…</p></div></div></div></div>
+    <div class="lr-guests" id="lr-guests"></div>
+    <div class="lr-pkresult" id="lr-pkresult" role="status"></div>
+    <div class="lr-reacts" id="lr-reacts" aria-hidden="true"></div>
+    <div class="lr-fx" id="lr-fx" aria-hidden="true"></div>
+    <div class="lr-banner" id="lr-banner"></div>
+    <div class="lr-ended" id="lr-ended"><div><h2>This live has ended</h2><p class="muted" id="lr-ended-txt">Thanks for watching.</p><a class="btn" href="{{ url_for('live.index') }}">Back to Live</a>{% if is_host %} <a class="btn ghost" href="{{ url_for('live.dashboard') }}">See earnings</a>{% endif %}</div></div>
+  </section>
+  <aside class="lr-side">
+    <div class="card lr-chatbox">
+      <div class="lr-pinned" id="lr-pinned">{{ m.icon('pin','i-sm') }}<span id="lr-pintext"></span><button class="lr-ib" type="button" id="lr-unpin" hidden aria-label="Unpin">{{ m.icon('x','i-sm') }}</button></div>
+      <div class="lr-chat" id="lr-chat" role="log" aria-live="polite" aria-label="Live chat"></div>
+      <button class="btn sm lr-newmsg" type="button" id="lr-newmsg">New messages ↓</button>
+      <form class="lr-compose" id="lr-form" autocomplete="off">
+        <input id="lr-input" type="text" maxlength="300" placeholder="Say something…" aria-label="Chat message" enterkeyhint="send">
+        <button class="lr-ib" type="submit" aria-label="Send message">{{ m.icon('send','i-sm') }}</button>
+        <button class="lr-ib" type="button" id="lr-react" aria-label="Send a reaction">❤️</button>
+        {% if not is_host %}<button class="lr-ib on" type="button" id="lr-giftbtn" aria-label="Send a gift">{{ m.icon('gift','i-sm') }}</button>{% endif %}
+      </form>
+    </div>
+    <div class="lr-actions">
+      {% if is_host %}<button class="btn sm" type="button" id="lr-ctl">{{ m.icon('sliders','i-sm') }} Host controls</button><button class="btn sm danger" type="button" id="lr-end">End live</button>
+      {% else %}<button class="btn sm ghost" type="button" id="lr-askguest" hidden>Ask to join</button><button class="btn sm ghost" type="button" id="lr-leaveguest" hidden>Leave stage</button><button class="btn sm ghost" type="button" id="lr-report">{{ m.icon('flag','i-sm') }} Report</button>{% endif %}
+      <button class="btn sm ghost" type="button" id="lr-audio" hidden>{{ m.icon('volume','i-sm') }} Tap to hear</button>
+      <span class="chip" id="lr-balance" {% if is_host %}hidden{% endif %}></span>
+    </div>
+  </aside>
+</div>
+<dialog class="lr-sheet" id="lr-sheet" aria-labelledby="lr-sheet-title"><div class="in"><h3><span id="lr-sheet-title"></span><button class="lr-ib" type="button" id="lr-sheet-x" aria-label="Close">{{ m.icon('x','i-sm') }}</button></h3><div id="lr-sheet-body"></div></div></dialog>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/livekit-client.umd.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/live-gifts.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/live.js') }}" defer></script>
+{% endblock %}
