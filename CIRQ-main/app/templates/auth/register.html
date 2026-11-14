@@ -3,7 +3,19 @@
 <div class="auth-shell"><div class="auth-split"><aside class="auth-art"><img src="{{ url_for('static', filename='images/auth-register.jpg') }}" alt=""><span class="tag">Your school. Your people. Your talent.</span></aside><div class="auth-card card" style="padding:26px">
   <div class="auth-logo">{{ m.brand_tile('xl') }}<h1 style="margin-top:14px;font-size:2rem">Join CIRQ</h1><p class="muted">Get <b class="coin" style="display:inline-flex">{{ config.WELCOME_COINS }} app coins</b> when your account is approved</p></div>
   <form method="post" novalidate>{{ m.csrf() }}
-    {{ m.field('username', 'Username', value=form.get('username',''), placeholder='letters, numbers, . or _', autocomplete='username', hint='3-24 characters. This is what you log in with.') }}
+    <label for="f-username">Username</label>
+    <input class="input" id="f-username" name="username" type="text" value="{{ form.get('username','') }}" placeholder="e.g. amy.k_22" required autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="30" aria-describedby="username-rules" data-username-input>
+    <div class="uname-rules" id="username-rules" data-username-rules>
+      <p class="uname-title">Your username must:</p>
+      <ul class="uname-list">
+        <li data-rule="length"><span class="mark" aria-hidden="true"></span><span>Be <b>3 to 24 characters</b> long</span><em class="count" data-username-count>0/24</em></li>
+        <li data-rule="chars"><span class="mark" aria-hidden="true"></span><span>Use only <b>letters</b>, <b>numbers</b>, dots <code>.</code> and underscores <code>_</code> (no spaces, no <code>@</code>, no other symbols)</span></li>
+        <li data-rule="edges"><span class="mark" aria-hidden="true"></span><span><b>Start and end</b> with a letter or number</span></li>
+        <li data-rule="repeat"><span class="mark" aria-hidden="true"></span><span>Not have two dots <code>..</code> or two underscores <code>__</code> in a row</span></li>
+      </ul>
+      <p class="uname-eg"><b>Good:</b> <code>amy.k</code> <code>king_martin22</code> <code>jo2024</code><br><b>Not allowed:</b> <code>_amy</code> <code>amy.</code> <code>amy..k</code> <code>amy k</code> <code>amy@k</code></p>
+      <p class="uname-note">Capital letters are fine, they are saved in lowercase. Each username is unique, so if yours is taken you will be asked to pick another. This is what you log in with.</p>
+    </div>
     {{ m.field('display_name', 'Your name', value=form.get('display_name',''), placeholder='Name shown on your profile', autocomplete='name') }}
     {{ m.field('email', 'Email', 'email', form.get('email',''), 'you@example.com', autocomplete='email', hint='Private. Used only to recover your account.') }}
     <label for="f-school-choice">School</label>
