@@ -46,6 +46,8 @@ def _tick_read_at(cid):
         return False
     for m in sb.select("conversation_members", conversation_id=cid):
         if m["user_id"] != g.user["id"]:
+            if social.is_blocked(g.user["id"], m["user_id"]):
+                return "blocked"                    # a blocked contact never sees 'seen', and you never see theirs
             return parse_dt(m["last_read_at"])
     return False
 
@@ -56,7 +58,7 @@ def _set_ticks(msgs, cid):
         return
     for m in msgs:
         if m["sender_id"] == g.user["id"]:
-            m["tick"] = messaging.tick_state(m, read_at)
+            m["tick"] = "sent" if read_at == "blocked" else messaging.tick_state(m, read_at)
 
 
 def _drop_hidden(rows):
@@ -127,17 +129,18 @@ def inbox():
             others[c["id"]] = other_id
     people = sb.by_id("profiles", list(others.values()))
     hidden = social.blocked_between(me)
+    i_blocked = {r["blocked_id"] for r in sb.select("blocks", blocker_id=me)}
     items = []
     q = (request.args.get("q") or "").strip().lower()
     for c in convs:
         other = people.get(others.get(c["id"]))
-        if c["kind"] == "dm" and (not other or other["id"] in hidden):
+        if c["kind"] == "dm" and (not other or (other["id"] in hidden and other["id"] not in i_blocked)):
             continue
         title = other["display_name"] if other else (c["title"] or "Group")
         if q and q not in title.lower() and q not in (other["username"] if other else ""):
             continue
-        items.append({"conv": c, "title": title, "other": other, "last": last.get(c["id"]), "unread": unread.get(c["id"], 0),
-                      "snippet": _snippet(last.get(c["id"]), me)})
+        items.append({"conv": c, "title": title, "other": other, "last": last.get(c["id"]), "unread": 0 if (other and other["id"] in i_blocked) else unread.get(c["id"], 0),
+                      "blocked": bool(other and other["id"] in i_blocked), "snippet": _snippet(last.get(c["id"]), me)})
     items.sort(key=lambda i: i["last"]["created_at"] if i["last"] else i["conv"]["created_at"], reverse=True)
     return render_template("messages/inbox.html", items=items, q=q)
 
@@ -178,17 +181,21 @@ def thread(cid):
     messaging.mark_delivered(me, [cid])
     sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=me)
     db().table("notifications").update({"read_at": iso()}).eq("user_id", me).eq("kind", "message").eq("ref_id", cid).is_("read_at", "null").execute()
-    other, members, can_send = None, [], True
+    other, members, can_send, block_state = None, [], True, None
     if conv["kind"] == "dm":
         other = sb.get("profiles", id=[x for x in conv["dm_key"].split(":") if x != me][0])
         can_send = bool(other) and social.can_message(g.user, other)
+        if other and sb.get("blocks", blocker_id=me, blocked_id=other["id"]):
+            block_state = "i_blocked"
+        elif other and sb.get("blocks", blocker_id=other["id"], blocked_id=me):
+            block_state = "blocked_me"
     else:
         members = list(sb.by_id("profiles", [m["user_id"] for m in sb.select("conversation_members", conversation_id=cid)]).values())
     if request.args.get("partial"):
         return render_template("messages/_bubbles.html", msgs=msgs)
     mine = _membership(cid, me) or {}
     return render_template("messages/thread.html", conv=conv, msgs=msgs, other=other, members=members, more=more,
-                           last_ts=msgs[-1]["created_at"] if msgs else "", can_send=can_send,
+                           last_ts=msgs[-1]["created_at"] if msgs else "", can_send=can_send, block_state=block_state,
                            disappear_after=mine.get("disappear_after") or 0, disappear_options=messaging.DISAPPEAR_OPTIONS,
                            disappear_label=messaging.DISAPPEAR_LABELS.get(mine.get("disappear_after") or 0, "Off"))
 
@@ -204,7 +211,8 @@ def send(cid):
         other_id = [m["user_id"] for m in members if m["user_id"] != me]
         other = sb.get("profiles", id=other_id[0]) if other_id else None
         if not other or social.is_blocked(me, other["id"]):
-            return jsonify(error="You can't message this person."), 403
+            mine = sb.get("blocks", blocker_id=me, blocked_id=other["id"]) if other else None
+            return jsonify(error="You blocked this contact. Unblock them to send messages." if mine else "You can't message this person."), 403
         if not social.can_message(g.user, other):
             return jsonify(error=f"@{other['username']} has a private account. Wait for them to approve your follow request."), 403
     body = clean_text(request.form.get("body"), 2000)
@@ -364,9 +372,66 @@ def poll(cid):
     if ids and read_at is not False:
         mine = db().table("messages").select("id,created_at,delivered_at").eq("conversation_id", cid) \
             .eq("sender_id", g.user["id"]).in_("id", ids).execute().data or []
-        ticks = {m["id"]: messaging.tick_state(m, read_at) for m in mine}
+        ticks = {m["id"]: "sent" if read_at == "blocked" else messaging.tick_state(m, read_at) for m in mine}
     return jsonify(html=render_template("messages/_bubbles.html", msgs=rows) if rows else "",
                    ts=rows[-1]["created_at"] if rows else after, ticks=ticks)
+
+
+def _dm_other(conv):
+    """The other person in a one-to-one chat (404 for group chats: block/report here are for contacts)."""
+    if conv["kind"] != "dm":
+        abort(404)
+    other_id = next((x for x in conv["dm_key"].split(":") if x != g.user["id"]), None)
+    other = sb.get("profiles", id=other_id) if other_id else None
+    if not other:
+        abort(404)
+    return other
+
+
+@bp.post("/<cid>/block")
+@login_required
+@limiter.limit("60 per hour", key_func=lambda: g.user["id"])
+def block_contact(cid):
+    """Block or unblock the person in this chat (WhatsApp style). History stays here; sending stops both ways."""
+    other = _dm_other(_conv_or_404(cid))
+    if request.form.get("action") == "unblock":
+        social.unblock_user(g.user["id"], other["id"])
+        flash(f"Unblocked @{other['username']}.", "info")
+    else:
+        social.block_user(g.user["id"], other["id"])
+        flash(f"Blocked @{other['username']}. They can't message you or see when you're online.", "success")
+    return redirect(url_for("messages.thread", cid=cid))
+
+
+@bp.post("/<cid>/report")
+@login_required
+@limiter.limit("20 per hour", key_func=lambda: g.user["id"])
+def report_contact(cid):
+    """Report the person in this chat. Moderators also get their last 5 messages to you as evidence, and you
+    can block them in the same step. The reported person is never told."""
+    other = _dm_other(_conv_or_404(cid))
+    me = g.user["id"]
+    reason = request.form.get("reason", "other")
+    if reason not in ("harassment", "spam", "inappropriate", "impersonation", "unsafe", "other"):
+        reason = "other"
+    details = clean_text(request.form.get("details"), 440)
+
+    def file(target_type, target_id, note=None):
+        if not sb.get("reports", reporter_id=me, target_type=target_type, target_id=target_id):
+            sb.insert("reports", {"reporter_id": me, "target_type": target_type, "target_id": target_id,
+                                  "reason": reason, "details": note})
+
+    file("profile", other["id"], ("Reported from chat. " + (details or "")).strip())
+    recent = db().table("messages").select("id").eq("conversation_id", cid).eq("sender_id", other["id"]) \
+        .order("created_at", desc=True).limit(5).execute().data or []
+    for row in recent:
+        file("message", row["id"], "Included with a chat report.")
+    blocked = False
+    if request.form.get("also_block"):
+        social.block_user(me, other["id"])
+        blocked = True
+    msg = "Thanks. Our moderators will review this report." + (f" @{other['username']} is blocked." if blocked else "")
+    return jsonify(ok=True, message=msg, blocked=blocked)
 
 
 @bp.post("/delivered")
