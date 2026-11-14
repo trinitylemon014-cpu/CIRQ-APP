@@ -1,8 +1,8 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Home{% endblock %}
 {% block content %}
 <div class="tray" aria-label="Stories">
-  <button class="tray-item tray-add" type="button" data-open="story-sheet" aria-label="Add to your story"><span class="tray-me">{{ m.avatar(cur, 66, ring=True) }}<span class="tray-plus">{{ m.icon('plus') }}</span></span><span class="name">Your story</span></button>
-  {% for t in tray %}<button class="tray-item {{ 'seen' if t.unseen == 0 }}" type="button" data-story="{{ t.author.username }}">{{ m.avatar(t.author, 66, ring=True) }}<span class="name">{{ 'You' if t.author.id == cur.id else t.author.username }}</span></button>{% endfor %}
+  <button class="tray-item tray-add" type="button" data-open="story-sheet" aria-label="Add to your story"><span class="tray-me">{{ m.avatar(cur, 66) }}<span class="tray-plus">{{ m.icon('plus') }}</span></span><span class="name">Your story</span></button>
+  {% for t in tray %}<button class="tray-item {{ 'seen' if t.unseen == 0 }}" type="button" data-story="{{ t.author.username }}">{{ m.avatar(t.author, 66, ring=(t.author.id != cur.id)) }}<span class="name">{{ 'You' if t.author.id == cur.id else t.author.username }}</span></button>{% endfor %}
 </div>
 
 <nav class="feed-tabs" aria-label="Feed">
