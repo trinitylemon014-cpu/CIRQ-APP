@@ -4,6 +4,7 @@ import ipaddress
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, g, current_app, abort, jsonify
 from app.extensions import db, limiter, csrf
 from app.services import supabase_service as sb, auth_service, recovery_service
+from app.services import account_service
 from app.services.account_service import auto_approve_if_due, approve_account, send_verification_email
 from app.services.audit_service import audit
 from app.services.mail_service import send_mail
@@ -114,8 +115,7 @@ def register():
         pw, pw2 = f.get("password", ""), f.get("password2", "")
         errors = []
         if "@" in raw_username or not valid_username(username):
-            errors.append("Username: 3-24 characters, using only letters, numbers, dots or underscores (no spaces or @). "
-                          "It must start and end with a letter or number, with no \"..\" or \"__\" in a row.")
+            errors.append("Username: 3-24 characters; letters, numbers, dots or underscores only (no @).")
         elif sb.get("profiles", "id", username=username):
             errors.append("That username is taken.")
         if len(display) < 2:
@@ -177,10 +177,16 @@ def register():
             raise
         verification_sent = send_verification_email(uid, email)
         profile = sb.get("profiles", id=uid)
+        instant = account_service.approve_on_signup(profile)
+        if instant:
+            profile = sb.get("profiles", id=uid)
         _start_session(profile, False)
         session["email_verification_sent"] = bool(verification_sent)
         session["recovery_first_view"] = True            # the next page shows the new recovery code without asking for the password
-        flash("Account created! Verify your email to enable automatic approval after five minutes. An administrator may approve it sooner.", "success")
+        if instant:
+            flash("Welcome to CIRQ! Your account is ready. Verify your email when you can so you can recover your account.", "success")
+        else:
+            flash("Account created! Verify your email to enable automatic approval after five minutes. An administrator may approve it sooner.", "success")
         return redirect(url_for("auth.recovery_code"))
     return render_template("auth/register.html", schools=schools, form=form)
 
