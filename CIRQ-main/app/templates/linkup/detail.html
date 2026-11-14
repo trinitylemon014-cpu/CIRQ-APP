@@ -9,13 +9,18 @@
   {% if school %}<p class="row muted">{{ m.icon('school','i-sm') }} {{ school.name }}</p>{% endif %}
   <div class="row"><span class="muted">Hosted by</span><a class="row" href="{{ url_for('profiles.view', username=host.username) }}">{{ m.avatar(host, 30) }}<b>@{{ host.username }}</b>{{ m.verified(host) }}</a></div>
   {% if e.description %}<p style="margin-top:14px;white-space:pre-wrap">{{ e.description }}</p>{% endif %}
-  {% if attendees %}<div class="row" style="margin:10px 0">{% for a in attendees %}<a href="{{ url_for('profiles.view', username=a.username) }}" title="@{{ a.username }}">{{ m.avatar(a, 34) }}</a>{% endfor %}</div>{% endif %}
+  <section class="going-box" aria-label="Who's going">
+    <div class="row between"><b>Who's going</b><a class="link small" href="{{ url_for('linkup.going', event_id=e.id) }}">See everyone ({{ going_count }})</a></div>
+    {% if people %}<div class="going-list">{% for a in people %}<a class="going-person" href="{{ url_for('profiles.view', username=a.username) }}" title="@{{ a.username }}">{{ m.avatar(a, 40) }}<span>{{ a.display_name.split(' ')[0] }}</span></a>{% endfor %}{% if more_going %}<a class="going-person going-more" href="{{ url_for('linkup.going', event_id=e.id) }}"><span class="going-plus">+{{ more_going }}</span><span>more</span></a>{% endif %}</div>
+    {% else %}<p class="muted small" style="margin:6px 0 0">Nobody has joined yet. Be the first!</p>{% endif %}
+  </section>
   {% if e.status == 'scheduled' %}
   <form method="post" action="{{ url_for('linkup.rsvp', event_id=e.id) }}" class="row wrap" style="margin-top:14px">{{ m.csrf() }}
     <button class="btn grow" name="status" value="going" {{ 'disabled' if rsvp and rsvp.status == 'going' }}>{{ m.icon('check','i-sm') }} {{ "You're going" if rsvp and rsvp.status == 'going' else 'Going' }}</button>
     <button class="btn ghost grow" name="status" value="interested">{{ 'Interested ✓' if rsvp and rsvp.status == 'interested' else 'Interested' }}</button>
     {% if rsvp %}<button class="btn ghost" name="status" value="none">Remove RSVP</button>{% endif %}</form>
   {% endif %}
+  {% if e.conversation_id %}<p class="muted small event-chat-note">{{ m.icon('message','i-sm') }} {% if rsvp and rsvp.status == 'going' %}You're in the event chat with {{ chat_members }} {{ 'person' if chat_members == 1 else 'people' }}.{% else %}Tap <b>Going</b> to join the event group chat ({{ chat_members }} in it now).{% endif %} It closes after {{ chat_closes|event_dt }}.</p>{% endif %}
   <div class="row wrap" style="margin-top:12px">
     {% if e.conversation_id and rsvp and rsvp.status == 'going' %}<a class="btn ghost sm" href="{{ url_for('messages.thread', cid=e.conversation_id) }}">{{ m.icon('message','i-sm') }} Event chat</a>{% endif %}
     <button class="btn ghost sm" type="button" data-copy="{{ share_url }}">{{ m.icon('share','i-sm') }} Share</button>
