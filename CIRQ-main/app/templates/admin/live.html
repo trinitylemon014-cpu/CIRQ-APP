@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Live admin{% endblock %}
+{% block content %}<h1 class="page-title">Live</h1>{% include 'admin/_nav.html' %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<div class="lv-note {{ '' if provider_ready else 'warn' }}">{{ m.icon('radio') }}<span>Streaming provider (LiveKit): <b>{{ 'connected (credentials present)' if provider_ready else 'NOT configured, nobody can go live' }}</b>. Who may host: <b>{{ eligibility }}</b> {{ '(verified badge or granted access)' if eligibility == 'verified' else '(any approved student, testing mode)' }}.</span></div>
+<div class="section-title"><h2>Live hosting access</h2></div>
+<form class="card" method="post" action="{{ url_for('live.admin_live_grant') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">{{ m.csrf() }}
+  <input type="text" name="username" placeholder="username" aria-label="Username" required style="flex:1;min-width:160px;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);color:var(--text)">
+  <button class="btn sm" name="grant" value="1">Allow to go live</button><button class="btn sm ghost" name="grant" value="0">Revoke</button></form>
+{% if granted %}<p class="lv-explain">Granted: {% for u in granted %}<a href="{{ url_for('profiles.view', username=u.username) }}">@{{ u.username }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+<div class="section-title"><h2>Open reports ({{ reports|length }})</h2></div>
+{% if reports %}<div class="card lv-scroll"><table class="lv-table"><thead><tr><th>When</th><th>Reason</th><th>Reporter</th><th>About</th><th>Details</th><th></th></tr></thead><tbody>
+{% for r in reports %}<tr><td>{{ r.created_at|ago }}</td><td>{{ r.reason }}</td><td>@{{ people[r.reporter_id].username if people[r.reporter_id] else '?' }}</td><td>{{ ('@' ~ people[r.target_user_id].username) if r.target_user_id and people[r.target_user_id] else 'the live' }}</td><td>{{ r.details or '' }}<br><a href="{{ url_for('live.room', sid=r.session_id) }}">Open live</a></td>
+<td><form method="post" action="{{ url_for('live.admin_live_report_resolve', rid=r.id) }}" style="display:flex;gap:6px">{{ m.csrf() }}<button class="btn sm" name="status" value="actioned">Actioned</button><button class="btn sm ghost" name="status" value="dismissed">Dismiss</button></form></td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="card flat"><p class="muted" style="margin:0">No open reports.</p></div>{% endif %}
+<div class="section-title"><h2>Recent lives</h2></div>
+{% if sessions %}<div class="card lv-scroll"><table class="lv-table"><thead><tr><th>Host</th><th>Title</th><th>Status</th><th>Started</th><th class="lv-num">Peak</th><th class="lv-num">Gifts</th><th></th></tr></thead><tbody>
+{% for s in sessions %}<tr><td>@{{ hosts[s.host_id].username if hosts[s.host_id] else '?' }}</td><td>{{ s.title }}</td><td>{{ 'LIVE' if s.status == 'live' else (s.end_reason or 'ended') }}</td><td>{{ s.started_at|ago }}</td><td class="lv-num">{{ s.peak_viewers }}</td><td class="lv-num">{{ s.gifts_count }}</td>
+<td>{% if s.status == 'live' %}<form method="post" action="{{ url_for('live.admin_live_end', sid=s.id) }}">{{ m.csrf() }}<button class="btn sm danger">End</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="card flat"><p class="muted" style="margin:0">No lives yet.</p></div>{% endif %}
+{% endblock %}
