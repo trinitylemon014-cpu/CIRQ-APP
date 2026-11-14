@@ -1,9 +1,9 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Reels{% endblock %}
 {% block content %}
-<div class="row between reel-head" style="margin-bottom:12px"><div><h1 class="page-title" style="margin:0">Reels</h1><p class="muted small" style="margin:4px 0 0">New reels appear first. Older reels stay here until their creator deletes them.</p></div><button class="btn sm" type="button" data-open="reel-create-dialog">{{ m.icon('plus','i-sm') }} New reel</button></div>
+<div class="row between reel-head" style="margin-bottom:12px"><div><h1 class="page-title" style="margin:0">Reels</h1><p class="muted small" style="margin:4px 0 0">A fresh mix every time you open Reels. Reels you've already watched come last.</p></div><button class="btn sm" type="button" data-open="reel-create-dialog">{{ m.icon('plus','i-sm') }} New reel</button></div>
 <div class="reel-loading-banner" data-reels-loading-banner role="status" aria-live="polite" hidden>{{ m.icon('loader') }} Loading more reels…</div>
 <div class="reel-wrap" data-comments-host>
-<div class="reels" id="reels" data-more-url="{{ url_for('reels.index') }}" data-cursor="{{ cursor or '' }}" data-newest="{{ newest or '' }}">
+<div class="reels" id="reels" data-more-url="{{ url_for('reels.index') }}" data-cursor="{{ cursor or '' }}" data-newest="{{ newest or '' }}" data-shuffle="1">
   {% if reels or sponsored_ad %}{% include 'reels/_items.html' %}{% endif %}
   {% if not reels %}<div class="card empty reel-empty" data-reels-empty>{{ m.icon('film') }}<h3>No reels yet</h3><p>Be the first to upload a short vertical video.</p><button class="btn" type="button" data-open="reel-create-dialog">Upload a reel</button></div>{% endif %}
   <div class="reel-feed-status" data-reels-loading role="status" aria-live="polite" hidden>{{ m.icon('loader') }} Loading more reels…</div>
