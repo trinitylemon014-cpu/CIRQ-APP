@@ -83,14 +83,18 @@ def feature_on():
 
 # ------------------------------------------------------------------ eligibility
 def can_host(p):
-    """(ok, message). Hosting needs an approved, email-verified account plus admin trust (verified badge or a live-access grant)."""
+    """(ok, message). LIVE_ELIGIBILITY=anyone (default): every approved account may go live. approved: also needs a verified email.
+    verified: email verified plus a verified badge or an admin live-access grant."""
     if not feature_on():
         return False, "CIRQ LIVE is switched off right now."
     if p.get("account_status") != "approved":
         return False, "Your account must be approved before you can go live."
+    mode = cfg("LIVE_ELIGIBILITY")
+    if mode == "anyone":
+        return True, ""
     if not p.get("email_verified_at"):
         return False, "Verify your email address before going live."
-    if cfg("LIVE_ELIGIBILITY") == "approved" or p.get("verified") or p.get("live_host_granted") or p.get("role") == "admin":
+    if mode == "approved" or p.get("verified") or p.get("live_host_granted") or p.get("role") == "admin":
         return True, ""
     return False, "Going live is available to verified creators. Ask a CIRQ admin to enable live access for your account."
 
