@@ -13,7 +13,9 @@ def _finish_approval(user_id, username, source, actor_id=None):
     coin_service.award(user_id, coins, "welcome", "welcome",
                        message=f"Welcome to CIRQ! You've got {coins} app coins.")
     notify(user_id, "account", body="Your CIRQ account has been approved. Welcome in!", dedupe=False)
-    if source == "system":
+    if source == "signup":
+        audit(None, "user_approved_on_signup", "profile", user_id, username=username)
+    elif source == "system":
         admins = sb.select("profiles", "id", role="admin", account_status="approved")
         for admin in admins:
             notify(admin["id"], "account", ref_type="auto_approved_account", ref_id=user_id,
@@ -84,3 +86,14 @@ def send_verification_email(user_id, email):
     link = f"{current_app.config['APP_BASE_URL']}/verify-email/{token}"
     return send_mail(email, "Verify your CIRQ email",
                      f"Welcome to CIRQ!\n\nConfirm this email address to enable automatic account approval after the five-minute waiting period. You can also use it to recover your account if you forget your password:\n{link}\n\nThis link works once and expires in 48 hours. If you didn't sign up, ignore this email.")
+
+
+def approve_on_signup(profile):
+    """Instant approval for a brand-new account (INSTANT_APPROVAL). Accounts flagged by the blocked email-domain/IP lists still wait for review."""
+    if not current_app.config.get("INSTANT_APPROVAL") or profile.get("auto_approval_blocked") or profile.get("account_status") != "pending":
+        return False
+    values = {"account_status": "approved", "status_note": None, "approval_source": "system", "approved_at": iso(), "approved_by": None}
+    if not sb.update("profiles", values, id=profile["id"], account_status="pending"):
+        return False
+    _finish_approval(profile["id"], profile["username"], "signup")
+    return True
