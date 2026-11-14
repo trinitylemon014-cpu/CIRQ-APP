@@ -13,6 +13,20 @@ def blocked_between(uid):
     return mine | theirs
 
 
+def block_user(me, other_id):
+    """Block someone: no messages, no profile views, no follows either way. Safe to call twice."""
+    if not sb.get("blocks", blocker_id=me, blocked_id=other_id):
+        sb.insert("blocks", {"blocker_id": me, "blocked_id": other_id})
+    sb.delete("follows", follower_id=me, followee_id=other_id)
+    sb.delete("follows", follower_id=other_id, followee_id=me)
+    remove_follow_request(me, other_id)
+    remove_follow_request(other_id, me)
+
+
+def unblock_user(me, other_id):
+    sb.delete("blocks", blocker_id=me, blocked_id=other_id)
+
+
 def is_blocked(a, b):
     return bool(sb.get("blocks", blocker_id=a, blocked_id=b) or sb.get("blocks", blocker_id=b, blocked_id=a))
 
