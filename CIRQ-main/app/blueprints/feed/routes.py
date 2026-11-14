@@ -20,7 +20,8 @@ def _page_size():
 def feed_posts(uid, before=None):
     """Public posts + everything from people I follow (and me), newest first, cursor-paginated."""
     n = _page_size()
-    following = social.following_ids(uid) + [uid]
+    following, hidden = sb.parallel(lambda: social.following_ids(uid), lambda: social.blocked_between(uid))   # cached for the rest of the page
+    following = following + [uid]
     base = lambda q: (q.eq("kind", "post").eq("moderation_status", "ok").is_("community_id", "null")
                       .order("created_at", desc=True).limit(n + 1))
     from app.extensions import db
@@ -28,9 +29,9 @@ def feed_posts(uid, before=None):
     q2 = base(db().table("posts").select("*").in_("author_id", following))
     if before:
         q1, q2 = q1.lt("created_at", before), q2.lt("created_at", before)
-    merged = {p["id"]: p for p in (q1.execute().data or []) + (q2.execute().data or [])}
+    r1, r2 = sb.parallel(lambda: q1.execute().data or [], lambda: q2.execute().data or [])
+    merged = {p["id"]: p for p in r1 + r2}
     rows = sorted(merged.values(), key=lambda p: p["created_at"], reverse=True)
-    hidden = social.blocked_between(uid)
     has_more = len(rows) > n
     rows = rows[:n]
     cursor = rows[-1]["created_at"] if rows and has_more else None
@@ -94,24 +95,36 @@ def for_you_posts(user):
 def home():
     before = request.args.get("before")
     tab = "foryou" if request.args.get("feed") == "foryou" and not before else "home"
-    posts, cursor, for_you_empty = [], None, False
-    if tab == "foryou":
-        posts = for_you_posts(g.user)
-        if not posts:   # nothing new to recommend right now: show the normal feed rather than an empty tab
-            for_you_empty = True
-            posts, cursor = feed_posts(g.user["id"])
-    else:
-        posts, cursor = feed_posts(g.user["id"], before)
-        posts = with_suggestions(g.user, posts)
-    sponsored_ad = boost_ad_service.for_viewer(g.user["id"], before or "")
+    uid = g.user["id"]
+
+    def posts_part():
+        if tab == "foryou":
+            found = for_you_posts(g.user)
+            if found:
+                return found, None, False
+            fallback, cur = feed_posts(uid)   # nothing new to recommend right now: show the normal feed rather than an empty tab
+            return fallback, cur, True
+        found, cur = feed_posts(uid, before)
+        return with_suggestions(g.user, found), cur, False
+
+    sb.parallel(lambda: social.following_ids(uid), lambda: social.blocked_between(uid))      # looked up once, reused by everything below
     if request.args.get("partial"):
+        (posts, cursor, for_you_empty), sponsored_ad = sb.parallel(posts_part, lambda: boost_ad_service.for_viewer(uid, before or ""))
         return render_template("partials/post_list.html", posts=posts, cursor=cursor, sponsored_ad=sponsored_ad)
-    tray = story_tray(g.user["id"])
-    suggestions = [p for p in sb.select("profiles", account_status="approved", school_id=g.user.get("school_id"), limit=8)
-                   if p["id"] != g.user["id"] and not social.is_following(g.user["id"], p["id"])
-                   and not social.has_requested(g.user["id"], p["id"])][:4]
+    # the four parts of the page don't depend on each other, so they load at the same time
+    (posts, cursor, for_you_empty), sponsored_ad, tray, suggestions = sb.parallel(
+        posts_part, lambda: boost_ad_service.for_viewer(uid, before or ""), lambda: story_tray(uid), lambda: home_suggestions(g.user))
     return render_template("feed/home.html", posts=posts, cursor=cursor, tray=tray, suggestions=suggestions,
                            sponsored_ad=sponsored_ad, feed_tab=tab, for_you_empty=for_you_empty)
+
+
+def home_suggestions(user):
+    """'People you may know' at school: 4 approved students I don't follow and haven't asked. Two lookups, not two per person."""
+    uid = user["id"]
+    people, asked = sb.parallel(lambda: sb.select("profiles", account_status="approved", school_id=user.get("school_id"), limit=8),
+                                lambda: social.requested_ids(uid))
+    following = set(social.following_ids(uid))
+    return [p for p in people if p["id"] != uid and p["id"] not in following and p["id"] not in asked][:4]
 
 
 def _save_media(file, kind_folder, post_id, owner_id, allow_video=True):
