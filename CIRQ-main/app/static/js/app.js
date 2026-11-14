@@ -83,6 +83,20 @@
     setInterval(refreshPresence, 60000);
   }
 
+  /* delivery ticks: while the app is open, tell the server my messages have arrived (works even if I hide my active status) */
+  if (document.body.dataset.deliveryPing === "1") {
+    const pingDelivered = () => {
+      if (document.visibilityState !== "visible") return;
+      fetch("/messages/delivered", {
+        method: "POST", credentials: "same-origin",
+        headers: { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" },
+      }).catch(() => {});
+    };
+    pingDelivered();
+    setInterval(pingDelivered, 30000);
+    document.addEventListener("visibilitychange", pingDelivered);
+  }
+
   /* ---------- like counts live outside the like button so they can open the "who liked" list ---------- */
   function setLikeCount(id, n, like) {
     const own = like && $("[data-count]", like); if (own) own.textContent = n;
@@ -1391,11 +1405,30 @@
     setInterval(async () => {   // polling fallback (no websockets needed)
       if (document.hidden) return;
       try {
-        const r = await api(`${chat.dataset.poll}?after=${encodeURIComponent(last)}`, { method: "GET" });
+        const open = $$(".ticks:not(.read)", box).map((t) => t.dataset.tickId).slice(-60);      // my messages not yet seen
+        const r = await api(`${chat.dataset.poll}?after=${encodeURIComponent(last)}${open.length ? `&ids=${open.join(",")}` : ""}`, { method: "GET" });
         if (r.html) { box.insertAdjacentHTML("beforeend", r.html); last = r.ts; bottom(); watchChatMedia(box); }
+        const names = { sent: "Sent", delivered: "Delivered", read: "Seen" };
+        Object.entries(r.ticks || {}).forEach(([id, state]) => {
+          const t = box.querySelector(`.ticks[data-tick-id="${id}"]`);
+          if (t && !t.classList.contains(state)) { t.className = `ticks ${state}`; t.title = names[state]; t.setAttribute("aria-label", names[state]); }
+        });
       } catch (_) { /* transient */ }
     }, 4000);
     keepLast();
+
+    /* disappearing messages: saved as soon as an option is picked */
+    const dform = $("[data-disappear-form]"), dnote = $("[data-disappear-note]");
+    if (dform) dform.addEventListener("change", async (event) => {
+      if (event.target.name !== "seconds") return;
+      try {
+        const r = await api(dform.action, { body: new FormData(dform) });
+        dnote.hidden = !r.seconds;
+        $("[data-disappear-label]", dnote).textContent = r.label;
+        toast(r.seconds ? `New messages will disappear for you after ${r.label}.` : "Disappearing messages are off.", "ok");
+        dform.closest("dialog").close();
+      } catch (error) { toast(error.message, "error"); }
+    });
   }
 
   /* ---------- CIRQ FLIP (collectible student cards) ---------- */
