@@ -1,7 +1,6 @@
 import logging
 import os
 import click
-from flask_compress import Compress
 import httpx
 from urllib.parse import urlparse
 from flask import Flask, Response, g, session, render_template, request, jsonify, url_for, send_from_directory
@@ -65,25 +64,6 @@ def create_app(config_object=None, clients=None):
               notifications_bp, attachments_bp, games_bp, schools_bp, admin_bp, wallet_bp, lending_bp, trivia_bp, recs_bp, legal_bp):
         app.register_blueprint(b)
 
-    # ---- speed: gzip text responses, and let browsers keep CSS/JS/images instead of re-downloading them each visit
-    app.config.setdefault("COMPRESS_MIN_SIZE", 500)
-    Compress(app)
-    _static_version = {}
-
-    @app.url_defaults
-    def version_static_urls(endpoint, values):
-        """/static/css/style.css becomes /static/css/style.css?v=<file time>: a deploy changes the number, so a long cache is safe."""
-        filename = values.get("filename") if endpoint == "static" else None
-        if not filename or "v" in values:
-            return
-        if app.debug or filename not in _static_version:
-            try:
-                _static_version[filename] = int(os.path.getmtime(os.path.join(app.static_folder, filename)))
-            except OSError:
-                _static_version[filename] = 0
-        if _static_version[filename]:
-            values["v"] = _static_version[filename]
-
     @app.before_request
     def load_user():
         g.user = None
@@ -106,15 +86,14 @@ def create_app(config_object=None, clients=None):
         resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(self), camera=(self)")
         parsed_storage_url = urlparse(app.config.get("SUPABASE_URL", ""))
         storage_origin = f"{parsed_storage_url.scheme}://{parsed_storage_url.netloc}" if parsed_storage_url.netloc else ""
+        from app.services import r2_service
+        r2_origin = r2_service.public_origin()          # videos stored in Cloudflare R2 (empty when R2 isn't used)
         resp.headers.setdefault("Content-Security-Policy",
             f"default-src 'self'; img-src 'self' data: blob: https://res.cloudinary.com {storage_origin}; "
-            f"media-src 'self' blob: https://res.cloudinary.com {storage_origin}; frame-src 'self' {storage_origin}; "
+            f"media-src 'self' blob: https://res.cloudinary.com {storage_origin} {r2_origin}; frame-src 'self' {storage_origin}; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
-        if request.endpoint == "static" and resp.status_code == 200:
-            # versioned URLs (?v=...) never change content, so keep them for a year; unversioned ones for an hour
-            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable" if "v" in request.args else "public, max-age=3600"
-        elif g.get("user"):
+        if g.get("user"):
             resp.headers["Cache-Control"] = "no-store"
         return resp
 
@@ -130,10 +109,8 @@ def create_app(config_object=None, clients=None):
         def unread_msgs():
             if not g.get("user"):
                 return 0
-            if "_unread_msgs" not in g.__dict__:          # the nav asks several times per page: ask the database once
-                from app.blueprints.messages.routes import unread_total
-                g._unread_msgs = unread_total(g.user["id"])
-            return g._unread_msgs
+            from app.blueprints.messages.routes import unread_total
+            return unread_total(g.user["id"])
         def nav_items():
             if not g.get("user"):
                 return []
@@ -251,10 +228,4 @@ def run_cleanup():
         old_signals = recommender.cleanup_old_signals()
     except Exception:
         old_signals = 0
-    try:
-        from app.services import event_chat
-        closed_chats = event_chat.expire_due(force=True)
-    except Exception:
-        closed_chats = 0
-    return (f"removed {len(expired)} expired stories; expired {len(stale)} reset tokens; pruned {old_signals} old viewing signals; "
-            f"closed {closed_chats} finished event chats")
+    return f"removed {len(expired)} expired stories; expired {len(stale)} reset tokens; pruned {old_signals} old viewing signals"
