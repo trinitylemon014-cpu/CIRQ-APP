@@ -3,7 +3,9 @@
 <div class="chat-wrap" data-cid="{{ conv.id }}" data-poll="{{ url_for('messages.poll', cid=conv.id) }}" data-last="{{ last_ts }}">
   <div class="chat-head"><a class="icon-btn" href="{{ url_for('messages.inbox') }}" aria-label="Back">{{ m.icon('arrow-left') }}</a>
     {% if other %}<a class="row" href="{{ url_for('profiles.view', username=other.username) }}">{{ m.avatar(other, 'lg') }}<div><b>{{ other.display_name }}</b>{{ m.verified(other) }}<br><small class="muted">@{{ other.username }} · <span class="presence-text" data-presence-label data-user-id="{{ other.id }}" hidden></span></small></div></a>
-    {% else %}<span class="av" style="--s:44px">{{ m.icon('users') }}</span><div><b>{{ conv.title or 'Group chat' }}</b><br><small class="muted">{{ members|length }} members</small></div>{% endif %}</div>
+    {% else %}<span class="av" style="--s:44px">{{ m.icon('users') }}</span><div><b>{{ conv.title or 'Group chat' }}</b><br><small class="muted">{{ members|length }} members</small></div>{% endif %}
+    <button class="icon-btn" type="button" style="margin-left:auto" data-open="disappear-dialog" aria-label="Disappearing messages" title="Disappearing messages">{{ m.icon('clock') }}</button></div>
+  <div class="disappear-note" data-disappear-note {{ 'hidden' if not disappear_after }}>{{ m.icon('clock','i-sm') }} <span>Disappearing messages for you: <b data-disappear-label>{{ disappear_label }}</b></span></div>
   <div class="bubbles" id="bubbles" aria-live="polite">
     {% if more %}<a class="btn sm ghost" style="align-self:center" href="?before={{ more }}">Older messages</a>{% endif %}
     {% include 'messages/_bubbles.html' %}
@@ -31,6 +33,14 @@
   <div class="chat-locked">{{ m.icon('lock','i-sm') }}<span>{% if other %}@{{ other.username }} has a private account. You can send messages once they approve your follow request.{% else %}You can't send messages in this chat.{% endif %}</span></div>
   {% endif %}
 </div>
+<dialog id="disappear-dialog" class="disappear-dialog" aria-labelledby="disappear-title">
+  <div class="row between" style="margin-bottom:8px"><h2 id="disappear-title" style="margin:0">Disappearing messages</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
+  <p class="muted small" style="margin:0 0 12px">New messages in this chat will disappear for <b>you</b> after the time you pick. The other person's copy isn't touched, and messages already sent keep their current timer.</p>
+  <form data-disappear-form action="{{ url_for('messages.set_disappearing', cid=conv.id) }}" method="post">
+    {{ m.csrf() }}
+    {% for secs, label in disappear_options %}<label class="disappear-opt"><input type="radio" name="seconds" value="{{ secs }}" {{ 'checked' if secs == disappear_after }}><span>{{ label }}</span></label>{% endfor %}
+  </form>
+</dialog>
 <dialog class="chat-modal chat-lightbox" id="chat-lightbox" aria-label="Image preview">
   <div class="chat-modal-head">
     <div class="row">
