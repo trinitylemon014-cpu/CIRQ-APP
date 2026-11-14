@@ -215,10 +215,12 @@ def _eligible(uid, rows):
     """Drop anything that must never be recommended: blocked people, hidden posts, unapproved or private accounts, no media row."""
     if not rows:
         return []
-    blocked = social.blocked_between(uid)
-    hidden = _recent_ids(uid, ("hide",), 3650)
-    authors = sb.by_id("profiles", [r["author_id"] for r in rows])
-    media = {m["post_id"] for m in sb.in_("post_media", "post_id", [r["id"] for r in rows], "post_id")}
+    blocked, hidden, authors, media_rows = sb.parallel(
+        lambda: social.blocked_between(uid),
+        lambda: _recent_ids(uid, ("hide",), 3650),
+        lambda: sb.by_id("profiles", [r["author_id"] for r in rows]),
+        lambda: sb.in_("post_media", "post_id", [r["id"] for r in rows], "post_id"))
+    media = {m["post_id"] for m in media_rows}
     out = []
     for r in rows:
         a = authors.get(r["author_id"])
@@ -249,10 +251,14 @@ def _diversify(ranked, n, per_author=1, consecutive_only=False):
 
 def suggest(uid, user, exclude_ids=(), n=3):
     """'Suggested for you' posts from people the student doesn't follow yet. Returns hydrated post dicts with .suggested/.reason."""
-    prof = load_profile(uid) if enabled(user) else empty_profile()
-    followed = set(social.following_ids(uid))
-    skip = set(exclude_ids) | _recent_ids(uid, ("impression",), 2)
-    rows = [r for r in _candidates("post", 14, 80) if r["id"] not in skip and r["author_id"] != uid and r["author_id"] not in followed]
+    prof, followed_list, shown, candidates = sb.parallel(
+        lambda: load_profile(uid) if enabled(user) else empty_profile(),
+        lambda: social.following_ids(uid),
+        lambda: _recent_ids(uid, ("impression",), 2),
+        lambda: _candidates("post", 14, 80))
+    followed = set(followed_list)
+    skip = set(exclude_ids) | shown
+    rows = [r for r in candidates if r["id"] not in skip and r["author_id"] != uid and r["author_id"] not in followed]
     scored = []
     for r, a, has_media in _eligible(uid, rows):
         s, parts, tok, same = score_post(uid, r, a, prof, followed, user.get("school_id"), has_media)
