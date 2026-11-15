@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
 {% block title %}Live settings{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css', v='20261115a') }}">
 <a class="back-link" href="{{ url_for('live.index') }}">{{ m.icon('arrow-left','i-sm') }} Live</a>
 <h1 class="page-title">Live settings</h1>
 <form method="post" class="card" style="max-width:560px">{{ m.csrf() }}
@@ -14,4 +14,4 @@
 <p class="lv-explain">You join a creator's fan club by sending them a gift. You can leave any time.</p>
 {% else %}<div class="card flat"><p class="muted" style="margin:0">You join a creator's fan club when you send them a gift. You can leave any time.</p></div>{% endif %}
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/live-clubs.js') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/live-clubs.js', v='20261115a') }}" defer></script>{% endblock %}
