@@ -1,6 +1,8 @@
 import base64
 import binascii
+import hashlib
 import math
+import secrets
 import uuid
 
 import httpx
@@ -8,7 +10,7 @@ from flask import Blueprint, jsonify, make_response, render_template, request, r
 from postgrest.exceptions import APIError
 from app.decorators import login_required
 from app.extensions import limiter, db
-from app.services import supabase_service as sb, cloudinary_service as cs, social, boost_ad_service, likers as likers_service
+from app.services import supabase_service as sb, cloudinary_service as cs, social, boost_ad_service, likers as likers_service, recommender
 from app.services.cloudinary_service import UploadError
 from app.services.moderation_service import check_text
 from app.utils import clean_text, parse_dt
@@ -16,6 +18,8 @@ from app.utils import clean_text, parse_dt
 bp = Blueprint("reels", __name__)
 PER_PAGE = 5   # only a handful of videos are ever loaded at once
 SCAN_SIZE = 25
+SHUFFLE_POOL = 1000   # how many of the newest eligible reels are shuffled on each visit
+SHUFFLE_WATCHED_DAYS = 30
 MAX_REEL_SECONDS = 90
 VIEW_MIN_SECONDS = 3
 
@@ -44,6 +48,61 @@ def _cursor_filter(cursor, direction):
     return f"and(created_at.{op}.{created_at}),and(created_at.eq.{created_at},id.{op}.{post_id})"
 
 
+def _shuffle_cursor(cursor):
+    """('seed', offset) for a shuffled-feed cursor, or None for an older newest-first cursor."""
+    if not cursor:
+        return None
+    try:
+        decoded = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return None                                  # let the old cursor parser reject it
+    if not decoded.startswith("s1|"):
+        return None
+    try:
+        _tag, seed, offset = decoded.split("|", 2)
+        offset = int(offset)
+        if not seed.isalnum() or offset < 0:
+            raise ValueError
+        return seed, offset
+    except ValueError:
+        abort(400, description="Invalid reel cursor.")
+
+
+def _shuffle_cursor_for(seed, offset):
+    return base64.urlsafe_b64encode(f"s1|{seed}|{offset}".encode()).decode().rstrip("=")
+
+
+def _shuffled_ids(seed, rows, watched):
+    """Reel ids in this visit's random order: reels not watched lately first, then the watched ones, each group shuffled.
+    The order depends only on the seed and the reel id, so every page of one visit continues the same order."""
+    def key(row):
+        return (row["id"] in watched, hashlib.sha256(f"{seed}:{row['id']}".encode()).hexdigest())
+    return [r["id"] for r in sorted(rows, key=key)]
+
+
+def _shuffled_page(me, seed, offset, following, hidden, eligible_authors):
+    """One page of the shuffled feed. Returns (page_reels, next_offset or None)."""
+    def pool():
+        q = (db().table("posts").select("id,author_id").eq("kind", "reel").eq("moderation_status", "ok").is_("community_id", "null")
+             .or_(f"visibility.eq.public,author_id.in.({','.join(eligible_authors)})")
+             .order("created_at", desc=True).limit(SHUFFLE_POOL))
+        return q.execute().data or []
+    rows, watched = sb.parallel(pool, lambda: recommender._recent_ids(me["id"], ("watch", "view"), SHUFFLE_WATCHED_DAYS))
+    rows = [r for r in rows if r["author_id"] not in hidden]
+    order = _shuffled_ids(seed, rows, watched)
+    visible, position = [], offset                      # position = how many ids of the shuffled list are used up
+    while len(visible) <= PER_PAGE and position < len(order):
+        chunk = order[position:position + SCAN_SIZE]
+        by_id = {p["id"]: p for p in sb.in_("posts", "id", chunk)}
+        ordered = [by_id[i] for i in chunk if i in by_id]
+        for reel in _visible_reels(ordered, me, following, hidden):
+            visible.append((reel, position + chunk.index(reel["id"]) + 1))
+        position += len(chunk)
+    page = [r for r, _pos in visible[:PER_PAGE]]
+    more = len(visible) > PER_PAGE
+    return page, (visible[PER_PAGE - 1][1] if more else None)
+
+
 def _visible_reels(rows, viewer, following, blocked):
     hydrated = social.hydrate_posts(rows, viewer["id"])
     out = []
@@ -68,10 +127,15 @@ def index():
     if request.args.get("before") and request.args.get("after"):
         abort(400, description="Use either the older or newer reel cursor, not both.")
     direction = "after" if request.args.get("after") else "before"
-    initial_cursor = _cursor_values(request.args.get(direction))
+    shuffle = _shuffle_cursor(request.args.get("before")) if direction == "before" else None
+    if direction == "before" and not request.args.get("before"):
+        shuffle = (secrets.token_hex(6), 0)             # a fresh visit: a brand-new random order
     following_list, hidden = sb.parallel(lambda: social.following_ids(me["id"]), lambda: social.blocked_between(me["id"]))
     following = set(following_list)
     eligible_authors = sorted(following | {me["id"]})
+    if shuffle:
+        return _shuffled_index(me, shuffle, following, hidden, eligible_authors)
+    initial_cursor = _cursor_values(request.args.get(direction))
 
     def scan():
         scan_cursor, scanned_ids, visible, exhausted = initial_cursor, set(), [], False
@@ -120,6 +184,22 @@ def index():
         return resp
     return render_template("reels/index.html", reels=page, cursor=cursor, newest=(_cursor_for(page[0]) if page else ""),
                            following=following, sponsored_ad=sponsored_ad, view_min_seconds=VIEW_MIN_SECONDS)
+
+
+def _shuffled_index(me, shuffle, following, hidden, eligible_authors):
+    seed, offset = shuffle
+    ad_cursor = request.args.get("before", "")
+    (page, next_offset), sponsored_ad = sb.parallel(
+        lambda: _shuffled_page(me, seed, offset, following, hidden, eligible_authors),
+        lambda: boost_ad_service.for_viewer(me["id"], ad_cursor or f"s1|{seed}"))
+    cursor = _shuffle_cursor_for(seed, next_offset) if next_offset else None
+    if request.args.get("partial"):
+        resp = make_response(render_template("reels/_items.html", reels=page, cursor=cursor, following=following,
+                                             sponsored_ad=sponsored_ad, view_min_seconds=VIEW_MIN_SECONDS))
+        resp.headers["X-Next-Cursor"] = cursor or ""
+        return resp
+    return render_template("reels/index.html", reels=page, cursor=cursor, newest="", shuffled=True, following=following,
+                           sponsored_ad=sponsored_ad, view_min_seconds=VIEW_MIN_SECONDS)
 
 
 @bp.post("/api/reels/<reel_id>/view")
