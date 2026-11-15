@@ -183,6 +183,7 @@
     <div class="cpanel-emoji" role="group" aria-label="Quick reactions">
       {% for e in ['❤️','🙌','🔥','👏','😢','😍','😮','😂'] %}<button type="button" data-cemoji="{{ e }}" aria-label="Add {{ e }}">{{ e }}</button>{% endfor %}
     </div>
+    <div class="cpanel-replying" data-cpanel-replying hidden><span>Replying to <b data-cpanel-replying-name></b></span><button type="button" data-cpanel-replying-cancel aria-label="Cancel reply">&times;</button></div>
     <form class="cpanel-form" data-cpanel-form autocomplete="off">
       <span class="cpanel-me" data-cpanel-me data-username="{{ cur.username }}">{{ m.avatar(cur, 'sm') }}</span>
       <div class="cpanel-field">
