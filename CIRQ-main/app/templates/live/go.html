@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
 {% block title %}Go live{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css', v='20261115a') }}">
 <a class="back-link" href="{{ url_for('live.index') }}">{{ m.icon('arrow-left','i-sm') }} Live</a>
 <h1 class="page-title">Go live</h1>
 {% if not can_host %}
@@ -36,4 +36,4 @@
   </form>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/live-go.js') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/live-go.js', v='20261115a') }}" defer></script>{% endblock %}
