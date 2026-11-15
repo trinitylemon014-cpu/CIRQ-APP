@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/live.css', v='20261115a') }}">
 <div class="lr" id="lr" data-sid="{{ sid }}" data-host="{{ host.username }}" data-is-host="{{ '1' if is_host else '0' }}" data-index="{{ url_for('live.index') }}" data-dashboard="{{ url_for('live.dashboard') }}">
   <section class="lr-stage" aria-label="Live video">
     <div class="lr-top">
@@ -20,7 +20,7 @@
     <div class="lr-reacts" id="lr-reacts" aria-hidden="true"></div>
     <div class="lr-fx" id="lr-fx" aria-hidden="true"></div>
     <div class="lr-banner" id="lr-banner"></div>
-    <div class="lr-ended" id="lr-ended"><div><h2>This live has ended</h2><p class="muted" id="lr-ended-txt">Thanks for watching.</p><a class="btn" href="{{ url_for('live.index') }}">Back to Live</a>{% if is_host %} <a class="btn ghost" href="{{ url_for('live.dashboard') }}">See earnings</a>{% endif %}</div></div>
+    <div class="lr-ended" id="lr-ended"><div><h2 id="lr-ended-h">This live has ended</h2><p class="muted" id="lr-ended-txt">Thanks for watching.</p><button class="btn" type="button" id="lr-retry" hidden>Try again</button> <a class="btn" href="{{ url_for('live.index') }}">Back to Live</a>{% if is_host %} <a class="btn ghost" href="{{ url_for('live.dashboard') }}">See earnings</a>{% endif %}</div></div>
   </section>
   <aside class="lr-side">
     <div class="card lr-chatbox">
@@ -46,6 +46,6 @@
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='vendor/livekit-client.umd.min.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/live-gifts.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/live.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/live-gifts.js', v='20261115a') }}" defer></script>
+<script src="{{ url_for('static', filename='js/live.js', v='20261115a') }}" defer></script>
 {% endblock %}
