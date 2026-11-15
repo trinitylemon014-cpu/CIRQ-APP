@@ -1,78 +1,120 @@
-"""The ordering rules behind the shuffled reels feed (no database needed)."""
+"""Reels are shuffled: a different order on every visit, unwatched reels first, one visit never repeats a reel."""
 import base64
-import uuid
 
-import pytest
-
-from app.services import reel_shuffle as rs
-
-T0 = "2026-11-14T05:00:00+00:00"
+from app.utils import iso
+from tests.test_recommendations import private, reel, reel_ids, walk_reels
 
 
-def ids(n=107):
-    return [str(uuid.uuid4()) for _ in range(n)]
+def make_reels(db, creator, n):
+    return [reel(db, creator, f"reel {i}") for i in range(n)]
 
 
-def walk(all_ids, seed, back=frozenset(), per=5):
-    """Page through the whole queue the way the route does, returning ids in served order."""
-    served, position = [], None
-    while True:
-        queue = rs.remaining(rs.order(all_ids, seed, back), seed, back, position)
-        page = queue[:per + 1]
-        served += page[:per]
-        if len(page) <= per:
-            return served
-        last = page[per - 1]
-        position = rs.decode_cursor(rs.encode_cursor(seed, T0, last, last in back))["position"]
+def mark_watched(db, viewer, reels):
+    for r in reels:
+        db.table("post_signals").insert({"user_id": viewer["id"], "post_id": r["id"], "event": "watch", "created_at": iso()}).execute()
 
 
-def test_every_reel_is_served_exactly_once():
-    pool = ids()
-    served = walk(pool, rs.new_seed())
-    assert sorted(served) == sorted(pool)
+def test_every_visit_has_a_different_order(as_user, db, mk):
+    a, _ = as_user("alice")
+    reels = make_reels(db, mk("carol"), 12)
+    orders = {tuple(walk_reels(a)) for _ in range(10)}
+    assert len(orders) > 1                                              # not the same list every time
+    assert all(set(o) == {r["id"] for r in reels} and len(o) == 12 for o in orders)      # but always every reel, once
 
 
-def test_each_visit_gets_a_different_order_but_one_seed_is_repeatable():
-    pool = ids()
-    a, b = rs.new_seed(), rs.new_seed()
-    assert rs.order(pool, a, set()) == rs.order(pool, a, set())
-    assert rs.order(pool, a, set()) != rs.order(pool, b, set())
+def test_first_page_changes_between_visits(as_user, db, mk):
+    a, _ = as_user("alice")
+    make_reels(db, mk("carol"), 12)
+    firsts = {tuple(reel_ids(a.get("/reels?partial=1"))) for _ in range(10)}
+    assert len(firsts) > 1
 
 
-def test_watched_and_own_reels_always_come_after_unseen_ones():
-    pool = ids()
-    back = set(pool[:40])
-    served = walk(pool, rs.new_seed(), back)
-    assert set(served[:67]) == set(pool[40:]) and set(served[67:]) == back
+def test_scrolling_continues_the_same_order_and_a_cursor_is_repeatable(as_user, db, mk):
+    a, _ = as_user("alice")
+    make_reels(db, mk("carol"), 14)
+    first = a.get("/reels?partial=1")
+    cursor = first.headers["X-Next-Cursor"]
+    again = [reel_ids(a.get(f"/reels?partial=1&before={cursor}")) for _ in range(3)]
+    assert again[0] == again[1] == again[2]                              # the same cursor always gives the same next page
+    assert not set(again[0]) & set(reel_ids(first))
 
 
-def test_a_reel_added_mid_visit_never_causes_repeats_or_skips():
-    pool, seed = ids(), rs.new_seed()
-    served, position, extra = [], None, str(uuid.uuid4())
-    for turn in range(40):
-        current = pool + ([extra] if turn >= 3 else [])
-        queue = rs.remaining(rs.order(current, seed, set()), seed, set(), position)
-        page = queue[:5]
-        served += page
-        if len(queue) <= 5:
-            break
-        position = rs.decode_cursor(rs.encode_cursor(seed, T0, page[-1], False))["position"]
-    assert len(served) == len(set(served)) and set(pool) <= set(served)
+def test_reels_you_have_not_watched_come_first_even_when_shuffled(as_user, db, mk):
+    a, alice = as_user("alice")
+    reels = make_reels(db, mk("carol"), 12)
+    watched, fresh = reels[:7], reels[7:]
+    mark_watched(db, alice, watched)
+    for _ in range(6):
+        order = walk_reels(a)
+        positions = {rid: i for i, rid in enumerate(order)}
+        assert max(positions[r["id"]] for r in fresh) < min(positions[r["id"]] for r in watched)
 
 
-def test_no_reel_is_favoured_on_the_first_page():
-    pool = ids(50)
-    firsts = set()
-    for _ in range(300):
-        firsts.update(rs.order(pool, rs.new_seed(), set())[:5])
-    assert len(firsts) == len(pool)
+def test_when_everything_is_watched_the_order_still_changes_every_visit(as_user, db, mk):
+    a, alice = as_user("alice")
+    reels = make_reels(db, mk("carol"), 12)
+    mark_watched(db, alice, reels)
+    orders = {tuple(walk_reels(a)) for _ in range(10)}
+    assert len(orders) > 1 and all(len(o) == 12 for o in orders)        # all watched, yet never the same list
 
 
-def test_cursor_round_trip_and_rejection_of_bad_cursors():
-    rid = str(uuid.uuid4())
-    decoded = rs.decode_cursor(rs.encode_cursor("abcdef12", T0, rid, True))
-    assert decoded["seed"] == "abcdef12" and decoded["t0"] == T0 and decoded["position"][0] == 1 and decoded["position"][2] == rid
-    legacy = base64.urlsafe_b64encode(f"{T0}|{rid}".encode()).decode().rstrip("=")
-    for bad in ("invalid", legacy, base64.urlsafe_b64encode(b"v2|zz|x|9|y|z").decode()):
-        with pytest.raises(rs.BadCursor):
-            rs.decode_cursor(bad)
+def test_watching_is_per_person(as_user, db, mk):
+    a, alice = as_user("alice"); b, _ = as_user("bob")
+    reels = make_reels(db, mk("carol"), 12)
+    mark_watched(db, alice, reels[:6])
+    order_b = {tuple(walk_reels(b)) for _ in range(8)}
+    assert len(order_b) > 1                                             # bob has watched nothing: nothing is pushed back for him
+
+
+def test_blocked_and_private_reels_never_appear_in_the_shuffle(as_user, db, mk):
+    a, alice = as_user("alice")
+    carol, rude, secret = mk("carol"), mk("rude"), mk("secret")
+    ok = make_reels(db, carol, 6)
+    blocked = make_reels(db, rude, 4)
+    hidden = make_reels(db, private(db, secret), 4)
+    db.table("blocks").insert({"blocker_id": alice["id"], "blocked_id": rude["id"]}).execute()
+    for _ in range(5):
+        seen = set(walk_reels(a))
+        assert seen == {r["id"] for r in ok}
+        assert not seen & {r["id"] for r in blocked + hidden}
+
+
+def test_a_follower_sees_a_private_creators_reels_in_the_shuffle(as_user, db, mk):
+    a, _ = as_user("alice")
+    creator = mk("creator")
+    a.post("/u/creator/follow")
+    private(db, creator)
+    mine = make_reels(db, creator, 3)
+    assert set(walk_reels(a)) == {r["id"] for r in mine}
+
+
+def test_own_reels_are_included(as_user, db, mk):
+    a, alice = as_user("alice")
+    own = make_reels(db, alice, 3)
+    assert set(walk_reels(a)) == {r["id"] for r in own}
+
+
+def test_bad_cursors_are_rejected_and_old_cursors_still_parse(as_user, db, mk):
+    a, _ = as_user("alice")
+    make_reels(db, mk("carol"), 3)
+    enc = lambda raw: base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+    assert a.get(f"/reels?partial=1&before={enc('s1|abc|-5')}").status_code == 400
+    assert a.get(f"/reels?partial=1&before={enc('s1|not valid|3')}").status_code == 400
+    assert a.get(f"/reels?partial=1&before={enc('s1|abc|notanumber')}").status_code == 400
+    assert a.get("/reels?partial=1&before=garbage!!").status_code == 400
+    assert a.get(f"/reels?partial=1&before={enc('s1|abc|0')}").status_code == 200
+    assert a.get(f"/reels?partial=1&before={enc('s1|abc|0')}&after={enc('s1|abc|0')}").status_code == 400
+
+
+def test_a_cursor_past_the_end_ends_the_feed_cleanly(as_user, db, mk):
+    a, _ = as_user("alice")
+    make_reels(db, mk("carol"), 3)
+    enc = base64.urlsafe_b64encode(b"s1|abc|999").decode().rstrip("=")
+    r = a.get(f"/reels?partial=1&before={enc}")
+    assert r.status_code == 200 and reel_ids(r) == [] and r.headers["X-Next-Cursor"] == ""
+
+
+def test_empty_feed_still_shows_the_empty_state(as_user):
+    a, _ = as_user("alice")
+    page = a.get("/reels").get_data(as_text=True)
+    assert "No reels yet" in page
