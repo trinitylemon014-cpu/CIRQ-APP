@@ -1,0 +1,9 @@
+{# A top-level comment + its replies. Needs: c (with author, like_count, liked, reply_count) and post_author_id. #}
+{% import 'partials/macros.html' as m with context %}
+<div class="cthread" data-thread="{{ c.id }}">
+  {% include 'partials/comment_row.html' %}
+  {% set n = c.reply_count or 0 %}
+  <button class="creplies-toggle" type="button" data-replies-toggle="{{ c.id }}" data-count="{{ n }}" aria-expanded="false" {{ 'hidden' if not n }}><i aria-hidden="true"></i><span data-replies-label>View {{ n }} {{ 'reply' if n == 1 else 'replies' }}</span></button>
+  <div class="crow-replies" data-replies-for="{{ c.id }}" data-loaded="{{ '0' if n else '1' }}" hidden></div>
+  <button class="creplies-more" type="button" data-replies-more="{{ c.id }}" hidden>View more replies</button>
+</div>
