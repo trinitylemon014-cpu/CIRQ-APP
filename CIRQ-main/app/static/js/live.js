@@ -137,7 +137,7 @@
     const r = await api(`/poll${q}`);
     if (r.network) return;
     if (!r.ok) {
-      if (r.status === 403 || r.status === 404) { showEnded(null, r.error || "You can no longer watch this live."); }
+      if (r.status === 403 || r.status === 410) { showEnded(null, r.error || "You can no longer watch this live."); }
       else if (r.status === 429) { /* rate limited: next tick */ }
       return;
     }
@@ -162,7 +162,7 @@
   // ---------------------------------------------------------------- state
   async function loadState(first) {
     const r = await api("/state");
-    if (!r.ok) { if (first) showEnded(null, r.error || "This live isn't available."); return; }
+    if (!r.ok) { if (first) failOpen(r); return; }
     S = r.state; applyState(first);
   }
   function applyState(first) {
@@ -483,6 +483,15 @@
     openSheet("Host controls", b);
   }
 
+  // Couldn't open the room. Only a definite answer (ended/not allowed/not found) says "ended"; a server hiccup or lost connection says so and offers a retry.
+  function failOpen(r) {
+    const code = r.status || 0, why = (r.error && !/couldn't find that page/i.test(r.error)) ? r.error : "";
+    if (code === 403 || code === 410) return showEnded(null, why || "You can't watch this live.");
+    $("lr-ended-h").textContent = "Couldn't open this live";
+    $("lr-ended-txt").textContent = (why || (code ? "Something went wrong on the server." : "No connection.")) + (code ? ` (error ${code})` : "");
+    const b = $("lr-retry"); b.hidden = false; b.onclick = () => location.reload();
+    $("lr-ended").classList.add("on");
+  }
   // ---------------------------------------------------------------- end / leave
   function showEnded(reason, text) {
     if (ended && $("lr-ended").classList.contains("on")) return;
@@ -503,7 +512,7 @@
   (async () => {
     if (!IS_HOST) {
       const j = await api("/join", {});
-      if (!j.ok) { showEnded(null, j.error || "You can't watch this live."); return; }
+      if (!j.ok) { failOpen(j); return; }
       S = j.state; applyState(true);
     } else loadState(true);
   })();
