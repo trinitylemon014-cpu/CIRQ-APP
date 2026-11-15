@@ -86,3 +86,10 @@ def test_room_script_builds_room_api_urls_not_site_root_urls(app):
     js = (pathlib.Path(app.root_path) / "static" / "js" / "live.js").read_text()
     assert 'path.startsWith("/") ? path : API + path' not in js
     assert r'/^\/(live|u)\//.test(path) ? path : API + path' in js
+
+
+def test_empty_room_state_and_viewers_list_do_not_send_placeholder_ids(host, sid):
+    """Regression: a room with no viewers sent IN ("-") to a uuid column -> Supabase 400 -> /state 500 -> 'ended' screen."""
+    c, _ = host
+    r = c.get(f"/live/api/{sid}/state")
+    assert r.status_code == 200 and r.get_json()["state"]["viewers"] == []
