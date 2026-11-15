@@ -1088,6 +1088,7 @@
     }
     let refreshBusy = false;
     async function refreshNewReels(retry = false) {
+      if (reels.dataset.shuffle === "1") return;                      // a shuffled feed has no "newest first" to refresh
       if (refreshBusy || busy || (document.hidden && !retry)) return;
       refreshBusy = true; if (refreshError) refreshError.hidden = true;
       try {
