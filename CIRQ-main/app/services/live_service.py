@@ -297,8 +297,10 @@ def viewers_list(sess, limit=60):
     rows = (db().table("live_viewers").select("*").eq("session_id", sess["id"]).gte("last_seen_at", cutoff).is_("left_at", "null")
             .order("joined_at", desc=True).limit(limit).execute().data or [])
     people = sb.by_id("profiles", [r["user_id"] for r in rows])
-    supp = {r["user_id"]: r["total_coins"] for r in (db().table("live_supporters").select("user_id,total_coins").eq("host_id", sess["host_id"])
-                                                     .in_("user_id", [r["user_id"] for r in rows] or ["-"]).execute().data or [])}
+    supp = {}
+    if rows:                                             # never send an empty IN list: PostgREST rejects it for uuid columns
+        supp = {r["user_id"]: r["total_coins"] for r in (db().table("live_supporters").select("user_id,total_coins").eq("host_id", sess["host_id"])
+                                                         .in_("user_id", [r["user_id"] for r in rows]).execute().data or [])}
     out = []
     for r in rows:
         p = people.get(r["user_id"])
