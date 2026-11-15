@@ -145,7 +145,11 @@ class Query:
     def gte(self, c, v): self.filters.append(("gte", c, v)); return self
     def lt(self, c, v): self.filters.append(("lt", c, v)); return self
     def lte(self, c, v): self.filters.append(("lte", c, v)); return self
-    def in_(self, c, v): self.filters.append(("in", c, list(v))); return self
+    def in_(self, c, v):
+        v = list(v)
+        if any(x == "-" for x in v):     # real PostgREST: 'invalid input syntax for type uuid: "-"' (this hid a production 500)
+            raise RuntimeError('invalid input syntax for type uuid: "-"')
+        self.filters.append(("in", c, v)); return self
     def is_(self, c, v): self.filters.append(("is", c, None)); return self
     def ilike(self, c, v): self.filters.append(("ilike", c, v)); return self
     def or_(self, expr):
