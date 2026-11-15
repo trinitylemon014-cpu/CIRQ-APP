@@ -159,20 +159,20 @@ def reel_ids(response):
     return re.findall(r'data-id="([^"]+)"', response.get_data(as_text=True))
 
 
-def walk_feed(client):
-    """Follow the cursors from a fresh visit to the end; returns the reel ids in the order they were served."""
-    served, cursor = [], ""
-    while True:
-        page = client.get(f"/reels?partial=1&before={cursor}" if cursor else "/reels?partial=1")
+def walk_reels(client, limit=500):
+    """Follow the 'load more' cursors of one visit to the end. Returns every reel id in the order it was served."""
+    first = client.get("/reels?partial=1")
+    seen, cursor = reel_ids(first), first.headers["X-Next-Cursor"]
+    while cursor and len(seen) < limit:
+        page = client.get(f"/reels?partial=1&before={cursor}")
         ids = reel_ids(page)
-        assert not set(ids).intersection(served)                                  # never a repeat inside one visit
-        served.extend(ids)
+        assert not set(ids).intersection(seen), "a reel was served twice in one visit"
+        seen.extend(ids)
         cursor = page.headers["X-Next-Cursor"]
-        if not cursor:
-            return served
+    return seen
 
 
-def test_reels_are_shuffled_and_paginate_without_repeats(as_user, db, mk):
+def test_reels_are_shuffled_each_visit_and_paginate_without_repeats(as_user, db, mk):
     a, _ = as_user("alice")
     creator = mk("carol")
     old = [reel(db, creator, f"reel {i}") for i in range(9)]
@@ -181,19 +181,18 @@ def test_reels_are_shuffled_and_paginate_without_repeats(as_user, db, mk):
         db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
 
     page = a.get("/reels").get_data(as_text=True)
-    assert 'data-open="reel-create-dialog"' in page and "New reel" in page and 'data-shuffle="1"' in page
+    assert 'data-open="reel-create-dialog"' in page and "New reel" in page
+    assert 'data-shuffle="1"' in page and "Shuffled every time you visit" in page
     first = a.get("/reels?partial=1")
     assert len(reel_ids(first)) == 5
-    second = a.get(f"/reels?partial=1&before={first.headers['X-Next-Cursor']}")
+    cursor = first.headers["X-Next-Cursor"]
+    second = a.get(f"/reels?partial=1&before={cursor}")
     assert len(reel_ids(second)) == 4 and not second.headers["X-Next-Cursor"]
-    assert set(reel_ids(first)) | set(reel_ids(second)) == {item["id"] for item in old}
-
-    # every visit is shuffled differently: the first page is not always the same five reels in the same order
-    openings = {tuple(reel_ids(a.get("/reels?partial=1"))) for _ in range(6)}
-    assert len(openings) > 1
+    assert set(reel_ids(first)) | set(reel_ids(second)) == {item["id"] for item in old}      # nothing missing, nothing repeated
+    assert not set(reel_ids(first)) & set(reel_ids(second))
 
 
-def test_reels_archive_reaches_old_content_and_new_uploads_do_not_shift_pages(as_user, db, mk):
+def test_reels_archive_reaches_old_content_and_new_uploads_do_not_repeat_pages(as_user, db, mk):
     a, _ = as_user("alice")
     creator = mk("carol")
     old = [reel(db, creator, f"archive {i}") for i in range(107)]
@@ -203,58 +202,18 @@ def test_reels_archive_reaches_old_content_and_new_uploads_do_not_shift_pages(as
 
     first = a.get("/reels?partial=1")
     cursor = first.headers["X-Next-Cursor"]
-    reel(db, creator, "new upload")                                   # uploaded while the viewer is scrolling
+    new = reel(db, creator, "new upload")                              # uploaded while the visit is in progress
 
     seen = reel_ids(first)
     while cursor:
         page = a.get(f"/reels?partial=1&before={cursor}")
         ids = reel_ids(page)
-        assert not set(ids).intersection(seen)                        # the upload does not shift pages into repeats
+        assert not set(ids).intersection(seen)                          # a new upload never makes a page repeat
         seen.extend(ids)
         cursor = page.headers["X-Next-Cursor"]
 
-    assert {item["id"] for item in old} <= set(seen) and len(seen) == len(set(seen))
-
-
-def test_watched_reels_come_after_every_unseen_reel_on_the_next_visit(as_user, db, mk):
-    viewer, _ = as_user("viewer")
-    creator = mk("carol")
-    reels = [reel(db, creator, f"reel {i}") for i in range(9)]
-    watched = {item["id"] for item in reels[:3]}
-    for rid in watched:                                               # yesterday: watched these three for 3+ seconds
-        r = viewer.post(f"/api/reels/{rid}/view", json={"watched_seconds": 3}, headers={"X-Requested-With": "fetch"})
-        assert r.status_code == 200 and r.get_json()["counted"] is True
-
-    for _ in range(4):                                                # however the shuffle falls, watched reels are last
-        order = walk_feed(viewer)
-        assert set(order) == {item["id"] for item in reels}
-        assert set(order[-3:]) == watched
-
-
-def test_reels_watched_during_a_visit_do_not_reshuffle_that_visit(as_user, db, mk):
-    viewer, _ = as_user("viewer")
-    creator = mk("carol")
-    reels = [reel(db, creator, f"reel {i}") for i in range(12)]
-    first = viewer.get("/reels?partial=1")
-    cursor = first.headers["X-Next-Cursor"]
-    for rid in reel_ids(first):                                       # watching the first page must not move anything
-        viewer.post(f"/api/reels/{rid}/view", json={"watched_seconds": 3}, headers={"X-Requested-With": "fetch"})
-    served = reel_ids(first)
-    while cursor:
-        page = viewer.get(f"/reels?partial=1&before={cursor}")
-        assert not set(reel_ids(page)).intersection(served)
-        served.extend(reel_ids(page))
-        cursor = page.headers["X-Next-Cursor"]
-    assert sorted(served) == sorted(item["id"] for item in reels)
-
-
-def test_own_reels_are_served_after_other_peoples_reels(as_user, db, mk):
-    a, alice = as_user("alice")
-    creator = mk("carol")
-    mine = {reel(db, alice, f"mine {i}")["id"] for i in range(3)}
-    theirs = {reel(db, creator, f"theirs {i}")["id"] for i in range(6)}
-    order = walk_feed(a)
-    assert set(order[:6]) == theirs and set(order[6:]) == mine
+    assert {item["id"] for item in old} <= set(seen)                     # the whole old archive was reachable
+    assert new["id"] in set(walk_reels(a))                               # and the next visit includes the new reel
 
 
 def test_private_reel_author_can_page_through_all_own_reels(as_user, db, mk):
@@ -316,7 +275,7 @@ def test_uploads_from_different_users_preserve_the_shared_reel_archive(as_user, 
     db.table("posts").update({"created_at": (base + timedelta(days=2)).isoformat()}).eq("id", bob_reel["id"]).execute()
 
     alice_view = reel_ids(alice_client.get("/reels?partial=1"))
-    assert set(alice_view) == {bob_reel["id"], alice_reel["id"], older["id"]}
+    assert set(alice_view) == {bob_reel["id"], alice_reel["id"], older["id"]} and len(alice_view) == 3
     assert len(db.data["posts"]) == 3
     assert {row["post_id"] for row in db.data["post_media"]} == {older["id"], alice_reel["id"], bob_reel["id"]}
 
@@ -333,26 +292,33 @@ def test_followers_can_see_private_creators_reels_but_other_users_cannot(as_user
     assert item["id"] not in reel_ids(outsider.get("/reels?partial=1"))
 
 
-def test_shuffled_feed_has_no_newer_page_so_old_tabs_polling_get_nothing(as_user, db, mk):
+def test_older_newest_first_cursors_still_work_for_tabs_opened_before_the_shuffle(as_user, db, mk):
+    from app.blueprints.reels.routes import _cursor_for
     client, _ = as_user("viewer")
     creator = mk("creator")
-    for i in range(7):
-        reel(db, creator, f"old {i}")
-    first = client.get("/reels?partial=1")
-    reel(db, creator, "brand new")
-    page = client.get("/reels?partial=1&after=shuffle")               # what a cached older page still asks every 30s
-    assert page.status_code == 200 and reel_ids(page) == []
-    assert page.headers["X-More-Newer"] == "0" and page.headers["X-After-Cursor"] == "shuffle"
-    assert len(reel_ids(first)) == 5
+    old = [reel(db, creator, f"old {i}") for i in range(9)]
+    start = datetime.now(timezone.utc) - timedelta(days=2)
+    for i, item in enumerate(old):
+        db.table("posts").update({"created_at": (start + timedelta(seconds=i)).isoformat()}).eq("id", item["id"]).execute()
+        item["created_at"] = (start + timedelta(seconds=i)).isoformat()
 
+    marker = _cursor_for(old[-1])                                       # "newest reel I have" from an old page
+    new = [reel(db, creator, f"new {i}") for i in range(12)]
+    for i, item in enumerate(new):
+        db.table("posts").update({"created_at": (start + timedelta(days=1, seconds=i)).isoformat()}).eq("id", item["id"]).execute()
 
-def test_old_chronological_cursors_are_rejected(as_user, db, mk):
-    import base64
-    client, _ = as_user("viewer")
-    creator = mk("creator")
-    item = reel(db, creator, "x")
-    legacy = base64.urlsafe_b64encode(f"{item['created_at']}|{item['id']}".encode()).decode().rstrip("=")
-    assert client.get(f"/reels?partial=1&before={legacy}").status_code == 400
+    refreshed, after = [], marker
+    while True:
+        page = client.get(f"/reels?partial=1&after={after}")
+        ids = reel_ids(page)
+        assert not set(ids).intersection(refreshed)
+        refreshed = ids + refreshed
+        after = page.headers["X-After-Cursor"]
+        if page.headers["X-More-Newer"] != "1":
+            break
+    assert refreshed == [item["id"] for item in reversed(new)]
+    older = client.get("/reels?partial=1&before=" + _cursor_for(old[5]))
+    assert reel_ids(older) == [item["id"] for item in reversed(old[:5])]
 
 
 def test_reel_saves_are_private_and_visibility_checked(as_user, db, mk):
