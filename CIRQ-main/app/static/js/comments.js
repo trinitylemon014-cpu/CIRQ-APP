@@ -20,12 +20,13 @@
   const sentinel = $("[data-cpanel-sentinel]"), countEl = $("[data-cpanel-count]");
   const form = $("[data-cpanel-form]"), input = $("[data-cpanel-input]"), sendBtn = $("[data-cpanel-send]"), chars = $("[data-cpanel-chars]");
   const me = $("[data-cpanel-me]"), grip = $("[data-cpanel-grip]"), head = $("[data-cpanel-head]");
+  const replyBar = $("[data-cpanel-replying]"), replyName = $("[data-cpanel-replying-name]");
   const MAX = 500, DOCK_MIN = 300, DOCK_MAX = 360;
   const sheetMQ = window.matchMedia("(max-width: 699px)");
   const finePointer = window.matchMedia("(pointer: fine)");
   const ICON = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 
-  const S = { open: false, id: null, trigger: null, cursor: "", hasMore: false, loading: false, sending: false, token: 0 };
+  const S = { open: false, id: null, trigger: null, cursor: "", hasMore: false, loading: false, sending: false, token: 0, reply: null };
 
   /* ---------- helpers ---------- */
   const fmt = (n) => {
@@ -76,12 +77,69 @@
     document.documentElement.classList.toggle("cpanel-lock", sheetOpen);
   }
 
+  /* ---------- replying: who am I answering, and the replies under a comment ---------- */
+  const enc = encodeURIComponent;
+  const repliesBox = (thread) => $(".crow-replies", thread);
+  function setReply(btn) {
+    const thread = btn.closest(".cthread");
+    if (!thread) return;
+    S.reply = { id: btn.dataset.commentReply, user: btn.dataset.replyUser, thread };
+    replyName.textContent = `@${S.reply.user}`;
+    replyBar.hidden = false;
+    input.placeholder = `Reply to @${S.reply.user}…`;
+    input.focus({ preventScroll: true });
+  }
+  function clearReply() {
+    S.reply = null;
+    replyBar.hidden = true;
+    input.placeholder = "Add a comment…";
+  }
+  function updateToggle(thread) {
+    const btn = $("[data-replies-toggle]", thread), box = repliesBox(thread), more = $("[data-replies-more]", thread);
+    const n = Math.max(0, Number(btn.dataset.count) || 0);
+    btn.hidden = n < 1;
+    btn.setAttribute("aria-expanded", box.hidden ? "false" : "true");
+    $("[data-replies-label]", btn).textContent = box.hidden ? `View ${n} ${n === 1 ? "reply" : "replies"}` : `Hide ${n === 1 ? "reply" : "replies"}`;
+    more.hidden = box.hidden || !thread.dataset.after;
+  }
+  async function loadReplies(thread, more) {
+    if (thread.dataset.busy) return;
+    thread.dataset.busy = "1";
+    const id = thread.dataset.thread, box = repliesBox(thread), token = S.token;
+    try {
+      const after = more ? thread.dataset.after || "" : "";
+      const r = await api(`/api/comments/${enc(id)}/replies${after ? `?after=${enc(after)}` : ""}`, { method: "GET" });
+      if (token !== S.token) return;
+      const have = new Set($$(".crow[data-comment]", box).map((n) => n.dataset.comment));
+      nodesFrom(r.html).forEach((n) => { if (!have.has(n.dataset.comment)) box.append(n); });
+      thread.dataset.after = r.next_cursor || "";
+      thread.dataset.loaded = "1";
+      $("[data-replies-toggle]", thread).dataset.count = Math.max(Number(r.count) || 0, $$(".crow[data-comment]", box).length);
+    } catch (err) {
+      toast(friendly(err), "error");
+    } finally {
+      delete thread.dataset.busy;
+      updateToggle(thread);
+    }
+  }
+  async function toggleReplies(btn) {
+    const thread = btn.closest(".cthread"), box = repliesBox(thread);
+    box.hidden = !box.hidden;
+    updateToggle(thread);
+    if (!box.hidden && thread.dataset.loaded === "0") await loadReplies(thread);
+  }
+  async function openReplies(thread) {                      // show the replies (loading the existing ones first)
+    repliesBox(thread).hidden = false;
+    if (thread.dataset.loaded === "0") await loadReplies(thread);
+    updateToggle(thread);
+  }
+
   /* ---------- open / close ---------- */
   function markTriggers() {
     $$("[data-comments]").forEach((t) => t.setAttribute("aria-expanded", S.open && t.dataset.comments === S.id ? "true" : "false"));
   }
   function resetList() {
-    S.token++; S.cursor = ""; S.hasMore = false; S.loading = false;
+    S.token++; S.cursor = ""; S.hasMore = false; S.loading = false; clearReply();
     list.innerHTML = ""; stateBox.innerHTML = ""; body.scrollTop = 0;
   }
   function openFor(id, trigger) {
@@ -103,7 +161,7 @@
   }
   function close(restoreFocus = true) {
     if (!S.open) return;
-    S.open = false; S.token++;
+    S.open = false; S.token++; clearReply();
     panel.classList.remove("open"); backdrop.classList.remove("show");
     panel.setAttribute("aria-hidden", "true");
     panel.inert = true;
@@ -126,6 +184,13 @@
     if (e.target.closest("[data-cpanel-retry]")) { fetchPage(); return; }
     const del = e.target.closest("[data-comment-delete]");
     if (del && panel.contains(del)) { removeComment(del); return; }
+    const rep = e.target.closest("[data-comment-reply]");
+    if (rep && panel.contains(rep)) { setReply(rep); return; }
+    if (e.target.closest("[data-cpanel-replying-cancel]")) { clearReply(); input.focus({ preventScroll: true }); return; }
+    const tog = e.target.closest("[data-replies-toggle]");
+    if (tog && panel.contains(tog)) { toggleReplies(tog); return; }
+    const more = e.target.closest("[data-replies-more]");
+    if (more && panel.contains(more)) { loadReplies(more.closest(".cthread"), true); return; }
     const em = e.target.closest("[data-cemoji]");
     if (em && panel.contains(em)) { insertEmoji(em.dataset.cemoji); }
   });
@@ -172,7 +237,7 @@
       const r = await api(url, { method: "GET" });
       if (token !== S.token) return;
       const have = new Set($$(".crow[data-comment]", list).map((n) => n.dataset.comment));
-      nodesFrom(r.html).forEach((n) => { if (!have.has(n.dataset.comment)) list.append(n); });
+      nodesFrom(r.html).forEach((n) => { if (!have.has(n.dataset.thread || n.dataset.comment)) list.append(n); });
       S.cursor = r.next_cursor || ""; S.hasMore = !!r.has_more;
       setCount(id, r.count);
       renderState(hasRows() ? "none" : (S.hasMore ? "none" : "empty"));
@@ -218,9 +283,9 @@
     input.dispatchEvent(new Event("input"));
     input.focus({ preventScroll: true });
   }
-  function pendingRow(text) {
+  function pendingRow(text, isReply) {
     const el = document.createElement("article");
-    el.className = "crow pending";
+    el.className = `crow pending${isReply ? " crow-reply" : ""}`;
     el.innerHTML = `<span class="crow-av">${me.innerHTML}</span><div class="crow-main"><div class="crow-top"><span class="crow-name"></span><time class="crow-time">Posting…</time></div><p class="crow-text"></p></div>`;
     $(".crow-name", el).textContent = me.dataset.username || "you";
     $(".crow-text", el).textContent = text;                              // text only, never HTML
@@ -230,23 +295,36 @@
     e.preventDefault();
     const text = input.value.trim();
     if (!text || S.sending || !S.id) return;
-    const id = S.id, row = pendingRow(text);
+    const id = S.id, reply = S.reply && document.contains(S.reply.thread) ? S.reply : null, row = pendingRow(text, !!reply);
     S.sending = true;
     input.value = ""; autosize(); syncForm();
     stateBox.innerHTML = "";
-    list.prepend(row);
-    body.scrollTo({ top: 0, behavior: "smooth" });
+    if (reply) {
+      await openReplies(reply.thread);                                  // existing replies first, then mine at the end
+      repliesBox(reply.thread).append(row);
+      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    } else {
+      list.prepend(row);
+      body.scrollTo({ top: 0, behavior: "smooth" });
+    }
     try {
       const fd = new FormData();
       fd.set("body", text); fd.set("view", "panel");
+      if (reply) fd.set("parent_id", reply.id);
       const r = await api(`/posts/${encodeURIComponent(id)}/comments`, { body: fd });
       setCount(id, r.count);
       if (S.id === id) {
         const [node] = nodesFrom(r.html);
         if (node) { node.classList.add("fresh"); row.replaceWith(node); } else row.remove();
+        if (reply) {
+          $("[data-replies-toggle]", reply.thread).dataset.count = r.reply_count || $$(".crow[data-comment]", repliesBox(reply.thread)).length;
+          updateToggle(reply.thread);
+          clearReply();
+        }
       }
     } catch (err) {
       row.remove();
+      if (reply) updateToggle(reply.thread);
       if (S.id === id) { input.value = text; autosize(); if (!hasRows() && !S.hasMore) renderState("empty"); }
       toast(friendly(err), "error");
     } finally {
@@ -257,14 +335,20 @@
 
   /* ---------- deleting ---------- */
   async function removeComment(btn) {
-    const id = btn.dataset.commentDelete, row = btn.closest(".crow");
+    const id = btn.dataset.commentDelete, own = btn.closest(".crow");
+    const row = own && !own.classList.contains("crow-reply") && own.closest(".cthread") ? own.closest(".cthread") : own;   // a top-level comment goes with its replies
     if (!id || !row || row.classList.contains("removing")) return;
-    if (!window.confirm("Delete this comment?")) return;
+    if (!window.confirm(own && own.classList.contains("crow-reply") ? "Delete this reply?" : "Delete this comment?")) return;
     row.classList.add("removing");
     try {
       const r = await api(`/comments/${encodeURIComponent(id)}/delete`);
       row.classList.add("gone");
-      setTimeout(() => { row.remove(); if (!hasRows() && !S.hasMore && S.open) renderState("empty"); }, 220);
+      const thread = r.root ? list.querySelector(`.cthread[data-thread="${CSS.escape(String(r.root))}"]`) : null;
+      setTimeout(() => {
+        row.remove();
+        if (thread) { $("[data-replies-toggle]", thread).dataset.count = r.reply_count || 0; updateToggle(thread); }
+        if (!hasRows() && !S.hasMore && S.open) renderState("empty");
+      }, 220);
       if (typeof r.count === "number") setCount(S.id, r.count); else bumpCount(S.id, -1);
     } catch (err) {
       row.classList.remove("removing");
