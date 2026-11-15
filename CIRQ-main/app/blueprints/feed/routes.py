@@ -10,6 +10,7 @@ from app.utils import iso, clean_text, utcnow, hours_from_now, parse_dt, encode_
 
 bp = Blueprint("feed", __name__)
 COMMENT_PAGE = 20   # comments are always loaded a page at a time, never all at once
+REPLY_PAGE = 10     # ...and so are the replies under one comment
 
 
 def _page_size():
@@ -282,17 +283,29 @@ def _viewable_post(post_id):
 
 def _hydrate_comments(rows, hidden):
     """Attach author, like count and 'did I like it' to comment rows. Blocked or unapproved authors are dropped."""
-    authors = sb.by_id("profiles", [c["author_id"] for c in rows])
     ids = [c["id"] for c in rows]
-    like_n = Counter(r["comment_id"] for r in sb.in_("comment_likes", "comment_id", ids, cols="comment_id"))
-    mine = social._mine("comment_likes", "comment_id", ids, g.user["id"])
+    people_ids = [c["author_id"] for c in rows] + [c.get("reply_to_user_id") for c in rows if c.get("reply_to_user_id")]
+    authors, like_rows, mine = sb.parallel(
+        lambda: sb.by_id("profiles", people_ids),
+        lambda: sb.in_("comment_likes", "comment_id", ids, cols="comment_id"),
+        lambda: social._mine("comment_likes", "comment_id", ids, g.user["id"]))
+    like_n = Counter(r["comment_id"] for r in like_rows)
     out = []
     for c in rows:
         a = authors.get(c["author_id"])
         if c["author_id"] in hidden or not a or a.get("account_status") != "approved":
             continue
-        out.append({**c, "author": a, "like_count": like_n[c["id"]], "liked": c["id"] in mine})
+        target = authors.get(c.get("reply_to_user_id"))
+        out.append({**c, "author": a, "like_count": like_n[c["id"]], "liked": c["id"] in mine,
+                    "reply_to": target if target and target["id"] not in hidden else None})
     return out
+
+
+def _sync_reply_count(root_id):
+    """Keep the 'N replies' number on a top-level comment right (counts only visible replies)."""
+    n = sb.count("comments", parent_id=root_id, moderation_status="ok")
+    sb.update("comments", {"reply_count": n}, id=root_id)
+    return n
 
 
 @bp.get("/post/<post_id>")
@@ -302,7 +315,15 @@ def detail(post_id):
     card = social.hydrate_posts([post], g.user["id"])[0]
     hidden = social.blocked_between(g.user["id"])
     rows = sb.select("comments", post_id=post_id, moderation_status="ok", order="created_at", desc=False)
-    comments = _hydrate_comments(rows, hidden)
+    everything = _hydrate_comments(rows, hidden)
+    comments, replies = [], {}
+    for c in everything:
+        if c.get("parent_id"):
+            replies.setdefault(c["parent_id"], []).append(c)
+        else:
+            comments.append(c)
+    for c in comments:
+        c["replies"] = replies.get(c["id"], [])
     return render_template("feed/detail.html", post=card, comments=comments)
 
 
@@ -316,7 +337,7 @@ def comments_page(post_id):
         cursor = decode_cursor(request.args.get("before"))
     except ValueError:
         abort(400, description="Invalid comments cursor.")
-    q = db().table("comments").select("*").eq("post_id", post_id).eq("moderation_status", "ok")
+    q = db().table("comments").select("*").eq("post_id", post_id).eq("moderation_status", "ok").is_("parent_id", "null")
     if cursor:
         ts, cid = cursor
         q = q.or_(f"created_at.lt.{ts},and(created_at.eq.{ts},id.lt.{cid})")
@@ -326,6 +347,32 @@ def comments_page(post_id):
     comments = _hydrate_comments(rows, social.blocked_between(g.user["id"]))
     html = render_template("partials/comment_rows.html", comments=comments, post_author_id=post["author_id"])
     return jsonify(html=html, count=post.get("comment_count") or 0, has_more=has_more,
+                   next_cursor=encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else "")
+
+
+@bp.get("/api/comments/<comment_id>/replies")
+@login_required
+@limiter.limit("180 per minute", key_func=lambda: g.user["id"])
+def comment_replies(comment_id):
+    """One page of the replies under a comment, oldest first, as ready-to-insert HTML."""
+    root = sb.get("comments", id=comment_id)
+    if not root or root.get("parent_id") or root.get("moderation_status") != "ok":
+        abort(404)
+    post, _author = _viewable_post(root["post_id"])
+    try:
+        cursor = decode_cursor(request.args.get("after"))
+    except ValueError:
+        abort(400, description="Invalid replies cursor.")
+    q = db().table("comments").select("*").eq("parent_id", comment_id).eq("moderation_status", "ok")
+    if cursor:
+        ts, cid = cursor
+        q = q.or_(f"created_at.gt.{ts},and(created_at.eq.{ts},id.gt.{cid})")
+    rows = q.order("created_at").order("id").limit(REPLY_PAGE + 1).execute().data or []
+    has_more = len(rows) > REPLY_PAGE
+    rows = rows[:REPLY_PAGE]
+    replies = _hydrate_comments(rows, social.blocked_between(g.user["id"]))
+    html = "".join(render_template("partials/comment_row.html", c=c, post_author_id=post["author_id"]) for c in replies)
+    return jsonify(html=html, has_more=has_more, count=root.get("reply_count") or 0,
                    next_cursor=encode_cursor(rows[-1]["created_at"], rows[-1]["id"]) if has_more and rows else "")
 
 
@@ -346,16 +393,34 @@ def add_comment(post_id):
             return jsonify(error=msg), 400
         flash(msg, "error")
         return redirect(url_for("feed.detail", post_id=post_id))
-    c = sb.insert("comments", {"post_id": post_id, "author_id": g.user["id"], "body": body})
-    notify(post["author_id"], "comment", g.user["id"], "post", post_id, dedupe=False)
+    parent_id = request.form.get("parent_id") or (request.get_json(silent=True) or {}).get("parent_id")
+    row, reply_to, root_id = {"post_id": post_id, "author_id": g.user["id"], "body": body}, None, None
+    if parent_id:                                  # a reply: always filed under the thread's top-level comment
+        parent = sb.get("comments", id=parent_id)
+        if not parent or parent["post_id"] != post_id or parent.get("moderation_status") != "ok":
+            abort(404)
+        if social.is_blocked(g.user["id"], parent["author_id"]):
+            abort(403)
+        root_id, reply_to = parent.get("parent_id") or parent["id"], parent["author_id"]
+        row.update(parent_id=root_id, reply_to_user_id=reply_to)
+    c = sb.insert("comments", row)
+    if reply_to:
+        notify(reply_to, "reply", g.user["id"], "post", post_id, dedupe=False)       # "X replied to your comment"
+        _sync_reply_count(root_id)
+    else:
+        notify(post["author_id"], "comment", g.user["id"], "post", post_id, dedupe=False)
     recommender.record_safe(g.user, post, author, "comment")
     c["author"] = g.user
     c["like_count"], c["liked"] = 0, False
+    c["reply_to"] = sb.get("profiles", id=reply_to) if reply_to else None
     if wants_json:
         panel = request.form.get("view") == "panel"
-        html = (render_template("partials/comment_row.html", c=c, post_author_id=post["author_id"]) if panel
-                else render_template("partials/comment.html", c=c))
-        return jsonify(html=html, id=c["id"], count=sb.get("posts", "comment_count", id=post_id)["comment_count"])
+        template = ("partials/comment_row.html" if root_id else "partials/comment_thread.html") if panel else "partials/comment.html"
+        html = render_template(template, c=c, post_author_id=post["author_id"])
+        out = {"html": html, "id": c["id"], "count": sb.get("posts", "comment_count", id=post_id)["comment_count"]}
+        if root_id:                                  # replies also tell the page which thread they belong to
+            out.update(root=root_id, reply_count=(sb.get("comments", "reply_count", id=root_id) or {}).get("reply_count") or 0)
+        return jsonify(out)
     return redirect(url_for("feed.detail", post_id=post_id) + "#comments")
 
 
@@ -406,8 +471,13 @@ def delete_comment(comment_id):
     if g.user["id"] not in (c["author_id"], post["author_id"]) and g.user.get("role") != "admin":
         abort(403)
     sb.delete("comments", id=comment_id)
+    root_id = c.get("parent_id")
+    reply_count = _sync_reply_count(root_id) if root_id and sb.get("comments", id=root_id) else None
     if request.headers.get("X-Requested-With") == "fetch":
-        return jsonify(ok=True, count=(sb.get("posts", "comment_count", id=c["post_id"]) or {}).get("comment_count", 0))
+        out = {"ok": True, "count": (sb.get("posts", "comment_count", id=c["post_id"]) or {}).get("comment_count", 0)}
+        if root_id:
+            out.update(root=root_id, reply_count=reply_count or 0)
+        return jsonify(out)
     flash("Comment deleted.", "info")
     return redirect(request.referrer or url_for("feed.detail", post_id=c["post_id"]))
 
