@@ -17,7 +17,7 @@ def target_url(n):
     if k in ("follow", "follow_accepted", "story_like") and n.get("actor_id"):
         a = sb.get("profiles", "username", id=n["actor_id"])
         return url_for("profiles.view", username=a["username"]) if a else url_for("notifications.index")
-    if k in ("like", "comment") and ref:
+    if k in ("like", "comment", "reply") and ref:
         return url_for("feed.detail", post_id=ref)
     if k == "comment_like" and ref and n.get("ref_type") == "post":
         return url_for("feed.detail", post_id=ref)
@@ -25,8 +25,6 @@ def target_url(n):
         return url_for("feed.home")
     if k.startswith("loan_") and ref:
         return url_for("lending.detail", loan_id=ref)
-    if k == "live_started" and ref:
-        return url_for("live.room", sid=ref)
     if k == "gift_received":
         return url_for("lending.index")
     if k == "message" and ref:
