@@ -1,8 +1,10 @@
 {% import 'partials/macros.html' as m with context %}
-<div class="comment" id="c-{{ c.id }}">
+<div class="comment{{ ' reply' if c.parent_id }}" id="c-{{ c.id }}">
   <a href="{{ url_for('profiles.view', username=c.author.username) }}">{{ m.avatar(c.author, 'xs') }}</a>
-  <div class="bubble"><b>{{ c.author.username }}</b>{{ m.verified(c.author) }} <small class="dim">{{ c.created_at|ago }}</small><br>{{ c.body }}</div>
+  <div class="bubble"><b>{{ c.author.username }}</b>{{ m.verified(c.author) }} <small class="dim">{{ c.created_at|ago }}</small>{% if c.reply_to %}<br><span class="crow-replying">Replying to <a href="{{ url_for('profiles.view', username=c.reply_to.username) }}">@{{ c.reply_to.username }}</a></span>{% endif %}<br>{{ c.body }}</div>
+  <button class="act" type="button" data-reply-to="{{ c.id }}" data-reply-user="{{ c.author.username }}" aria-label="Reply to {{ c.author.username }}">{{ m.icon('comment','i-sm') }}<span class="small">Reply</span></button>
   <button class="act clike {{ 'liked' if c.liked }}" type="button" data-clike="{{ c.id }}" aria-pressed="{{ 'true' if c.liked else 'false' }}" aria-label="Like comment">{{ m.icon('heart','i-sm') }}</button><button class="act likers-btn" type="button" data-likers="{{ url_for('feed.comment_likers', comment_id=c.id) }}" data-likers-title="Comment likes" data-clikes-of="{{ c.id }}" aria-label="See who liked this comment" {{ 'hidden' if not c.like_count }}>{{ c.like_count or '' }}</button>
   <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="Comment options">{{ m.icon('more','i-sm') }}</button>
     <div class="menu-list">{% if c.author_id == cur.id %}<form method="post" action="{{ url_for('feed.delete_comment', comment_id=c.id) }}" data-confirm="Delete this comment?">{{ m.csrf() }}<button class="danger">{{ m.icon('trash','i-sm') }} Delete</button></form>{% else %}{{ m.report_btn('comment', c.id) }}{% endif %}</div></div>
 </div>
+{% if not c.parent_id %}<div class="creplies" data-creplies-for="{{ c.id }}">{% for c in (c.replies or []) %}{% include 'partials/comment.html' %}{% endfor %}</div>{% endif %}
