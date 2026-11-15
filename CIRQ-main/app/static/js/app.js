@@ -197,35 +197,6 @@
   window.addEventListener("popstate", () => closePageMenu(false));
   window.addEventListener("pagehide", () => closePageMenu(false));
 
-  /* Register page: live username checklist. Mirrors the server rules in app/utils.py (valid_username); the server stays the authority. */
-  const unameInput = $("[data-username-input]"), unameRules = $("[data-username-rules]");
-  if (unameInput && unameRules) {
-    const count = $("[data-username-count]", unameRules);
-    const setRule = (key, state) => {
-      const li = $(`[data-rule="${key}"]`, unameRules);
-      if (li) li.dataset.state = state;                       // idle | ok | bad | pending
-    };
-    const checkUsername = () => {
-      const raw = unameInput.value.trim();
-      const v = raw.toLowerCase().replace(/^@/, "");           // same normalising the server does
-      const n = v.length;
-      if (count) count.textContent = `${n}/24`;
-      if (!n) { ["length", "chars", "edges", "repeat"].forEach((k) => setRule(k, "idle")); unameRules.dataset.valid = "0"; return; }
-      const lengthOk = n >= 3 && n <= 24;
-      const charsOk = /^[a-z0-9._]+$/.test(v);
-      const edgesOk = /^[a-z0-9]/.test(v) && /[a-z0-9]$/.test(v);
-      const repeatOk = !/\.\.|__/.test(v);
-      setRule("length", lengthOk ? "ok" : (n < 3 ? "pending" : "bad"));   // too short = still typing, not an error
-      setRule("chars", charsOk ? "ok" : "bad");
-      setRule("edges", edgesOk ? "ok" : "bad");
-      setRule("repeat", repeatOk ? "ok" : "bad");
-      unameRules.dataset.valid = (lengthOk && charsOk && edgesOk && repeatOk) ? "1" : "0";
-    };
-    unameInput.addEventListener("input", checkUsername);
-    unameInput.addEventListener("change", checkUsername);
-    checkUsername();
-  }
-
   const schoolChoice = $("#f-school-choice"), customSchool = $("[data-new-school]");
   if (schoolChoice && customSchool) {
     const schoolName = $("#f-new-school");
@@ -509,12 +480,35 @@
       try {
         const r = await api(f.action, { body: new FormData(f) });
         const list = $("[data-comment-list]"); const none = $("[data-no-comments]"); none && none.remove();
-        list.insertAdjacentHTML("beforeend", r.html); f.reset();
+        const box = r.root ? document.querySelector(`[data-creplies-for="${CSS.escape(String(r.root))}"]`) : null;
+        (box || list).insertAdjacentHTML("beforeend", r.html); f.reset(); clearReplyTarget(f);
         const n = $("[data-comment-count]"); n && (n.textContent = `(${r.count})`);
+        const fresh = document.getElementById(`c-${r.id}`); fresh && fresh.scrollIntoView({ block: "nearest", behavior: "smooth" });
       } catch (err) { toast(err.message, "error"); }
       btn.disabled = false; return;
     }
     if (f.matches('[action$="/delete"][data-ajax]')) { /* reserved */ }
+  });
+
+  /* replying on the post page: tap Reply, the form then posts under that comment */
+  function clearReplyTarget(form) {
+    const chip = $("[data-reply-chip]");
+    if (form && form.elements.parent_id) form.elements.parent_id.value = "";
+    if (form && form.elements.body) form.elements.body.placeholder = "Add a comment";
+    if (chip) chip.hidden = true;
+  }
+  document.addEventListener("click", (e) => {
+    const form = $("[data-comment-form]");
+    if (!form) return;
+    const reply = e.target.closest("[data-reply-to]");
+    if (reply) {
+      form.elements.parent_id.value = reply.dataset.replyTo;
+      $("[data-reply-name]").textContent = `@${reply.dataset.replyUser}`;
+      $("[data-reply-chip]").hidden = false;
+      form.elements.body.placeholder = `Reply to @${reply.dataset.replyUser}…`;
+      form.elements.body.focus();
+      form.scrollIntoView({ block: "center", behavior: "smooth" });
+    } else if (e.target.closest("[data-reply-cancel]")) clearReplyTarget(form);
   });
 
   document.addEventListener("change", (e) => {
@@ -1094,7 +1088,6 @@
     }
     let refreshBusy = false;
     async function refreshNewReels(retry = false) {
-      if (reels.dataset.shuffle === "1") return;                              // shuffled feed: there is no "newer reels" list to poll
       if (refreshBusy || busy || (document.hidden && !retry)) return;
       refreshBusy = true; if (refreshError) refreshError.hidden = true;
       try {
@@ -1132,7 +1125,7 @@
     reels.addEventListener("click", (e) => {
       if (e.target.closest("[data-reels-refresh-retry]")) refreshNewReels(true);
     });
-    if (reels.dataset.shuffle !== "1") window.setInterval(() => refreshNewReels(), 30000);
+    window.setInterval(() => refreshNewReels(), 30000);
   }
 
   /* ---------- reel composer: preview, validation, real upload progress ---------- */
