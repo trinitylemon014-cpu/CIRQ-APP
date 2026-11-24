@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0c">
+  <meta name="robots" content="noindex">
+  <title>Offline · CIRQ</title>
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" data-pwa-theme-css data-light-href="{{ url_for('static', filename='css/style-light.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pwa.css') }}">
+</head>
+<body class="offline-page" data-offline-page data-health="{{ url_for('health') }}">
+  <main class="offline-wrap" id="main">
+    <span class="brand-tile xl" aria-hidden="true">C.</span>
+    <h1>You're offline</h1>
+    <p class="muted">CIRQ can't be reached right now. Check your Wi‑Fi or mobile data. We'll reconnect and reload by ourselves as soon as you're back.</p>
+    <div class="offline-actions">
+      <button class="btn" type="button" data-offline-retry>Try again</button>
+    </div>
+    <p class="muted small offline-status" role="status" aria-live="polite" data-offline-status>Waiting for a connection…</p>
+  </main>
+  <script src="{{ url_for('static', filename='js/pwa.js') }}" defer></script>
+</body>
+</html>
