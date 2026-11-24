@@ -125,6 +125,8 @@ class Config:
     CHAT_ATTACHMENT_VIDEO_MAX_MB = _int("CHAT_ATTACHMENT_VIDEO_MAX_MB", 50)
     CHAT_ATTACHMENT_OTHER_MAX_MB = _int("CHAT_ATTACHMENT_OTHER_MAX_MB", 25)
     CHAT_ATTACHMENT_MAX_FILES = _int("CHAT_ATTACHMENT_MAX_FILES", 10)
+    MESSAGE_EDIT_MINUTES = _int("MESSAGE_EDIT_MINUTES", 15)         # how long after sending a message can still be edited (0 = no limit)
+    MESSAGE_UNSEND_HOURS = _int("MESSAGE_UNSEND_HOURS", 48)         # how long the sender can still "delete for everyone" (0 = no limit)
     CHAT_ATTACHMENT_BATCH_MAX_MB = min(_int("CHAT_ATTACHMENT_BATCH_MAX_MB", 85), 90)
     CHAT_ATTACHMENT_SIGNED_URL_SECONDS = _int("CHAT_ATTACHMENT_SIGNED_URL_SECONDS", 900)
     MAX_CONTENT_LENGTH = min(max(
