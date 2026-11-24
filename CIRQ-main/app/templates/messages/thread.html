@@ -1,25 +1,32 @@
 {% extends 'base.html' %}{% import 'partials/macros.html' as m with context %}{% block title %}Chat{% endblock %}
 {% block content %}
-<div class="chat-wrap" data-cid="{{ conv.id }}" data-poll="{{ url_for('messages.poll', cid=conv.id) }}" data-last="{{ last_ts }}">
+<div class="chat-wrap" data-cid="{{ conv.id }}" data-poll="{{ url_for('messages.poll', cid=conv.id) }}" data-last="{{ last_ts }}" data-now="{{ now }}"
+  data-msg-base="{{ url_for('messages.thread', cid=conv.id) }}/messages" data-edit-minutes="{{ edit_minutes }}" data-unsend-hours="{{ unsend_hours }}">
   <div class="chat-head"><a class="icon-btn" href="{{ url_for('messages.inbox') }}" aria-label="Back">{{ m.icon('arrow-left') }}</a>
     {% if other %}<a class="row" href="{{ url_for('profiles.view', username=other.username) }}">{{ m.avatar(other, 'lg') }}<div><b>{{ other.display_name }}</b>{{ m.verified(other) }}<br><small class="muted">@{{ other.username }} · <span class="presence-text" data-presence-label data-user-id="{{ other.id }}" hidden></span></small></div></a>
     {% else %}<span class="av" style="--s:44px">{{ m.icon('users') }}</span><div><b>{{ conv.title or 'Group chat' }}</b><br><small class="muted">{{ members|length }} members</small></div>{% endif %}
     <div class="row" style="margin-left:auto;gap:4px"><button class="icon-btn" type="button" data-open="disappear-dialog" aria-label="Disappearing messages" title="Disappearing messages">{{ m.icon('clock') }}</button>
-    {% if other %}<div class="menu"><button class="icon-btn" type="button" data-menu aria-label="Chat options" aria-haspopup="true">{{ m.icon('more') }}</button>
+    <div class="menu"><button class="icon-btn" type="button" data-menu aria-label="Chat options" aria-haspopup="true">{{ m.icon('more') }}</button>
       <div class="menu-list" role="menu">
-        <button type="button" data-open="chat-report-dialog">{{ m.icon('flag','i-sm') }} Report @{{ other.username }}</button>
+        {% if other %}<button type="button" data-open="chat-report-dialog">{{ m.icon('flag','i-sm') }} Report @{{ other.username }}</button>
         {% if block_state == 'i_blocked' %}<form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}">{{ m.csrf() }}<input type="hidden" name="action" value="unblock"><button>{{ m.icon('check','i-sm') }} Unblock @{{ other.username }}</button></form>
-        {% else %}<form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}" data-confirm="Block @{{ other.username }}? They won't be able to message you or see when you're online. You can unblock them any time from this chat.">{{ m.csrf() }}<input type="hidden" name="action" value="block"><button class="danger">{{ m.icon('x','i-sm') }} Block @{{ other.username }}</button></form>{% endif %}
-      </div></div>{% endif %}</div></div>
+        {% else %}<form method="post" action="{{ url_for('messages.block_contact', cid=conv.id) }}" data-confirm="Block @{{ other.username }}? They won't be able to message you or see when you're online. You can unblock them any time from this chat.">{{ m.csrf() }}<input type="hidden" name="action" value="block"><button class="danger">{{ m.icon('x','i-sm') }} Block @{{ other.username }}</button></form>{% endif %}{% endif %}
+        <form method="post" action="{{ url_for('messages.delete_chat', cid=conv.id) }}" data-confirm="{{ 'Delete this chat? Your messages and theirs are removed from your side only; @' ~ other.username ~ ' keeps their copy. A new message starts the chat again.' if other else 'Clear this chat for you? The other members keep their copy.' }}">{{ m.csrf() }}<button class="danger">{{ m.icon('trash','i-sm') }} {{ 'Delete chat' if other else 'Clear chat' }}</button></form>
+      </div></div></div></div>
   {% if conv.expires_at %}<div class="disappear-note">{{ m.icon('calendar','i-sm') }} <span>Event chat: closes after {{ conv.expires_at|event_dt }} and everything in it is deleted.</span></div>{% endif %}
   <div class="disappear-note" data-disappear-note {{ 'hidden' if not disappear_after }}>{{ m.icon('clock','i-sm') }} <span>Disappearing messages for you: <b data-disappear-label>{{ disappear_label }}</b></span></div>
   <div class="bubbles" id="bubbles" aria-live="polite">
     {% if more %}<a class="btn sm ghost" style="align-self:center" href="?before={{ more }}">Older messages</a>{% endif %}
     {% include 'messages/_bubbles.html' %}
-    {% if not msgs %}<p class="muted" style="text-align:center;margin:auto">No messages yet. Say hello!</p>{% endif %}
+    {% if not msgs %}<p class="muted chat-empty" style="text-align:center;margin:auto">No messages yet. Say hello!</p>{% endif %}
   </div>
   {% if can_send %}
   <div class="chat-composer" data-max-files="{{ config.CHAT_ATTACHMENT_MAX_FILES }}">
+    <div class="chat-context" data-chat-context hidden>
+      <span class="chat-context-ic" data-ctx-icon aria-hidden="true"></span>
+      <div class="chat-context-text"><b data-ctx-title></b><span data-ctx-text></span></div>
+      <button type="button" class="icon-btn" data-ctx-cancel aria-label="Cancel">{{ m.icon('x','i-sm') }}</button>
+    </div>
     <div class="chat-file-previews" id="chat-file-previews" hidden></div>
     <div class="chat-upload-status" id="chat-upload-status" hidden aria-live="polite">
       <progress id="chat-upload-progress" max="100" value="0"></progress>
@@ -29,7 +36,7 @@
     </div>
     <form class="chat-form" id="chat-form" action="{{ url_for('messages.send', cid=conv.id) }}"
       data-attachment-action="{{ url_for('attachments_api.send_with_attachments', cid=conv.id) }}" method="post" enctype="multipart/form-data">
-      {{ m.csrf() }}
+      {{ m.csrf() }}<input type="hidden" name="reply_to_id" value="" data-reply-input>
       <label class="icon-btn chat-attach-btn" style="margin:0;cursor:pointer" aria-label="Attach files">📎<input id="chat-file-input" type="file" name="attachments" multiple
         accept=".jpg,.jpeg,.png,.gif,.webp,.heic,.mp4,.mov,.webm,.mkv,.avi,.3gp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.zip,.mp3,.m4a,.wav,.ogg" hidden></label>
       <input type="text" name="body" maxlength="2000" placeholder="Message" aria-label="Message" autocomplete="off">
@@ -47,6 +54,16 @@
   {% endif %}
   {% endif %}
 </div>
+<div class="msg-menu" id="msg-menu" role="menu" aria-label="Message options" hidden></div>
+<dialog id="msg-delete-dialog" class="disappear-dialog" aria-labelledby="msg-del-title">
+  <div class="row between" style="margin-bottom:8px"><h2 id="msg-del-title" style="margin:0">Delete message?</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
+  <p class="muted small" data-del-hint style="margin:0 0 14px"></p>
+  <div class="stack" style="gap:8px">
+    <button class="btn danger" type="button" data-del-everyone hidden>Delete for everyone</button>
+    <button class="btn danger ghost" type="button" data-del-me>Delete for me</button>
+    <button class="btn ghost" type="button" data-close>Cancel</button>
+  </div>
+</dialog>
 {% if other %}<dialog id="chat-report-dialog" class="disappear-dialog" aria-labelledby="chat-report-title">
   <form method="post" action="{{ url_for('messages.report_contact', cid=conv.id) }}" data-chat-report-form>{{ m.csrf() }}
     <h2 id="chat-report-title" style="margin:0 0 6px">Report @{{ other.username }}</h2>
