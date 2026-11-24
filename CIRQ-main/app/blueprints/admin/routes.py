@@ -415,6 +415,13 @@ def reports():
         t = sb.get(TABLES[r["target_type"]], id=r["target_id"])
         r["target"] = t
         r["preview"] = (t or {}).get("caption") or (t or {}).get("body") or (t or {}).get("title") or (t or {}).get("username") or "(content removed)"
+        r["edits"], r["sender_deleted"] = [], False
+        if r["target_type"] == "message" and t:                 # a reported message may have been edited or deleted since: moderators see the history
+            r["sender_deleted"] = bool(t.get("deleted_at"))
+            try:
+                r["edits"] = sb.select("message_edits", message_id=t["id"], order="created_at", desc=False)
+            except Exception:                                    # chat-actions migration not applied yet
+                r["edits"] = []
     return render_template("admin/reports.html", rows=rows, status=status)
 
 
