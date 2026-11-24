@@ -1030,5 +1030,32 @@ alter table stories drop constraint if exists stories_content_check;
 alter table stories add constraint stories_content_check check (
   (media_type = 'text' and text_body is not null) or (media_type in ('image','video') and url is not null and public_id is not null));
 
+-- ---------- 8. Chat message actions ----------
+-- Chat message actions: reply to a message, edit a sent message, delete for everyone, and "delete chat" (per person).
+-- Safe to run more than once. Nothing existing is changed or removed.
+
+-- Reply: the message this one answers. If the original is ever purged, the reply simply loses its quote.
+alter table messages add column if not exists reply_to_id uuid references messages(id) on delete set null;
+create index if not exists messages_reply_idx on messages(reply_to_id) where reply_to_id is not null;
+
+-- Edit: when the text was last changed. Every earlier version is kept in message_edits for moderators.
+alter table messages add column if not exists edited_at timestamptz;
+create table if not exists message_edits (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references messages(id) on delete cascade,
+  editor_id uuid not null references profiles(id) on delete cascade,
+  old_body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists message_edits_msg_idx on message_edits(message_id, created_at);
+alter table message_edits enable row level security;          -- no policies: only the server (service role) reads or writes this
+
+-- Delete for everyone: the row stays as a tombstone ("This message was deleted") so replies and reports still make sense.
+alter table messages add column if not exists deleted_at timestamptz;
+alter table messages add column if not exists deleted_by uuid references profiles(id) on delete set null;
+
+-- "Delete chat" for me: everything up to this moment is hidden from me only. New messages show up again as normal.
+alter table conversation_members add column if not exists cleared_at timestamptz;
+
 -- Make PostgREST pick up the new tables and columns right away.
 notify pgrst, 'reload schema';
