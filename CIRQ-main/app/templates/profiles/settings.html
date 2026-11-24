@@ -16,6 +16,19 @@
   {% if cur.is_private %}<a class="row between person-link" href="{{ url_for('profiles.follow_requests') }}"><span>{{ m.icon('users','i-sm') }} Follow requests</span><span>{% if pending_requests %}<span class="chip lime">{{ pending_requests }}</span>{% endif %} {{ m.icon('arrow-left','i-sm') }}</span></a>{% endif %}
   <button class="btn block" style="margin-top:12px">Save privacy</button></form>
 <div class="card theme-row" style="margin-top:14px"><div><b>Theme</b><small>Dark is the new look. Light is the original.</small></div>{{ m.theme_switch() }}</div>
+<div class="card pwa-card" style="margin-top:14px">
+  <div class="row"><span class="brand-tile" aria-hidden="true">C.</span><div class="grow"><b>Install the CIRQ app</b><br><small class="muted">Open CIRQ from your home screen, full screen and fast, like any other app. It uses almost no storage.</small></div>
+    <button class="btn sm" type="button" data-pwa-install hidden>Install</button></div>
+  <p class="muted" data-pwa-installed hidden style="margin:12px 0 0">✓ You're using the installed app.</p>
+  <p class="muted small" data-pwa-ios hidden style="margin:12px 0 0">On iPhone and iPad, tap the <b>Share</b> button in Safari, then <b>Add to Home Screen</b>.</p>
+  <details data-pwa-howto><summary>How to install on my device</summary>
+    <ol class="pwa-steps">
+      <li><b>Android (Chrome):</b> tap <b>Install</b> above, or open the ⋮ menu and choose <b>Install app</b> / <b>Add to Home screen</b>.</li>
+      <li><b>iPhone / iPad (Safari):</b> tap the <b>Share</b> button, then <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+      <li><b>Windows / Mac / Chromebook (Chrome or Edge):</b> click the install icon at the right of the address bar, or open the menu and choose <b>Install CIRQ</b>.</li>
+      <li><b>Mac (Safari 17+):</b> choose <b>File → Add to Dock</b>.</li>
+    </ol></details>
+</div>
 <a class="card lend-link" href="{{ url_for('auth.recovery_code') }}" style="margin-top:14px"><span class="icon-tile">{{ m.icon('shield','i-lg') }}</span><div class="grow"><h2 style="margin:0">Account recovery</h2><p class="muted" style="margin:2px 0 0">{{ 'Your recovery code is saved. Tap to view or renew it.' if cur.recovery_saved_at else 'Save your recovery code so you can always get back in if you forget your password.' }}</p></div>{{ m.icon('arrow-left','chev') }}</a>
 <form class="card" method="post" style="margin-top:14px">{{ m.csrf() }}<input type="hidden" name="action" value="password"><h2>Change password</h2>
   {{ m.pw_field('current', 'Current password') }}{{ m.pw_field('new', 'New password', 'new-password') }}{{ m.pw_field('new2', 'Confirm new password', 'new-password') }}
