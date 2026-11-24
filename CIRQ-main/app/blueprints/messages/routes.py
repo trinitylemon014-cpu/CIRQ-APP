@@ -81,8 +81,24 @@ def _decorate(msgs):
     for row in sb.in_("message_attachments", "message_id", [m["id"] for m in msgs]):
         attachments.setdefault(row["message_id"], []).append(row)
     now = utcnow()
+    me = g.user["id"]
+    reply_ids = [m["reply_to_id"] for m in msgs if m.get("reply_to_id")]
+    targets = sb.by_id("messages", reply_ids) if reply_ids else {}
+    target_people = sb.by_id("profiles", [t["sender_id"] for t in targets.values()]) if targets else {}
     for m in msgs:
         m["sender"] = senders.get(m["sender_id"])
+        m["deleted"] = bool(m.get("deleted_at"))
+        m["can_edit"] = messaging.can_edit(m, me)
+        m["can_unsend"] = messaging.can_unsend(m, me)
+        m["preview"] = messaging.preview_text(m, 100)
+        m["reply"] = None
+        if m.get("reply_to_id") and not m["deleted"]:
+            t = targets.get(m["reply_to_id"])
+            if not t or t["conversation_id"] != m["conversation_id"] or t["moderation_status"] != "ok":
+                m["reply"] = {"id": None, "who": "", "text": "Original message unavailable", "gone": True}
+            else:
+                m["reply"] = {"id": t["id"], "gone": bool(t.get("deleted_at")), "text": messaging.preview_text(t),
+                              "who": "You" if t["sender_id"] == me else ((target_people.get(t["sender_id"]) or {}).get("username") or "Someone")}
         # A story reply shows a small thumbnail while the story is still live; afterwards just the label.
         st = stories.get(m.get("story_id"))
         exp = parse_dt(st["expires_at"]) if st else None
@@ -103,6 +119,8 @@ def _snippet(m, me):
     """One-line preview for the inbox list."""
     if not m:
         return "Say hi 👋"
+    if m.get("deleted_at"):
+        return "🚫 You deleted this message" if m["sender_id"] == me else "🚫 This message was deleted"
     if m.get("story_reply"):
         label = "You replied to their story" if m["sender_id"] == me else "Replied to your story"
         return f"{label}: {m['body']}" if m.get("body") else label
@@ -120,11 +138,15 @@ def inbox():
         .eq("moderation_status", "ok").order("created_at", desc=True).limit(400).execute().data or []
     last, unread = {}, {}
     gone = messaging.hidden_ids(me)
+    cleared = {cid: parse_dt(r.get("cleared_at")) for cid, r in mem.items() if r.get("cleared_at")}     # "Delete chat" for me
     for m in recent:
         if m["id"] in gone:
             continue
+        cut = cleared.get(m["conversation_id"])
+        if cut and (parse_dt(m["created_at"]) or cut) <= cut:
+            continue
         last.setdefault(m["conversation_id"], m)
-        if m["sender_id"] != me and m["created_at"] > mem[m["conversation_id"]]["last_read_at"]:
+        if m["sender_id"] != me and not m.get("deleted_at") and m["created_at"] > mem[m["conversation_id"]]["last_read_at"]:
             unread[m["conversation_id"]] = unread.get(m["conversation_id"], 0) + 1
     others = {}
     for c in convs:
@@ -140,6 +162,8 @@ def inbox():
         other = people.get(others.get(c["id"]))
         if c["kind"] == "dm" and (not other or (other["id"] in hidden and other["id"] not in i_blocked)):
             continue
+        if cleared.get(c["id"]) and not last.get(c["id"]):
+            continue                              # a deleted chat stays out of the list until a new message arrives
         title = other["display_name"] if other else (c["title"] or "Group")
         if q and q not in title.lower() and q not in (other["username"] if other else ""):
             continue
@@ -176,7 +200,11 @@ def thread(cid):
         messaging.purge_conversation(cid)          # delete what has disappeared for everyone in this chat
     except Exception:
         current_app.logger.exception("purging disappeared messages failed")
+    now_ts = iso()                                  # taken before reading, so live updates never miss a change in between
+    mine = _membership(cid, me) or {}
     q = db().table("messages").select("*").eq("conversation_id", cid).eq("moderation_status", "ok").order("created_at", desc=True).limit(PAGE + 1)
+    if mine.get("cleared_at"):
+        q = q.gt("created_at", mine["cleared_at"])
     if request.args.get("before"):
         q = q.lt("created_at", request.args["before"])
     rows = q.execute().data or []
@@ -197,11 +225,29 @@ def thread(cid):
         members = list(sb.by_id("profiles", [m["user_id"] for m in sb.select("conversation_members", conversation_id=cid)]).values())
     if request.args.get("partial"):
         return render_template("messages/_bubbles.html", msgs=msgs)
-    mine = _membership(cid, me) or {}
-    return render_template("messages/thread.html", conv=conv, msgs=msgs, other=other, members=members, more=more,
+    return render_template("messages/thread.html", conv=conv, msgs=msgs, other=other, members=members, more=more, now=now_ts,
+                           edit_minutes=current_app.config.get("MESSAGE_EDIT_MINUTES", 15), unsend_hours=current_app.config.get("MESSAGE_UNSEND_HOURS", 48),
                            last_ts=msgs[-1]["created_at"] if msgs else "", can_send=can_send, block_state=block_state,
                            disappear_after=mine.get("disappear_after") or 0, disappear_options=messaging.DISAPPEAR_OPTIONS,
                            disappear_label=messaging.DISAPPEAR_LABELS.get(mine.get("disappear_after") or 0, "Off"))
+
+
+def _reply_target(cid, raw):
+    """(message id, None) for a valid reply target, (None, None) if this isn't a reply, or (None, error response)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None, None
+    gone = (jsonify(error="The message you're replying to is no longer available."), 400)
+    try:
+        rid = str(uuid.UUID(raw))
+    except ValueError:
+        return None, gone
+    t = sb.get("messages", id=rid)
+    cut = parse_dt((_membership(cid, g.user["id"]) or {}).get("cleared_at"))
+    if (not t or t["conversation_id"] != cid or t["moderation_status"] != "ok" or t.get("deleted_at")
+            or rid in messaging.hidden_ids(g.user["id"], [rid]) or (cut and (parse_dt(t["created_at"]) or cut) <= cut)):
+        return None, gone
+    return rid, None
 
 
 @bp.post("/<cid>/send")
@@ -226,7 +272,12 @@ def send(cid):
     ok, why = check_text(body)
     if not ok:
         return jsonify(error=why), 400
+    reply_id, err = _reply_target(cid, request.form.get("reply_to_id"))
+    if err:
+        return err
     row = {"conversation_id": cid, "sender_id": me, "body": body or None}
+    if reply_id:
+        row["reply_to_id"] = reply_id
     if file and file.filename:
         try:
             info = cs.upload(file, "chat", me, private=True)   # private "authenticated" delivery; signed URLs on read
@@ -239,10 +290,7 @@ def send(cid):
         if m["user_id"] != me:
             notify(m["user_id"], "message", me, "conversation", cid, body=(conv.get("title") or ""))
     sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=me)
-    msg["sender"] = g.user
-    _set_ticks([msg], cid)
-    if msg.get("media_public_id"):
-        msg["media_row"] = {"url": msg["media_url"], "public_id": msg["media_public_id"], "media_type": msg["media_type"], "delivery_type": "authenticated"}
+    msg = _decorate([msg])[0]
     return jsonify(html=render_template("messages/_bubbles.html", msgs=[msg]), ts=msg["created_at"])
 
 
@@ -297,6 +345,9 @@ def send_with_attachments(cid):
     ok, why = check_text(body)
     if not ok:
         return jsonify(error=why), 400
+    reply_id, err = _reply_target(cid, request.form.get("reply_to_id"))
+    if err:
+        return err
 
     try:
         prepared = [ca.validate_upload(file) for file in files]
@@ -315,6 +366,7 @@ def send_with_attachments(cid):
         "sender_id": me,
         "body": body or None,
         "attachment_count": len(prepared),
+        **({"reply_to_id": reply_id} if reply_id else {}),
     })
     uploaded_paths, saved = [], []
     try:
@@ -348,9 +400,7 @@ def send_with_attachments(cid):
         if member["user_id"] != me:
             notify(member["user_id"], "message", me, "conversation", cid, body=(conv.get("title") or ""))
     sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=me)
-    message["sender"] = g.user
-    message["attachments"] = saved
-    _set_ticks([message], cid)
+    message = _decorate([message])[0]
     return jsonify(html=render_template("messages/_bubbles.html", msgs=[message]), ts=message["created_at"])
 
 
@@ -360,10 +410,14 @@ def send_with_attachments(cid):
 def poll(cid):
     """Polling fallback (every few seconds from the browser). Returns only messages newer than `after`."""
     _conv_or_404(cid)
+    now_ts = iso()
+    cleared = (_membership(cid, g.user["id"]) or {}).get("cleared_at")
     after = request.args.get("after", "").replace(" ", "+")   # a raw "+" in a URL arrives as a space
     q = db().table("messages").select("*").eq("conversation_id", cid).eq("moderation_status", "ok").neq("sender_id", g.user["id"]).order("created_at")
     if after:
         q = q.gt("created_at", after)
+    if cleared:
+        q = q.gt("created_at", cleared)
     rows = _decorate(_drop_hidden(q.limit(50).execute().data or []))
     if rows:
         sb.update("conversation_members", {"last_read_at": iso()}, conversation_id=cid, user_id=g.user["id"])
@@ -378,7 +432,92 @@ def poll(cid):
             .eq("sender_id", g.user["id"]).in_("id", ids).execute().data or []
         ticks = {m["id"]: "sent" if read_at == "blocked" else messaging.tick_state(m, read_at) for m in mine}
     return jsonify(html=render_template("messages/_bubbles.html", msgs=rows) if rows else "",
-                   ts=rows[-1]["created_at"] if rows else after, ticks=ticks)
+                   ts=rows[-1]["created_at"] if rows else after, ticks=ticks, updates=_changed_since(cid, request.args.get("upd", ""), cleared), now=now_ts)
+
+
+def _changed_since(cid, raw, cleared):
+    """Messages that were edited or deleted-for-everyone after `raw`, as ready-to-swap bubbles, so an open chat updates live."""
+    since = parse_dt((raw or "").replace(" ", "+"))
+    if not since:
+        return []
+    stamp = iso(since)                              # re-formatted from a parsed date: user text never reaches the filter
+    try:
+        rows = db().table("messages").select("*").eq("conversation_id", cid).eq("moderation_status", "ok") \
+            .or_(f"edited_at.gt.{stamp},deleted_at.gt.{stamp}").order("created_at").limit(50).execute().data or []
+    except APIError:                                # the chat-actions migration hasn't been applied yet: nothing to report
+        return []
+    cut = parse_dt(cleared)
+    rows = [r for r in rows if not cut or (parse_dt(r["created_at"]) or cut) > cut]
+    return [{"id": m["id"], "html": render_template("messages/_bubbles.html", msgs=[m])} for m in _decorate(_drop_hidden(rows))]
+
+
+def _message_or_404(cid, mid):
+    _conv_or_404(cid)
+    try:
+        mid = str(uuid.UUID(mid))
+    except ValueError:
+        abort(404)
+    msg = sb.get("messages", id=mid)
+    if not msg or msg["conversation_id"] != cid or msg["moderation_status"] != "ok":
+        abort(404)
+    return msg
+
+
+@bp.post("/<cid>/messages/<mid>/delete")
+@login_required
+@limiter.limit("60 per minute", key_func=lambda: g.user["id"])
+def delete_message(cid, mid):
+    """Delete a message. scope=me hides it for you only (anyone in the chat). scope=everyone replaces it with
+    'This message was deleted' for all members (sender only, within MESSAGE_UNSEND_HOURS)."""
+    msg = _message_or_404(cid, mid)
+    me = g.user["id"]
+    scope = request.form.get("scope") or (request.get_json(silent=True) or {}).get("scope")
+    if scope == "everyone":
+        problem = messaging.unsend_problem(msg, me)
+        if problem:
+            return jsonify(error=problem), 403
+        msg = messaging.unsend(msg, me)
+        return jsonify(ok=True, scope="everyone", id=msg["id"],
+                       html=render_template("messages/_bubbles.html", msgs=_decorate([msg])))
+    if scope == "me":
+        messaging.hide_for(me, msg)
+        return jsonify(ok=True, scope="me", id=msg["id"])
+    return jsonify(error="Choose Delete for me or Delete for everyone."), 400
+
+
+@bp.post("/<cid>/messages/<mid>/edit")
+@login_required
+@limiter.limit("30 per minute", key_func=lambda: g.user["id"])
+def edit_message(cid, mid):
+    """Change the text of a message you already sent (plain text only, for MESSAGE_EDIT_MINUTES after sending)."""
+    msg = _message_or_404(cid, mid)
+    me = g.user["id"]
+    problem = messaging.edit_problem(msg, me)
+    if problem:
+        return jsonify(error=problem), 403
+    body = clean_text(request.form.get("body"), 2000)
+    if not body:
+        return jsonify(error="A message can't be empty. Delete it instead."), 400
+    ok, why = check_text(body)
+    if not ok:
+        return jsonify(error=why), 400
+    if body != msg["body"]:
+        msg = messaging.record_edit(msg, body, me)
+    return jsonify(ok=True, id=msg["id"], html=render_template("messages/_bubbles.html", msgs=_decorate([msg])))
+
+
+@bp.post("/<cid>/clear")
+@login_required
+@limiter.limit("30 per hour", key_func=lambda: g.user["id"])
+def delete_chat(cid):
+    """'Delete chat' (WhatsApp style): removes this chat's history from MY side only. The other person keeps theirs, and a new
+    message brings the chat back, starting empty."""
+    conv = _conv_or_404(cid)
+    messaging.clear_chat(cid, g.user["id"])
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=True, redirect=url_for("messages.inbox"))
+    flash("Chat deleted for you." if conv["kind"] == "dm" else "Chat cleared for you.", "success")
+    return redirect(url_for("messages.inbox"))
 
 
 def _dm_other(conv):
