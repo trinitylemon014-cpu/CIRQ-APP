@@ -61,14 +61,15 @@ def create_app(config_object=None, clients=None):
     from app.blueprints.trivia.routes import bp as trivia_bp
     from app.blueprints.recs.routes import bp as recs_bp
     from app.blueprints.live.routes import bp as live_bp
-    for b in (auth_bp, feed_bp, profiles_bp, discover_bp, reels_bp, stories_bp, linkup_bp, messages_bp,
+    from app.blueprints.pwa.routes import bp as pwa_bp
+    for b in (pwa_bp, auth_bp, feed_bp, profiles_bp, discover_bp, reels_bp, stories_bp, linkup_bp, messages_bp,
               notifications_bp, attachments_bp, games_bp, schools_bp, admin_bp, wallet_bp, lending_bp, trivia_bp, recs_bp, live_bp, legal_bp):
         app.register_blueprint(b)
 
     @app.before_request
     def load_user():
         g.user = None
-        if request.endpoint in (None, "static", "health", "favicon", "robots"):
+        if request.endpoint in (None, "static", "health", "favicon", "robots", "pwa.manifest", "pwa.service_worker", "pwa.offline", "pwa.assetlinks"):
             return
         uid = session.get("uid")
         if not uid or "cirq_db" not in app.extensions:
