@@ -7,6 +7,12 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="theme-color" content="{{ '#0b0b0c' if theme == 'dark' else '#f6f6f1' }}">
   <meta name="color-scheme" content="{{ theme }}">
+  <link rel="manifest" href="{{ url_for('pwa.manifest') }}">
+  <meta name="application-name" content="CIRQ">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CIRQ">
+  <meta name="apple-mobile-web-app-status-bar-style" content="{{ 'black' if theme == 'dark' else 'default' }}">
   <title>{% block title %}CIRQ{% endblock %} · CIRQ</title>
   <link rel="icon" href="/favicon.ico" sizes="48x48">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon-96.png') }}" sizes="96x96">
@@ -15,6 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css' if theme == 'dark' else 'css/style-light.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pwa.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}" data-presence-enabled="{{ '1' if cur and cur.account_status == 'approved' and cur.get('show_active_status', true) else '0' }}" data-delivery-ping="{{ '1' if cur and cur.account_status == 'approved' else '0' }}">
 <a class="skip" href="#main">Skip to content</a>
@@ -198,8 +205,15 @@
 {% else %}
 <main id="main">{% block bare %}{% block public %}{% endblock %}{% endblock %}</main>
 {% endif %}
+<div class="pwa-banner" data-pwa-banner hidden role="region" aria-label="Install CIRQ">
+  <span class="brand-tile" aria-hidden="true">C.</span>
+  <div class="pwa-banner-text"><b>Install CIRQ</b><span data-pwa-banner-text>Add it to your home screen for a faster, full-screen app.</span></div>
+  <button class="btn sm" type="button" data-pwa-install hidden>Install</button>
+  <button class="icon-btn" type="button" data-pwa-dismiss aria-label="Not now">{{ m.icon('x','i-sm') }}</button>
+</div>
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/pwa.js') }}" data-sw="{{ url_for('pwa.service_worker') }}" defer></script>
 {% if cur and cur.account_status == 'approved' and not bare %}<script src="{{ url_for('static', filename='js/comments.js') }}" defer></script><script src="{{ url_for('static', filename='js/likers.js') }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
