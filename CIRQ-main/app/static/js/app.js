@@ -1206,6 +1206,7 @@
     const box = $("#bubbles"), form = $("#chat-form");
     const bottom = () => (box.scrollTop = box.scrollHeight); bottom();
     let last = chat.dataset.last || "";
+    let updSince = chat.dataset.now || "";            // server clock: edits and deletes after this moment are fetched by the poll
     const keepLast = () => { const m = $$(".msg", box).pop(); if (m) last = m.dataset.ts; };
     const formInput = form && $("#chat-file-input", form);
     const previews = $("#chat-file-previews"), status = $("#chat-upload-status");
@@ -1249,7 +1250,7 @@
       });
     }
     function addFiles(files) {
-      if (!form || retryLocked || uploadRequest) return;
+      if (!form || retryLocked || uploadRequest || ctx.mode === "edit") return;
       const incoming = [...files];
       if (selected.length + incoming.length > maxFiles) { toast(`You can attach up to ${maxFiles} files per message.`, "error"); return; }
       incoming.forEach((file) => selected.push({ file, url: URL.createObjectURL(file) }));
@@ -1275,6 +1276,7 @@
     }
     function sendMessage() {
       if (!form || uploadRequest || retryLocked) return;
+      if (ctx.mode === "edit") { submitEdit(); return; }
       const body = form.elements.namedItem("body").value;
       if (!body.trim() && !selected.length) return;
       const payload = new FormData(form);
@@ -1284,8 +1286,8 @@
         api(form.action, { body: payload }).then((result) => {
           const empty = $("p.muted", box); empty && empty.remove();
           box.insertAdjacentHTML("beforeend", result.html); last = result.ts; bottom();
-          form.elements.namedItem("body").value = ""; form.elements.namedItem("body").focus();
-        }).catch((error) => toast(error.message, "error")).finally(() => { button.disabled = false; });
+          form.elements.namedItem("body").value = ""; clearReply(); form.elements.namedItem("body").focus();
+        }).catch((error) => { toast(error.message, "error"); if (/no longer available/.test(error.message)) clearReply(); }).finally(() => { button.disabled = false; });
         return;
       }
       messageRequestId ||= newMessageId();
@@ -1315,7 +1317,7 @@
         uploadRequest = null; retryLocked = false; lockComposer(false);
         const empty = $("p.muted", box); empty && empty.remove();
         box.insertAdjacentHTML("beforeend", result.html); last = result.ts; messageRequestId = null;
-        form.elements.namedItem("body").value = ""; clearSelected(); status.hidden = true; bottom(); watchChatMedia(box);
+        form.elements.namedItem("body").value = ""; clearReply(); clearSelected(); status.hidden = true; bottom(); watchChatMedia(box);
         form.elements.namedItem("body").focus();
       };
       xhr.onerror = () => showFailure("Connection lost. Your message wasn't confirmed; retry the upload.", true);
@@ -1430,8 +1432,10 @@
       if (document.hidden) return;
       try {
         const open = $$(".ticks:not(.read)", box).map((t) => t.dataset.tickId).slice(-60);      // my messages not yet seen
-        const r = await api(`${chat.dataset.poll}?after=${encodeURIComponent(last)}${open.length ? `&ids=${open.join(",")}` : ""}`, { method: "GET" });
+        const r = await api(`${chat.dataset.poll}?after=${encodeURIComponent(last)}${updSince ? `&upd=${encodeURIComponent(updSince)}` : ""}${open.length ? `&ids=${open.join(",")}` : ""}`, { method: "GET" });
         if (r.html) { box.insertAdjacentHTML("beforeend", r.html); last = r.ts; bottom(); watchChatMedia(box); }
+        (r.updates || []).forEach(applyUpdate);                                  // someone edited or deleted a message
+        if (r.now) updSince = r.now;
         const names = { sent: "Sent", delivered: "Delivered", read: "Seen" };
         Object.entries(r.ticks || {}).forEach(([id, state]) => {
           const t = box.querySelector(`.ticks[data-tick-id="${id}"]`);
@@ -1440,6 +1444,222 @@
       } catch (_) { /* transient */ }
     }, 4000);
     keepLast();
+
+    /* ---------- message actions: reply, edit, copy, delete (WhatsApp / Instagram style) ---------- */
+    const ctxBar = $("[data-chat-context]"), replyInput = form && $("[data-reply-input]", form);
+    const textInput = form && form.elements.namedItem("body");
+    const msgBase = chat.dataset.msgBase, menu = $("#msg-menu"), delDialog = $("#msg-delete-dialog");
+    const ctx = { mode: null, id: null };                           // what the composer is doing: replying to / editing a message
+    new MutationObserver(() => { const e = $(".chat-empty", box); if (e && $(".msg", box)) e.remove(); }).observe(box, { childList: true });   // "No messages yet" goes away as soon as one appears
+    let menuFor = null, menuAnchor = null, delTarget = null, pressTimer = 0, swipe = null, swallowClick = false;
+    const msgEl = (id) => box.querySelector(`.msg[data-id="${CSS.escape(id)}"]`);
+    const ping = (ms = 10) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) { /* not supported */ } };
+
+    function showCtx(mode, title, text) {
+      ctx.mode = mode; ctxBar.hidden = false; ctxBar.dataset.mode = mode;
+      $("[data-ctx-title]", ctxBar).textContent = title; $("[data-ctx-text]", ctxBar).textContent = text;
+      form.classList.toggle("editing", mode === "edit");
+      $(".send", form).setAttribute("aria-label", mode === "edit" ? "Save edit" : "Send");
+      textInput.focus({ preventScroll: true });
+    }
+    function clearCtx() {
+      ctx.mode = null; ctx.id = null;
+      if (!ctxBar) return;
+      ctxBar.hidden = true; replyInput.value = ""; form.classList.remove("editing"); $(".send", form).setAttribute("aria-label", "Send");
+    }
+    function clearReply() { if (ctx.mode === "reply") clearCtx(); }
+    function cancelCtx() { if (ctx.mode === "edit") textInput.value = ""; clearCtx(); textInput.focus({ preventScroll: true }); }
+    function startReply(el) {
+      if (!form) { toast("You can't send messages in this chat.", "error"); return; }
+      if (ctx.mode === "edit") textInput.value = "";
+      ctx.id = el.dataset.id; replyInput.value = el.dataset.id;
+      showCtx("reply", `Replying to ${el.dataset.mine === "1" ? "yourself" : el.dataset.who}`, el.dataset.preview || "");
+    }
+    function startEdit(el) {
+      if (!form) return;
+      if (selected.length) { toast("Remove the attached files before editing a message.", "error"); return; }
+      replyInput.value = ""; ctx.id = el.dataset.id; textInput.value = el.dataset.body || "";
+      showCtx("edit", "Edit message", el.dataset.body || "");
+      textInput.setSelectionRange(textInput.value.length, textInput.value.length);
+    }
+    async function submitEdit() {
+      const id = ctx.id, body = textInput.value.trim(), button = $(".send", form);
+      if (!body) { toast("A message can't be empty. Use Delete instead.", "error"); return; }
+      button.disabled = true;
+      try {
+        const fd = new FormData(); fd.set("body", body);
+        const r = await api(`${msgBase}/${id}/edit`, { body: fd });
+        swapBubble(id, r.html); textInput.value = ""; clearCtx();
+      } catch (error) { toast(error.message, "error"); }
+      finally { button.disabled = false; }
+    }
+
+    /* swap one bubble for the server's fresh version (after an edit / delete, mine or someone else's) */
+    function swapBubble(id, html) {
+      const old = msgEl(id); if (!old) return null;
+      const t = document.createElement("template"); t.innerHTML = html.trim();
+      const next = t.content.firstElementChild; if (!next) return null;
+      old.replaceWith(next); watchChatMedia(box);
+      return next;
+    }
+    function applyUpdate(u) {
+      const next = swapBubble(u.id, u.html); if (!next) return;
+      const gone = next.dataset.deleted === "1";
+      $$(`.msg-quote[data-quote-to="${CSS.escape(u.id)}"]`, box).forEach((q) => {      // keep quotes of this message up to date
+        const span = $("span", q); if (!span) return;
+        if (gone) { q.classList.add("gone"); q.removeAttribute("data-quote-to"); span.textContent = "This message was deleted"; }
+        else span.textContent = next.dataset.preview || span.textContent;
+      });
+      if (ctx.id === u.id) {
+        if (gone) { if (ctx.mode === "edit") textInput.value = ""; clearCtx(); toast("That message was deleted.", "ok"); }
+        else if (ctx.mode === "reply") $("[data-ctx-text]", ctxBar).textContent = next.dataset.preview || "";
+      }
+    }
+    function removeBubble(id) {
+      const el = msgEl(id); if (!el) return;
+      el.classList.add("gone");
+      setTimeout(() => {
+        el.remove();
+        if (!$(".msg", box) && !$(".chat-empty", box)) box.insertAdjacentHTML("beforeend", '<p class="muted chat-empty" style="text-align:center;margin:auto">No messages yet. Say hello!</p>');
+      }, 220);
+    }
+
+    /* the options menu: opened by the ⋯ button, a long-press or (desktop) the button on hover */
+    function closeMenu(refocus) {
+      if (menu.hidden) return;
+      menu.hidden = true; if (menuFor) menuFor.classList.remove("menu-open");
+      if (refocus && menuAnchor && document.contains(menuAnchor)) menuAnchor.focus({ preventScroll: true });
+      menuFor = null; menuAnchor = null;
+    }
+    function openMenu(el, anchor) {
+      closeMenu();
+      const deleted = el.dataset.deleted === "1", items = [];
+      if (!deleted && form) items.push(["reply", "Reply"]);
+      if (!deleted && el.dataset.body) items.push(["copy", "Copy"]);
+      if (el.dataset.canEdit === "1" && form) items.push(["edit", "Edit"]);
+      items.push(["delete", "Delete…", "danger"]);
+      menu.replaceChildren(...items.map(([act, label, cls]) => {
+        const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem"); b.dataset.act = act; b.textContent = label;
+        if (cls) b.className = cls; return b;
+      }));
+      menu.dataset.id = el.dataset.id; menu.hidden = false; el.classList.add("menu-open"); menuFor = el; menuAnchor = anchor || null;
+      const r = (anchor || el).getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
+      let top = r.bottom + 6; if (top + mh > innerHeight - 8) top = r.top - mh - 6;
+      let left = el.dataset.mine === "1" ? r.right - mw : r.left;
+      menu.style.top = `${Math.max(8, top)}px`; menu.style.left = `${Math.min(Math.max(8, left), innerWidth - mw - 8)}px`;
+      const first = $("button", menu); if (first && anchor) first.focus({ preventScroll: true });
+    }
+    menu.addEventListener("click", async (event) => {
+      const b = event.target.closest("button[data-act]"), el = menuFor; if (!b || !el) return;
+      const act = b.dataset.act; closeMenu();
+      if (act === "reply") startReply(el);
+      else if (act === "edit") startEdit(el);
+      else if (act === "delete") openDelete(el);
+      else if (act === "copy") {
+        const text = el.dataset.body || "";
+        try { await navigator.clipboard.writeText(text); toast("Copied.", "ok"); }
+        catch (_) {
+          const t = document.createElement("textarea"); t.value = text; document.body.append(t); t.select();
+          try { document.execCommand("copy"); toast("Copied.", "ok"); } catch (__) { toast("Couldn't copy.", "error"); } t.remove();
+        }
+      }
+    });
+    menu.addEventListener("keydown", (event) => {
+      const items = $$("button", menu), i = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown") { event.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (event.key === "Escape") { event.preventDefault(); closeMenu(true); }
+    });
+    document.addEventListener("pointerdown", (event) => { if (!menu.hidden && !menu.contains(event.target) && !event.target.closest("[data-msg-menu]")) closeMenu(); });
+    box.addEventListener("scroll", () => closeMenu(), { passive: true });
+    window.addEventListener("resize", () => closeMenu());
+
+    /* delete: for me / for everyone (WhatsApp style dialog) */
+    function openDelete(el) {
+      delTarget = el.dataset.id;
+      const mine = el.dataset.mine === "1", deleted = el.dataset.deleted === "1", everyone = $("[data-del-everyone]", delDialog), hint = $("[data-del-hint]", delDialog);
+      everyone.hidden = !(mine && el.dataset.canUnsend === "1");
+      hint.textContent = deleted ? "This only removes the notice from your chat."
+        : mine && !everyone.hidden ? "Delete for everyone removes it for all members of this chat. Delete for me removes it from your side only."
+        : mine ? `You can delete a message for everyone only within ${chat.dataset.unsendHours} hours of sending it. You can still delete it for yourself.`
+        : "This removes the message from your side only. Everyone else in the chat still sees it.";
+      delDialog.showModal();
+    }
+    async function doDelete(scope) {
+      const id = delTarget; if (!id) return;
+      const buttons = $$("button", delDialog); buttons.forEach((b) => { b.disabled = true; });
+      try {
+        const fd = new FormData(); fd.set("scope", scope);
+        const r = await api(`${msgBase}/${id}/delete`, { body: fd });
+        delDialog.close();
+        if (ctx.id === id) { if (ctx.mode === "edit") textInput.value = ""; clearCtx(); }
+        if (r.scope === "everyone") applyUpdate({ id, html: r.html }); else removeBubble(id);
+        toast(r.scope === "everyone" ? "Message deleted for everyone." : "Message deleted for you.", "ok");
+      } catch (error) { toast(error.message, "error"); }
+      finally { buttons.forEach((b) => { b.disabled = false; }); delTarget = null; }
+    }
+    $("[data-del-everyone]", delDialog).addEventListener("click", () => doDelete("everyone"));
+    $("[data-del-me]", delDialog).addEventListener("click", () => doDelete("me"));
+
+    /* clicks inside the conversation: ⋯ button, tapping a quote jumps to the original */
+    box.addEventListener("click", (event) => {
+      if (swallowClick) { event.preventDefault(); event.stopPropagation(); return; }
+      const more = event.target.closest("[data-msg-menu]");
+      if (more) { event.stopPropagation(); const el = more.closest(".msg"); if (menuFor === el) closeMenu(); else openMenu(el, more); return; }
+      const quote = event.target.closest(".msg-quote");
+      if (quote && quote.dataset.quoteTo) {
+        const target = msgEl(quote.dataset.quoteTo);
+        if (!target) { toast('That message is further up. Tap "Older messages" to load it.', "ok"); return; }
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+        target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
+      }
+    }, true);
+
+    /* touch: long-press opens the menu, swipe right replies */
+    const interactive = "a, button, video, audio, input, textarea, [data-lightbox-src], .chat-document-card";
+    const cancelPress = () => { clearTimeout(pressTimer); pressTimer = 0; };
+    const stopSwipe = (reply) => {
+      cancelPress();
+      if (!swipe) return;
+      const { el, dx, active } = swipe; swipe = null;
+      el.classList.remove("swiping", "swipe-ready"); el.style.removeProperty("--sw");
+      if (reply && active && dx > 56) { ping(); startReply(el); }
+    };
+    box.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "touch" || event.target.closest(interactive)) return;
+      const el = event.target.closest(".msg"); if (!el) return;
+      swipe = { el, x: event.clientX, y: event.clientY, dx: 0, active: false, id: event.pointerId };
+      pressTimer = setTimeout(() => {
+        if (!swipe || swipe.active) return;
+        swallowClick = true; setTimeout(() => { swallowClick = false; }, 500); ping(15); openMenu(el);
+        swipe = null;
+      }, 480);
+    });
+    box.addEventListener("pointermove", (event) => {
+      if (!swipe || event.pointerId !== swipe.id) return;
+      const dx = event.clientX - swipe.x, dy = event.clientY - swipe.y;
+      if (!swipe.active) {
+        if (Math.abs(dy) > 10 || dx < -10) { stopSwipe(false); return; }          // scrolling, or the wrong direction
+        if (dx > 12 && dx > Math.abs(dy) * 1.5 && form && swipe.el.dataset.deleted !== "1") { swipe.active = true; cancelPress(); swipe.el.classList.add("swiping"); }
+        else return;
+      }
+      swipe.dx = Math.min(dx, 72); swipe.el.style.setProperty("--sw", `${swipe.dx}px`);
+      swipe.el.classList.toggle("swipe-ready", swipe.dx > 56);
+    });
+    box.addEventListener("pointerup", () => stopSwipe(true));
+    box.addEventListener("pointercancel", () => stopSwipe(false));
+
+    /* the composer bar and keyboard shortcuts */
+    if (form) {
+      $("[data-ctx-cancel]", ctxBar).addEventListener("click", cancelCtx);
+      textInput.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && ctx.mode) { event.preventDefault(); cancelCtx(); }
+        else if (event.key === "ArrowUp" && !textInput.value && !ctx.mode) {                    // like WhatsApp Web / Slack: edit my last message
+          const mine = $$('.msg.mine[data-can-edit="1"]', box).pop();
+          if (mine) { event.preventDefault(); startEdit(mine); }
+        }
+      });
+    }
 
     /* report the person in this chat (optionally block them in the same step) */
     const reportForm = $("[data-chat-report-form]");
