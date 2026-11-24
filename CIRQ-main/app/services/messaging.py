@@ -104,6 +104,9 @@ def purge_conversation(cid):
     for r in expired:
         by_msg.setdefault(r["message_id"], set()).add(r["user_id"])
     gone = [mid for mid, users in by_msg.items() if members <= users]
+    if gone:                                       # never destroy a message someone has reported: moderators may still need it
+        reported = {r["target_id"] for r in sb.in_("reports", "target_id", gone, cols="target_id,target_type") if r["target_type"] == "message"}
+        gone = [mid for mid in gone if mid not in reported]
     if not gone:
         return 0
     try:
@@ -114,3 +117,110 @@ def purge_conversation(cid):
     db().table("message_hides").delete().in_("message_id", gone).execute()
     db().table("messages").delete().in_("id", gone).execute()
     return len(gone)
+
+
+# ---------------------------------------------------------------- reply / edit / delete (WhatsApp / Instagram style)
+def _age_seconds(msg):
+    created = parse_dt(msg.get("created_at"))
+    return (utcnow() - created).total_seconds() if created else 0
+
+
+def has_report(message_id):
+    return any(r["target_type"] == "message" for r in sb.select("reports", target_id=message_id))
+
+
+def edit_problem(msg, uid):
+    """Why this message can't be edited right now (a sentence for the user), or None if it can. Only the sender, only plain text
+    (no photo/file/story reply), only for a short while after sending."""
+    if msg["sender_id"] != uid:
+        return "You can only edit your own messages."
+    if msg.get("deleted_at"):
+        return "This message was deleted."
+    if not (msg.get("body") or "").strip() or msg.get("media_public_id") or msg.get("attachment_count") or msg.get("story_reply") or msg.get("story_id"):
+        return "Only text messages can be edited."
+    minutes = current_app.config.get("MESSAGE_EDIT_MINUTES", 15)
+    if minutes and _age_seconds(msg) > minutes * 60:
+        return f"You can edit a message for {minutes} minutes after sending it."
+    return None
+
+
+def unsend_problem(msg, uid):
+    """Why 'delete for everyone' isn't allowed for this message, or None. Only the sender, only within the configured window."""
+    if msg["sender_id"] != uid:
+        return "Only the person who sent a message can delete it for everyone."
+    hours = current_app.config.get("MESSAGE_UNSEND_HOURS", 48)
+    if not msg.get("deleted_at") and hours and _age_seconds(msg) > hours * 3600:
+        return f"You can delete a message for everyone only within {hours} hours of sending it. You can still delete it for yourself."
+    return None
+
+
+def can_edit(msg, uid):
+    return edit_problem(msg, uid) is None
+
+
+def can_unsend(msg, uid):
+    return not msg.get("deleted_at") and unsend_problem(msg, uid) is None
+
+
+def preview_text(msg, limit=140):
+    """One line describing a message, for reply quotes and the reply bar."""
+    if msg.get("deleted_at"):
+        return "This message was deleted"
+    body = (msg.get("body") or "").strip()
+    if body:
+        return body[:limit] + ("…" if len(body) > limit else "")
+    if msg.get("media_type") == "video":
+        return "🎥 Video"
+    if msg.get("media_public_id"):
+        return "📷 Photo"
+    return "📎 Attachment" if msg.get("attachment_count") else "Message"
+
+
+def record_edit(msg, new_body, editor_id):
+    """Change the text of a sent message. The earlier version is kept (moderators can see it), so editing can't be used to
+    hide something that was reported."""
+    sb.insert("message_edits", {"message_id": msg["id"], "editor_id": editor_id, "old_body": msg["body"]})
+    stamp = iso()
+    sb.update("messages", {"body": new_body, "edited_at": stamp}, id=msg["id"])
+    return {**msg, "body": new_body, "edited_at": stamp}
+
+
+def hide_for(uid, msg):
+    """'Delete for me': the message disappears for this person only. Reuses the disappearing-message table (hide_at = now)."""
+    row = sb.get("message_hides", message_id=msg["id"], user_id=uid)
+    if row:
+        sb.update("message_hides", {"hide_at": iso()}, id=row["id"])
+    else:
+        sb.insert("message_hides", {"message_id": msg["id"], "user_id": uid, "conversation_id": msg["conversation_id"], "hide_at": iso()})
+
+
+def unsend(msg, by_id):
+    """'Delete for everyone'. The row stays as a tombstone so replies and reports still make sense. The content and any files are
+    wiped, unless the message has been reported: then moderators keep it, and the sender is never told why."""
+    if msg.get("deleted_at"):
+        return msg
+    patch = {"deleted_at": iso(), "deleted_by": by_id}
+    if not has_report(msg["id"]):
+        files = sb.select("message_attachments", message_id=msg["id"])
+        try:
+            if files:
+                from app.services import chat_attachments as ca
+                ca.remove_from_storage([f["storage_path"] for f in files])
+            if msg.get("media_public_id"):
+                from app.services import cloudinary_service as cs
+                cs.destroy(msg["media_public_id"], msg.get("media_type") or "image", "authenticated")
+        except Exception:
+            current_app.logger.exception("could not remove files for a message deleted for everyone")
+        if files:
+            db().table("message_attachments").delete().eq("message_id", msg["id"]).execute()
+        patch.update(body="", media_url=None, media_public_id=None, media_type=None, attachment_count=0)
+    sb.update("messages", patch, id=msg["id"])
+    return {**msg, **patch}
+
+
+def clear_chat(cid, uid):
+    """'Delete chat' for one person: their history up to now is hidden from them only; the other people keep theirs.
+    New messages bring the chat back, starting from an empty page."""
+    stamp = iso()
+    sb.update("conversation_members", {"cleared_at": stamp, "last_read_at": stamp}, conversation_id=cid, user_id=uid)
+    db().table("notifications").update({"read_at": stamp}).eq("user_id", uid).eq("kind", "message").eq("ref_id", cid).is_("read_at", "null").execute()
