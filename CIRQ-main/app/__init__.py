@@ -69,7 +69,7 @@ def create_app(config_object=None, clients=None):
     @app.before_request
     def load_user():
         g.user = None
-        if request.endpoint in (None, "static", "health", "favicon", "robots", "pwa.manifest", "pwa.service_worker", "pwa.offline", "pwa.assetlinks"):
+        if request.endpoint in (None, "static", "health", "favicon", "robots", "pwa.manifest", "pwa.service_worker", "pwa.offline", "pwa.assetlinks", "pwa.icon", "pwa.apple_touch_icon"):
             return
         uid = session.get("uid")
         if not uid or "cirq_db" not in app.extensions:
