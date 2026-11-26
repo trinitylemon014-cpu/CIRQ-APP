@@ -17,7 +17,7 @@
   <link rel="icon" href="/favicon.ico" sizes="48x48">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon-96.png') }}" sizes="96x96">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon-192.png') }}" sizes="192x192">
-  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('pwa.apple_touch_icon') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css' if theme == 'dark' else 'css/style-light.css') }}">
@@ -45,6 +45,7 @@
     <a class="nav {{ 'active' if item.active }}" href="{{ item.href }}" {% if item.active %}aria-current="page"{% endif %}>{{ m.icon(item.icon) }} {{ item.label }}{% if item.badge %}<span class="n-badge">{{ item.badge }}</span>{% endif %}</a>
     {% endfor %}
     <div class="grow"></div>
+    <button class="nav pwa-nav" type="button" data-pwa-open hidden>{{ m.icon('download') }} Install app</button>
     {% for item in navigation if item.section == 'account' %}<a class="nav {{ 'active' if item.active }}" href="{{ item.href }}" {% if item.active %}aria-current="page"{% endif %}>{{ m.icon(item.icon) }} {{ item.label }}</a>{% endfor %}
     <form method="post" action="{{ url_for('auth.logout') }}">{{ m.csrf() }}<button class="nav" style="width:100%;border:0;background:none;font:inherit;cursor:pointer;display:flex;align-items:center;gap:14px;padding:13px 16px;color:var(--muted);font-weight:700">{{ m.icon('logout') }} Log out</button></form>
   </aside>
@@ -106,6 +107,7 @@
       {% endfor %}
     </div>
     {% endif %}
+    <div class="mobile-page-links"><button class="mobile-page-link pwa-nav" type="button" data-pwa-open hidden>{{ m.icon('download') }}<span>Install app</span></button></div>
     <form class="mobile-page-logout" method="post" action="{{ url_for('auth.logout') }}">{{ m.csrf() }}<button class="mobile-page-link" type="submit">{{ m.icon('logout') }}<span>Log out</span></button></form>
   </nav>
 </section>
@@ -211,6 +213,18 @@
   <button class="btn sm" type="button" data-pwa-install hidden>Install</button>
   <button class="icon-btn" type="button" data-pwa-dismiss aria-label="Not now">{{ m.icon('x','i-sm') }}</button>
 </div>
+<dialog id="pwa-install-dialog" class="disappear-dialog" aria-labelledby="pwa-dlg-title">
+  <div class="row between" style="margin-bottom:6px"><h2 id="pwa-dlg-title" style="margin:0">Install CIRQ</h2><button class="icon-btn" type="button" data-close aria-label="Close">{{ m.icon('x') }}</button></div>
+  <p class="muted small" style="margin:0 0 12px">Add CIRQ to your home screen or desktop. It opens full screen like a normal app.</p>
+  <div class="pwa-guide" data-pwa-guide="ios" hidden><ol class="pwa-steps"><li>Tap the <b>Share</b> button (the square with an arrow) in Safari.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>.</li></ol><p class="muted small">Don't see it? Open this page in <b>Safari</b> first.</p></div>
+  <div class="pwa-guide" data-pwa-guide="android" hidden><ol class="pwa-steps"><li><b>Chrome:</b> tap the <b>⋮</b> menu, then <b>Install app</b> (or <b>Add to Home screen</b>).</li><li><b>Samsung Internet:</b> tap <b>☰</b>, then <b>Add page to</b>, then <b>Home screen</b>.</li><li><b>Firefox:</b> tap <b>⋮</b>, then <b>Install</b>.</li></ol></div>
+  <div class="pwa-guide" data-pwa-guide="chromium" hidden><ol class="pwa-steps"><li>Look at the right end of the <b>address bar</b> for the install icon (a screen with a down arrow, or ⊕) and click it.</li><li>No icon? Open the <b>⋮</b> menu: in Chrome choose <b>Cast, save and share → Install page as app</b>; in Edge choose <b>Apps → Install this site as an app</b>.</li><li>Click <b>Install</b>.</li></ol></div>
+  <div class="pwa-guide" data-pwa-guide="safari-mac" hidden><ol class="pwa-steps"><li>In the menu bar choose <b>File → Add to Dock…</b> (Safari 17 or newer).</li><li>Click <b>Add</b>.</li></ol></div>
+  <div class="pwa-guide" data-pwa-guide="firefox-desktop" hidden><p class="muted" style="margin:0">Firefox on computers can't install web apps. Open CIRQ in <b>Chrome</b> or <b>Edge</b> and choose Install there. On a phone, Firefox can install it.</p></div>
+  <div class="pwa-guide" data-pwa-guide="other" hidden><p class="muted" style="margin:0">Open your browser's menu and look for <b>Install app</b> or <b>Add to Home screen</b>. If you don't see it, try Chrome, Edge or Safari.</p></div>
+  <p class="muted small pwa-already"><b>Says it's already installed?</b> Open CIRQ from your Start menu, Applications folder or app list. To install again, first remove it at <b>chrome://apps</b> or <b>edge://apps</b> (right-click CIRQ → Remove).</p>
+  <div class="stack" style="gap:8px;margin-top:14px"><button class="btn" type="button" data-pwa-install hidden>Install now</button><button class="btn ghost" type="button" data-close>Close</button></div>
+</dialog>
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/pwa.js') }}" data-sw="{{ url_for('pwa.service_worker') }}" defer></script>
