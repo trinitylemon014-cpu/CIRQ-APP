@@ -1647,3 +1647,78 @@ dialog.likers[open] { display: flex; }
 .cpanel-replying button, .reply-chip button { border: 0; background: none; color: var(--dim); font-size: 1.15rem; line-height: 1; cursor: pointer }
 .creplies { margin-left: 34px }
 .comment.reply .bubble { font-size: .92em }
+
+/* ==========================================================================
+   26. Chat message actions: reply, edit, delete  ·  LIGHT THEME
+   White menu with soft shadow, ink text, lime + indigo accents, readable on
+   both white bubbles and lime "mine" bubbles. (The dark theme already had this.)
+   ========================================================================== */
+.msg { position: relative; touch-action: pan-y; transition: transform .2s var(--ease), opacity .2s; }
+.msg.swiping { transition: none; transform: translateX(var(--sw, 0px)); }
+.msg.swiping::before { content: "↩"; position: absolute; left: -44px; top: 50%; display: grid; place-items: center; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%;
+  background: #fff; color: var(--text-2); font-size: 1rem; box-shadow: 0 4px 12px rgba(27, 31, 59, .14); transform: translateX(calc(var(--sw, 0px) * -.35)); }
+.msg.swipe-ready::before { background: var(--grad-primary); color: var(--on-lime); box-shadow: 0 6px 14px rgba(169, 222, 0, .45); }
+.msg.gone { opacity: 0; transform: scale(.96); }
+
+/* the highlight pulse when you jump to a quoted message. .flash is also the toast class, so reset what it adds */
+.msg.flash { display: block; padding: 11px 16px; backdrop-filter: none; animation: msgFlash 1.4s ease-out; box-shadow: 0 4px 14px rgba(27, 31, 59, .06); }
+.msg.mine.flash { box-shadow: 0 8px 18px rgba(169, 222, 0, .3); }
+.msg.flash:has(.msg-more) { padding-right: 30px; }
+@keyframes msgFlash { 0%, 35% { outline: 2px solid var(--lime-600); outline-offset: 3px; } 100% { outline: 2px solid transparent; outline-offset: 3px; } }
+
+.msg-text { white-space: pre-wrap; }
+.msg .edited { font-style: italic; }
+.msg-more { position: absolute; top: 4px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); opacity: 0; cursor: pointer; transition: opacity .15s, background .15s; }
+.msg.mine .msg-more { color: var(--on-lime); }
+.msg-more .i { width: 16px; height: 16px; }
+.msg:hover .msg-more, .msg:focus-within .msg-more, .msg.menu-open .msg-more { opacity: .75; }
+.msg-more:hover, .msg-more:focus-visible { opacity: 1; background: rgba(27, 31, 59, .08); }
+.msg.mine .msg-more:hover, .msg.mine .msg-more:focus-visible { background: rgba(27, 31, 59, .14); }
+@media (hover: none) { .msg-more { opacity: .55; } }
+.msg:has(.msg-more) { padding-right: 32px; }
+
+/* quoted reply inside a bubble */
+.msg-quote { display: block; width: 100%; margin: -2px 0 8px; padding: 7px 11px; text-align: left; border: 0; border-left: 3px solid var(--accent); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; cursor: pointer; }
+.msg.mine .msg-quote { border-left-color: var(--on-lime); background: rgba(27, 31, 59, .1); color: var(--on-lime); }
+.msg-quote b { display: block; margin-bottom: 1px; font-size: .72rem; font-weight: 800; color: var(--accent-600); }
+.msg.mine .msg-quote b { color: var(--on-lime); }
+.msg-quote span { display: -webkit-box; overflow: hidden; font-size: .84rem; color: var(--text-2); -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.msg.mine .msg-quote span { color: var(--on-lime); opacity: .85; }
+.msg-quote.gone { cursor: default; font-style: italic; }
+
+/* deleted message */
+.msg.deleted, .msg.mine.deleted { background: transparent; color: var(--muted); border: 1.5px dashed rgba(27, 31, 59, .18); box-shadow: none; }
+.msg-deleted { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; font-style: italic; }
+.msg-deleted .i { width: 14px; height: 14px; }
+
+/* the "Replying to…" / "Editing message" bar above the composer */
+.chat-context { display: flex; align-items: center; gap: 10px; margin: 0 4px 8px; padding: 9px 8px 9px 14px; border-left: 3px solid var(--lime-600); border-radius: 14px; background: #fff; box-shadow: 0 4px 14px rgba(27, 31, 59, .07); }
+.chat-context[hidden] { display: none; }
+.chat-context-text { flex: 1; min-width: 0; display: grid; }
+.chat-context-text b { font-size: .78rem; font-weight: 800; color: var(--accent-600); }
+.chat-context-text span { overflow: hidden; color: var(--text-2); font-size: .85rem; text-overflow: ellipsis; white-space: nowrap; }
+.chat-form.editing { border-color: var(--lime-600); box-shadow: 0 0 0 4px rgba(201, 249, 0, .35); }
+
+/* the floating message menu: reply · edit · delete */
+.msg-menu { position: fixed; z-index: 120; min-width: 190px; padding: 6px; border: 0; border-radius: 18px; background: #fff; box-shadow: 0 18px 44px rgba(27, 31, 59, .2), 0 0 0 1px rgba(27, 31, 59, .05); }
+.msg-menu[hidden] { display: none; }
+.msg-menu button { display: block; width: 100%; padding: 11px 14px; border: 0; border-radius: 12px; background: none; color: var(--text); text-align: left; font: 700 .92rem var(--font); cursor: pointer; transition: background .12s; }
+.msg-menu button:hover, .msg-menu button:focus-visible { background: var(--surface-2); outline: none; }
+.msg-menu button.danger { color: var(--danger-ink); }
+.msg-menu button.danger:hover, .msg-menu button.danger:focus-visible { background: rgba(255, 77, 122, .1); }
+
+/* delete a whole chat from the inbox */
+.convo-row { position: relative; }
+.convo-row .convo { padding-right: 58px; }
+.convo-del { position: absolute; top: 50%; right: 10px; margin: 0; transform: translateY(-50%); }
+.convo-del .icon-btn { width: 36px; height: 36px; color: var(--muted); }
+.convo-del .icon-btn:hover { color: var(--danger-ink); background: rgba(255, 77, 122, .1); }
+
+/* the delete confirmation dialog */
+#msg-delete-dialog { width: min(92vw, 400px); padding: 24px 22px 20px; }
+#msg-delete-dialog h2 { font-weight: 900; letter-spacing: -.02em; }
+#msg-delete-dialog p { color: var(--text-2); }
+#msg-delete-dialog .stack .btn { width: 100%; justify-content: center; }
+#msg-delete-dialog .btn.ghost { background: var(--surface-2); box-shadow: none; }
+#msg-delete-dialog .btn.ghost:hover { background: var(--surface-3); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .msg, .msg-more { transition: none; } .msg.flash { animation: none; } }
