@@ -11,15 +11,16 @@ import os
 import re
 from pathlib import Path
 
-from flask import Blueprint, Response, abort, current_app, jsonify, render_template, url_for
+from flask import Blueprint, Response, abort, current_app, jsonify, render_template, request, url_for
+
+from app.blueprints.pwa.icon_data import ICONS
 
 bp = Blueprint("pwa", __name__)
 
 DARK, GOLD = "#0b0b0c", "#f7b500"
 # Small, always-needed files that are saved at install time so the app shell opens instantly and works on a weak connection.
 # Big or rarely used files (the live-stream library, images) are cached the first time they are used instead.
-PRECACHE_STATIC = ("css/style.css", "css/style-light.css", "css/pwa.css", "js/app.js", "js/pwa.js",
-                   "icons/icon-192.png", "icons/icon-512.png", "favicon.ico")
+PRECACHE_STATIC = ("css/style.css", "css/style-light.css", "css/pwa.css", "js/app.js", "js/pwa.js", "favicon.ico")
 FINGERPRINT = re.compile(r"^([0-9A-F]{2}:){31}[0-9A-F]{2}$")
 
 
@@ -46,7 +47,30 @@ def version():
 
 
 def _icon(name, size, purpose):
-    return {"src": url_for("static", filename=f"icons/{name}"), "sizes": f"{size}x{size}", "type": "image/png", "purpose": purpose}
+    # Served by this app from icon_data.py (not from a file in /static), so an install can never be broken by a missing image file.
+    return {"src": url_for("pwa.icon", name=name), "sizes": f"{size}x{size}", "type": "image/png", "purpose": purpose}
+
+
+def _png(name):
+    data = ICONS.get(name)
+    if data is None:
+        abort(404)
+    resp = Response(data, mimetype="image/png")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    resp.add_etag()
+    return resp.make_conditional(request)
+
+
+@bp.get("/pwa-icons/<name>")
+def icon(name):
+    return _png(name)
+
+
+@bp.get("/apple-touch-icon-precomposed.png")
+@bp.get("/apple-touch-icon.png")                      # registered first, so this is the address url_for() builds
+def apple_touch_icon():
+    """iPhones and iPads also look for this exact address on their own, so it must exist at the site root."""
+    return _png("apple-touch-icon.png")
 
 
 @bp.get("/manifest.webmanifest")
