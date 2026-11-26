@@ -13,8 +13,20 @@
     get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* private mode */ } },
   };
-  const standalone = () => window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: fullscreen)").matches || window.navigator.standalone === true;
+  const mq = (q) => { try { return window.matchMedia(q).matches; } catch (_) { return false; } };
+  // "Installed" means CIRQ is running in its own app window. Browser full screen (F11), a video going full screen or a plain tab must NOT count.
+  const standalone = () => mq("(display-mode: standalone)") || mq("(display-mode: window-controls-overlay)") || window.navigator.standalone === true || document.referrer.startsWith("android-app://");
+  const displayMode = () => ["standalone", "window-controls-overlay", "minimal-ui", "fullscreen", "browser"].find((m) => mq(`(display-mode: ${m})`)) || "browser";
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  function platform() {                                              // which set of install steps fits this device
+    const ua = navigator.userAgent;
+    if (isIOS()) return "ios";
+    if (/android/i.test(ua)) return "android";
+    if (/firefox/i.test(ua)) return "firefox-desktop";
+    if (/chrome|chromium|crios|edg\//i.test(ua)) return "chromium";
+    if (/safari/i.test(ua)) return "safari-mac";
+    return "other";
+  }
   if (standalone()) root.classList.add("is-pwa");
 
   function notify(message, kind = "ok") {
@@ -36,7 +48,10 @@
 
   function renderInstallUi() {
     const installed = standalone(), ios = isIOS() && !installed;
-    $$("[data-pwa-install]").forEach((b) => { b.hidden = !deferred || installed; });
+    $$("[data-pwa-install]").forEach((b) => { b.hidden = !deferred || installed; });         // one-tap buttons: only when the browser offered a prompt
+    $$("[data-pwa-open]").forEach((b) => { b.hidden = installed; });                         // the sidebar / settings Install button: always there until installed
+    const status = $("[data-pwa-status]");
+    if (status) status.textContent = installed ? "" : `Right now: ${displayMode() === "browser" ? "browser tab" : displayMode()} · ${deferred ? "your browser can install CIRQ with one tap." : "tap Install for the steps for your device."}`;
     $$("[data-pwa-installed]").forEach((el) => { el.hidden = !installed; });
     $$("[data-pwa-ios]").forEach((el) => { el.hidden = !ios; });
     $$("[data-pwa-howto]").forEach((el) => { el.hidden = installed; });
@@ -52,14 +67,24 @@
   setTimeout(() => { bannerReady = true; renderInstallUi(); }, 3500);          // don't greet people with a banner the instant a page opens
   window.matchMedia("(display-mode: standalone)").addEventListener?.("change", renderInstallUi);
 
+  function openInstall() {
+    if (standalone()) return;
+    if (deferred) { install(); return; }                              // the browser offered a prompt: one tap
+    const dialog = $("#pwa-install-dialog"); if (!dialog) return;    // otherwise show the steps for this device
+    const which = platform();
+    $$("[data-pwa-guide]", dialog).forEach((g) => { g.hidden = g.dataset.pwaGuide !== which; });
+    if (!dialog.open) dialog.showModal();
+  }
   async function install() {
     if (!deferred) return;
+    const dialog = $("#pwa-install-dialog"); if (dialog && dialog.open) dialog.close();
     const prompt = deferred; deferred = null; renderInstallUi();
     prompt.prompt();
     const choice = await prompt.userChoice.catch(() => null);
     if (choice && choice.outcome === "dismissed") snooze();
   }
   document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-pwa-open]")) { openInstall(); return; }
     if (event.target.closest("[data-pwa-install]")) { install(); return; }
     if (event.target.closest("[data-pwa-dismiss]")) { snooze(); renderInstallUi(); }
   });
